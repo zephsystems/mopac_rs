@@ -3,7 +3,7 @@
 //! Licensed under the Apache License, Version 2.0 (the "License").
 //! Evaluates $S_{\mu\nu}(R) = \int \phi_\mu^*(\vec{r}) \phi_\nu(\vec{r}) d^3r$ via auxiliary integrals.
 
-use crate::constants::angstrom_to_bohr;
+use crate::constants::{angstrom_to_bohr, ConstantsVersion};
 
 /// Auxiliary integral $A_k(p) = \int_1^\infty x^k e^{-p x} dx$.
 ///
@@ -56,7 +56,7 @@ pub fn aux_b(k: usize, alpha: f64) -> f64 {
 
 /// Diatomic overlap between two $1s$ Slater-type orbitals with exponents $\zeta_1, \zeta_2$ at separation $R$ in Ångströms.
 pub fn overlap_1s_1s(r_angstrom: f64, zeta1: f64, zeta2: f64) -> f64 {
-    let r_bohr = angstrom_to_bohr(r_angstrom, true);
+    let r_bohr = angstrom_to_bohr(r_angstrom, ConstantsVersion::Codata2018);
     if r_bohr < 1e-12 {
         // One-center limit: orthogonal if different, 1.0 if identical exponents
         return if (zeta1 - zeta2).abs() < 1e-12 {
