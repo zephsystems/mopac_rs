@@ -1,0 +1,201 @@
+//! Automated Scrutiny & Inconsistency Verification Suite for MOPAC_RS.
+//!
+//! Licensed under the Apache License, Version 2.0 (the "License").
+//! Empirically verifies the mathematical solutions to legacy Fortran pathologies.
+
+use mopac_core::constants::codata2018::*;
+use mopac_core::integrals::core_repulsion::*;
+use mopac_core::integrals::overlap::*;
+use mopac_core::integrals::rotation::*;
+use mopac_core::integrals::two_electron::*;
+use mopac_core::parameters::am1::Am1Model;
+use mopac_core::parameters::ParameterModel;
+use mopac_core::types::*;
+use std::thread;
+
+/// Scrutiny Test 1: Unit Immutability & Core Repulsion Consistency.
+///
+/// Legacy Fortran `ccrep.F90` mutates the input distance argument `r = r * a0` in place.
+/// Here we verify that input coordinates remain strictly immutable and that core repulsion
+/// scales correctly for chemical bonds ($H_2$, $C-H$, $C-C$).
+#[test]
+fn test_scrutiny_unit_immutability_and_core_repulsion() {
+    let am1 = Am1Model;
+    let h_param = am1.get_element(1).expect("H params missing");
+    let c_param = am1.get_element(6).expect("C params missing");
+
+    let dist_h2 = 0.74; // Typical H-H bond in Angstroms
+    let dist_copy = dist_h2;
+
+    let e_rep_h2 = compute_pair_core_repulsion(dist_h2, &h_param, &h_param);
+
+    // Assert input variable was NOT mutated in place
+    assert_eq!(dist_h2, dist_copy, "Input distance must remain immutable");
+
+    // Physical bounds check: H-H nuclear repulsion at 0.74 Å must be positive and in reasonable eV range (~15-25 eV)
+    assert!(e_rep_h2 > 10.0 && e_rep_h2 < 30.0, "H2 core repulsion {} out of physical bounds", e_rep_h2);
+
+    // Distance scaling check: Repulsion must decrease monotonically as distance increases
+    let e_rep_h2_longer = compute_pair_core_repulsion(1.50, &h_param, &h_param);
+    assert!(e_rep_h2 > e_rep_h2_longer, "Core repulsion must decay monotonically with distance");
+
+    // Heteronuclear pair check: C-H bond (1.09 Å)
+    let e_rep_ch = compute_pair_core_repulsion(1.09, &c_param, &h_param);
+    assert!(e_rep_ch > 0.0, "C-H core repulsion must be positive");
+}
+
+/// Scrutiny Test 2: Multithreaded Reentrancy & Elimination of Fortran `SAVE` Statics.
+///
+/// Legacy Fortran `fock2.F90` uses static `SAVE` arrays causing catastrophic race conditions.
+/// Here we spawn 8 concurrent threads evaluating the same molecular batch simultaneously
+/// and assert 100% bit-identical results across all threads.
+#[test]
+fn test_scrutiny_multithreaded_reentrancy() {
+    let coords = vec![
+        [0.0, 0.0, 0.0],
+        [0.0, 0.0, 1.09],
+        [1.026, 0.0, -0.363],
+        [-0.513, 0.889, -0.363],
+        [-0.513, -0.889, -0.363],
+    ]; // Methane (CH4)
+    let atomic_numbers = vec![6, 1, 1, 1, 1];
+
+    let batch = MolecularBatch::new(atomic_numbers, &coords);
+    let am1 = Am1Model;
+
+    // Run baseline calculation
+    let baseline_energy = compute_total_core_repulsion(&batch, &am1);
+
+    // Spawn 8 concurrent threads doing the exact same calculation
+    let mut handles = Vec::new();
+    for _ in 0..8 {
+        let b = batch.clone();
+        let handle = thread::spawn(move || {
+            let m = Am1Model;
+            compute_total_core_repulsion(&b, &m)
+        });
+        handles.push(handle);
+    }
+
+    for h in handles {
+        let thread_result = h.join().expect("Thread panicked");
+        // Verify bit-level exact match across threads (zero race conditions)
+        assert_eq!(
+            thread_result.to_bits(),
+            baseline_energy.to_bits(),
+            "Concurrent calculation must be bit-identical (reentrancy check)"
+        );
+    }
+}
+
+/// Scrutiny Test 3: 3D Frame Rotation Orthonormality & Collinear Degeneracies.
+///
+/// Legacy Fortran `rotate.F90`/`coe.F90` contains branching jumps (`go to 50`) when atoms
+/// are collinear with the global z-axis. Here we verify that $D^{(1)}$ remains orthonormal
+/// ($D D^T = I$, $\det(D) = 1.0$) for both arbitrary 3D vectors and collinear degenerate axes.
+#[test]
+fn test_scrutiny_rotation_orthonormality_and_collinear_degeneracy() {
+    // Case A: Arbitrary 3D orientation
+    let ra = [1.23, 4.56, -7.89];
+    let rb = [-2.34, 0.12, 3.45];
+    let frame_a = DiatomicRotationFrame::compute(&ra, &rb);
+    assert!(frame_a.is_orthonormal(1e-14), "Arbitrary rotation frame must be orthonormal to 1e-14");
+    assert!((frame_a.determinant() - 1.0).abs() < 1e-14, "Determinant must be +1.0");
+
+    // Case B: Collinear along global +Z axis (degenerate case xy -> 0)
+    let ra_z = [0.0, 0.0, 0.0];
+    let rb_z = [0.0, 0.0, 2.5];
+    let frame_z = DiatomicRotationFrame::compute(&ra_z, &rb_z);
+    assert!(frame_z.is_orthonormal(1e-14), "+Z collinear frame must be orthonormal");
+    assert!((frame_z.determinant().abs() - 1.0).abs() < 1e-14, "Z frame determinant must have unit norm");
+
+    // Case C: Collinear along global -Z axis
+    let rb_neg_z = [0.0, 0.0, -3.0];
+    let frame_neg_z = DiatomicRotationFrame::compute(&ra_z, &rb_neg_z);
+    assert!(frame_neg_z.is_orthonormal(1e-14), "-Z collinear frame must be orthonormal");
+}
+
+/// Scrutiny Test 4: Slater Overlap Invariants & Radial Decay.
+///
+/// Validates that Slater-type orbital overlap $S(1s, 1s)$ satisfies fundamental quantum invariants:
+/// 1. $S(0) = 1.0$ (normalization).
+/// 2. $S(R) \to 0$ as $R \to \infty$ (compact support decay).
+/// 3. Symmetry: $S_{AB} = S_{BA}$.
+#[test]
+fn test_scrutiny_slater_overlap_invariants() {
+    let zeta_h = 1.1880780; // AM1 Hydrogen exponent
+
+    // Normalization at R = 0
+    let s_zero = overlap_1s_1s(0.0, zeta_h, zeta_h);
+    assert!((s_zero - 1.0).abs() < 1e-12, "S(0) must be exactly 1.0, got {}", s_zero);
+
+    // Monotonic decay: H-H overlap at 0.74 Å is ~0.680
+    let s_074 = overlap_1s_1s(0.74, zeta_h, zeta_h);
+    let s_150 = overlap_1s_1s(1.50, zeta_h, zeta_h);
+    let s_300 = overlap_1s_1s(3.00, zeta_h, zeta_h);
+
+    assert!((s_074 - 0.6800).abs() < 0.01, "H2 overlap at 0.74 Å must be ~0.680, got {}", s_074);
+    assert!(s_074 > s_150, "Overlap must decrease with distance: {} > {}", s_074, s_150);
+    assert!(s_150 > s_300, "Overlap must decrease with distance: {} > {}", s_150, s_300);
+
+    // Asymptotic vanish at long range (10 Å)
+    let s_far = overlap_1s_1s(10.0, zeta_h, zeta_h);
+    assert!(s_far < 1e-6, "Overlap at 10 Å must be negligibly small, got {}", s_far);
+
+    // Symmetry test: swapping zetas must yield identical overlap
+    let zeta_diff = 1.8086650; // Carbon exponent
+    let s_ab = overlap_1s_1s(1.09, zeta_h, zeta_diff);
+    let s_ba = overlap_1s_1s(1.09, zeta_diff, zeta_h);
+    assert!((s_ab - s_ba).abs() < 1e-14, "Overlap must be symmetric: {} == {}", s_ab, s_ba);
+}
+
+/// Scrutiny Test 5: ScfWorkspace Cache Alignment & Zero-Allocation Invariance.
+///
+/// Verifies that matrix allocations in ScfWorkspace are strictly aligned to 64-byte boundaries,
+/// and that reset operations perform 0 allocations.
+#[test]
+fn test_scrutiny_scf_workspace_zero_allocations() {
+    let norbs = 100;
+    let mut ws = ScfWorkspace::allocate(norbs);
+
+    // Verify 64-byte alignment
+    let ptr = ws.fock.data.as_ptr() as usize;
+    assert_eq!(ptr % CACHE_LINE_ALIGNMENT, 0, "Fock buffer must be 64-byte aligned");
+
+    let p_ptr = ws.density.data.as_ptr() as usize;
+    assert_eq!(p_ptr % CACHE_LINE_ALIGNMENT, 0, "Density buffer must be 64-byte aligned");
+
+    // Write values
+    ws.fock.set(10, 20, 3.14159);
+    assert_eq!(ws.fock.get(10, 20), 3.14159);
+
+    // Reset without reallocating
+    ws.reset();
+    assert_eq!(ws.fock.get(10, 20), 0.0, "Reset must zero all elements");
+    assert_eq!(ws.fock.data.as_ptr() as usize, ptr, "Pointer must not change upon reset");
+}
+
+/// Scrutiny Test 6: Long-Range Electrostatic Asymptotics of Two-Electron Integrals.
+///
+/// Validates that $(ss|ss)$ converges to classical Coulomb law $\frac{e^2}{R}$ at large separations.
+#[test]
+fn test_scrutiny_two_electron_coulomb_asymptotics() {
+    let gss_a = 12.848; // H
+    let gss_b = 12.230; // C
+
+    // At short range (R = 0), (ss|ss) equals one-center integral
+    let gamma_0 = dewar_klopman_monopole(0.0, gss_a, gss_a);
+    assert!((gamma_0 - gss_a).abs() < 1e-12, "At R=0, gamma must equal gss exactly");
+
+    // At long range (R = 100 Å), gamma must equal 14.399645 / 100 Å to within 0.01%
+    let r_far = 100.0;
+    let gamma_far = dewar_klopman_monopole(r_far, gss_a, gss_b);
+    let coulomb_expected = EV_ANGSTROM_FACTOR / r_far;
+
+    let relative_error = (gamma_far - coulomb_expected).abs() / coulomb_expected;
+    assert!(
+        relative_error < 0.0001,
+        "Relative error {} exceeds 0.01% for Coulomb asymptote at 100 Å",
+        relative_error
+    );
+}

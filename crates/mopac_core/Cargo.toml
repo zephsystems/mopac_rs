@@ -1,0 +1,12 @@
+[package]
+name = "mopac_core"
+version = "0.1.0"
+edition = "2021"
+authors = ["zeph.sys <zeph.systems@gmail.com>"]
+license = "Apache-2.0"
+description = "High-performance Data-Oriented semi-empirical quantum chemistry core engine in Rust"
+
+[dependencies]
+
+[dev-dependencies]
+
