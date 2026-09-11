@@ -3,7 +3,7 @@
 //! Licensed under the Apache License, Version 2.0 (the "License").
 //! Evaluates kinetic energy, atomic core energies, and nuclear attraction integrals.
 
-use crate::integrals::overlap::overlap_1s_1s;
+use crate::integrals::overlap::compute_diatomic_overlap_block;
 use crate::integrals::two_electron::dewar_klopman_monopole;
 use crate::parameters::ParameterModel;
 use crate::types::{AlignedMatrix, BasisType, MolecularBatch};
@@ -14,7 +14,7 @@ use crate::types::{AlignedMatrix, BasisType, MolecularBatch};
 /// 1. Diagonal one-center elements:
 ///    $$H_{\mu\mu} = U_{\mu\mu} - \sum_{B \neq A} Z_B^{\text{core}} \gamma_{AB}(R_{AB})$$
 /// 2. Off-diagonal two-center elements (Resonance integrals):
-///    $$H_{\mu\nu} = \frac{1}{2} (\beta_\mu^A + \beta_\nu^B) S_{\mu\nu}(R_{AB})$$
+///    $$H_{\mu\nu} = \frac{1}{2} (\beta_\mu^A + \beta_\nu^B) S_{\mu\nu}(\vec{R}_{AB})$$
 pub fn build_hcore(
     batch: &MolecularBatch,
     model: &dyn ParameterModel,
@@ -89,6 +89,7 @@ pub fn build_hcore(
             None => continue,
         };
         let orb_a_start = batch.orbital_offsets[i];
+        let norb_a = batch.basis_types[i].num_orbitals();
 
         for j in (i + 1)..batch.natoms {
             let zb = batch.atomic_numbers[j];
@@ -97,15 +98,34 @@ pub fn build_hcore(
                 None => continue,
             };
             let orb_b_start = batch.orbital_offsets[j];
+            let norb_b = batch.basis_types[j].num_orbitals();
 
             let r_ab = batch.distance(i, j);
+            if r_ab < 1e-10 {
+                continue;
+            }
 
-            // For s-s interactions (e.g. H-H or s-orbital pairs):
-            let s_ss = overlap_1s_1s(r_ab, p_a.zs, p_b.zs);
-            let h_ss = 0.5 * (p_a.betas + p_b.betas) * s_ss;
+            let dir = [
+                (batch.x[j] - batch.x[i]) / r_ab,
+                (batch.y[j] - batch.y[i]) / r_ab,
+                (batch.z[j] - batch.z[i]) / r_ab,
+            ];
 
-            h_core.set(orb_a_start, orb_b_start, h_ss);
-            h_core.set(orb_b_start, orb_a_start, h_ss);
+            let mut s_mat = [[0.0f64; 4]; 4];
+            compute_diatomic_overlap_block(za, zb, &p_a, &p_b, r_ab, dir, &mut s_mat);
+
+            let beta_a = [p_a.betas, p_a.betap, p_a.betap, p_a.betap];
+            let beta_b = [p_b.betas, p_b.betap, p_b.betap, p_b.betap];
+
+            for oa in 0..norb_a.min(4) {
+                let idx_a = orb_a_start + oa;
+                for ob in 0..norb_b.min(4) {
+                    let idx_b = orb_b_start + ob;
+                    let h_res = 0.5 * (beta_a[oa] + beta_b[ob]) * s_mat[oa][ob];
+                    h_core.set(idx_a, idx_b, h_res);
+                    h_core.set(idx_b, idx_a, h_res);
+                }
+            }
         }
     }
 }

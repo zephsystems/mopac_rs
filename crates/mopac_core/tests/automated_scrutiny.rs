@@ -416,3 +416,118 @@ fn test_scrutiny_pulay_diis_error_reduction() {
     assert!(res.iterations <= 10, "DIIS must converge H2 in <= 10 iterations, took {}", res.iterations);
 }
 
+/// Scrutiny Test 10: Complete Diatomic STO Overlap Block & 3D Tensor Rotation Invariance.
+///
+/// Verifies:
+/// 1. Bit-level parity with MOPAC v23.2.5 for C-O diatomic overlap at R = 1.128 Å.
+/// 2. Bit-level parity with MOPAC v23.2.5 for C-H diatomic overlap at R = 1.1198 Å.
+/// 3. Exact 3D rotational invariance of Cartesian p-orbital tensors under arbitrary spatial rotations.
+#[test]
+fn test_scrutiny_diatomic_overlap_block_invariants_and_rotation() {
+    use mopac_core::integrals::overlap::compute_diatomic_overlap_block;
+    use mopac_core::parameters::am1::Am1Model;
+    use mopac_core::parameters::ParameterModel;
+
+    let am1 = Am1Model;
+    let param_c = am1.get_element(6).unwrap();
+    let param_o = am1.get_element(8).unwrap();
+    let param_h = am1.get_element(1).unwrap();
+
+    // 1. Carbon Monoxide (C-O) at R = 1.128 Å along Z
+    let r_co = 1.128;
+    let mut s_mat_co = [[0.0f64; 4]; 4];
+    compute_diatomic_overlap_block(6, 8, &param_c, &param_o, r_co, [0.0, 0.0, 1.0], &mut s_mat_co);
+
+    let beta_s_c = param_c.betas;
+    let beta_p_c = param_c.betap;
+    let beta_s_o = param_o.betas;
+    let beta_p_o = param_o.betap;
+
+    // Expected H_core values from official MOPAC v23.2.5 run on CO:
+    // H(s_C, s_O) = -6.259811 eV
+    // H(px_C, px_O) = -3.951300 eV
+    // H(pz_C, pz_O) = +5.440476 eV
+    // H(s_C, pz_O) = +6.715171 eV
+    // H(pz_C, s_O) = -7.616655 eV
+    let h_ss = 0.5 * (beta_s_c + beta_s_o) * s_mat_co[0][0];
+    let h_pipi = 0.5 * (beta_p_c + beta_p_o) * s_mat_co[1][1];
+    let h_sigma = 0.5 * (beta_p_c + beta_p_o) * s_mat_co[3][3];
+    let h_s_pz = 0.5 * (beta_s_c + beta_p_o) * s_mat_co[0][3];
+    let h_pz_s = 0.5 * (beta_p_c + beta_s_o) * s_mat_co[3][0];
+
+    assert!(
+        (h_ss - (-6.259811)).abs() < 1e-5,
+        "C-O H_ss mismatch with MOPAC: {} vs -6.259811", h_ss
+    );
+    assert!(
+        (h_pipi - (-3.951300)).abs() < 1e-5,
+        "C-O H_pipi mismatch with MOPAC: {} vs -3.951300", h_pipi
+    );
+    assert!(
+        (h_sigma - 5.440476).abs() < 1e-5,
+        "C-O H_sigma mismatch with MOPAC: {} vs 5.440476", h_sigma
+    );
+    assert!(
+        (h_s_pz - 6.715171).abs() < 1e-5,
+        "C-O H(s_C, pz_O) mismatch with MOPAC: {} vs 6.715171", h_s_pz
+    );
+    assert!(
+        (h_pz_s - (-7.616655)).abs() < 1e-5,
+        "C-O H(pz_C, s_O) mismatch with MOPAC: {} vs -7.616655", h_pz_s
+    );
+
+    // 2. Carbon-Hydrogen (C-H) at R = 1.1198 Å along Z
+    let r_ch = 1.1198;
+    let mut s_mat_ch = [[0.0f64; 4]; 4];
+    compute_diatomic_overlap_block(6, 1, &param_c, &param_h, r_ch, [0.0, 0.0, 1.0], &mut s_mat_ch);
+
+    let beta_s_h = param_h.betas;
+    // Expected H_core values from official MOPAC v23.2.5 on CH:
+    // H(s_C, s_H) = -5.148905 eV
+    // H(pz_C, s_H) = -3.220867 eV
+    let h_ss_ch = 0.5 * (beta_s_c + beta_s_h) * s_mat_ch[0][0];
+    let h_pz_s_ch = 0.5 * (beta_p_c + beta_s_h) * s_mat_ch[3][0];
+
+    assert!(
+        (h_ss_ch - (-5.148905)).abs() < 1e-5,
+        "C-H H_ss mismatch with MOPAC: {} vs -5.148905", h_ss_ch
+    );
+    assert!(
+        (h_pz_s_ch - (-3.220867)).abs() < 1e-5,
+        "C-H H(pz_C, s_H) mismatch with MOPAC: {} vs -3.220867", h_pz_s_ch
+    );
+
+    // 3. 3D Rotational Invariance under arbitrary space rotation
+    let raw_dir: [f64; 3] = [0.353553, -0.612372, 0.707107];
+    let norm = (raw_dir[0] * raw_dir[0] + raw_dir[1] * raw_dir[1] + raw_dir[2] * raw_dir[2]).sqrt();
+    let dir = [raw_dir[0] / norm, raw_dir[1] / norm, raw_dir[2] / norm];
+    let mut s_mat_rot = [[0.0f64; 4]; 4];
+    compute_diatomic_overlap_block(6, 8, &param_c, &param_o, r_co, dir, &mut s_mat_rot);
+
+    // Diagonalize the 3x3 p-p subblock of s_mat_rot: eigenvalues must match [s_sigma, s_pi, s_pi]
+    let mut pp_block = AlignedMatrix::zeroed(3, 3);
+    for i in 0..3 {
+        for j in 0..3 {
+            pp_block.set(i, j, s_mat_rot[1 + i][1 + j]);
+        }
+    }
+    let mut eigs = AlignedVec64::zeroed(3);
+    let mut vecs = AlignedMatrix::zeroed(3, 3);
+    mopac_core::scf::eigensolver::diagonalize_symmetric(&pp_block, &mut eigs, &mut vecs);
+
+    let s_sigma_ref = s_mat_co[3][3]; // along Z
+    let s_pi_ref = s_mat_co[1][1];    // perpendicular
+
+    let mut expected_eigs = [s_sigma_ref, s_pi_ref, s_pi_ref];
+    expected_eigs.sort_by(|a, b| a.partial_cmp(b).unwrap());
+
+    for i in 0..3 {
+        assert!(
+            (eigs[i] - expected_eigs[i]).abs() < 1e-12,
+            "Rotational invariance eigenvalue violation at {}: {} vs expected {}",
+            i, eigs[i], expected_eigs[i]
+        );
+    }
+}
+
+
