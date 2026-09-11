@@ -292,6 +292,8 @@ pub struct ScfWorkspace {
     pub tmp1: AlignedMatrix<f64>,
     /// Temporary matrix buffer 2
     pub tmp2: AlignedMatrix<f64>,
+    /// Pre-allocated DIIS convergence acceleration workspace
+    pub diis: crate::scf::diis::DiisWorkspace,
 }
 
 impl ScfWorkspace {
@@ -307,6 +309,7 @@ impl ScfWorkspace {
             diis_error: AlignedMatrix::zeroed(norbs, norbs),
             tmp1: AlignedMatrix::zeroed(norbs, norbs),
             tmp2: AlignedMatrix::zeroed(norbs, norbs),
+            diis: crate::scf::diis::DiisWorkspace::allocate(norbs, crate::scf::diis::DEFAULT_MAX_DIIS),
         }
     }
 
@@ -320,5 +323,6 @@ impl ScfWorkspace {
         self.diis_error.fill_zero();
         self.tmp1.fill_zero();
         self.tmp2.fill_zero();
+        self.diis.reset();
     }
 }

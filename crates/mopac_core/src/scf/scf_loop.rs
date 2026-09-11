@@ -57,10 +57,11 @@ pub fn run_rhf_scf(
     diagonalize_symmetric(&ws.h_core, &mut ws.eigenvalues, &mut ws.eigenvectors);
     compute_density_matrix(&ws.eigenvectors, nocc, &mut ws.density);
 
+    ws.diis.reset();
     let mut prev_energy = 0.0f64;
     let mut converged = false;
     let mut iters_done = 0;
-    let damping = 0.5; // Simple linear damping
+    let damping = 0.5; // Linear damping fallback when DIIS has not yet engaged
 
     // 5. SCF Iteration Loop (ZERO dynamic heap allocations)
     for iter in 1..=max_iter {
@@ -69,9 +70,12 @@ pub fn run_rhf_scf(
         // Build Fock matrix F = H_core + G(P)
         build_fock(batch, model, &ws.h_core, &ws.density, &mut ws.fock);
 
-        // Compute electronic energy
+        // Compute electronic energy of the current physical state (P, F)
         let e_elec = compute_electronic_energy(&ws.density, &ws.h_core, &ws.fock);
         let e_total = e_elec + enuc;
+
+        // Apply Pulay DIIS acceleration (modifies ws.fock in-place if m >= 2)
+        let diis_res = ws.diis.push_and_extrapolate(&mut ws.fock, &ws.density, &mut ws.tmp2);
 
         // Diagonalize Fock matrix: F C = C epsilon
         diagonalize_symmetric(&ws.fock, &mut ws.eigenvalues, &mut ws.eigenvectors);
@@ -83,19 +87,26 @@ pub fn run_rhf_scf(
         let delta_e = (e_total - prev_energy).abs();
         let delta_p = max_density_diff(&ws.tmp1, &ws.density);
 
-        if iter > 1 && delta_e < energy_tol_ev && delta_p < density_tol {
+        if iter > 1 && delta_e < energy_tol_ev && (delta_p < density_tol || diis_res.max_error < density_tol) {
             converged = true;
+            ws.density.data.copy_from_slice(&ws.tmp1.data);
             break;
         }
 
         prev_energy = e_total;
 
-        // Apply density damping: P = (1 - damping) * P_new + damping * P_old
-        for i in 0..ws.norbs {
-            for j in 0..ws.norbs {
-                let p_new = ws.tmp1.get(i, j);
-                let p_old = ws.density.get(i, j);
-                ws.density.set(i, j, (1.0 - damping) * p_new + damping * p_old);
+        // Update density for next iteration
+        if diis_res.extrapolated {
+            // Under DIIS extrapolation, adopt the stationary solution directly (no damping)
+            ws.density.data.copy_from_slice(&ws.tmp1.data);
+        } else {
+            // Linear damping fallback (e.g. iteration 1 or if DIIS reset)
+            for i in 0..ws.norbs {
+                for j in 0..ws.norbs {
+                    let p_new = ws.tmp1.get(i, j);
+                    let p_old = ws.density.get(i, j);
+                    ws.density.set(i, j, (1.0 - damping) * p_new + damping * p_old);
+                }
             }
         }
     }

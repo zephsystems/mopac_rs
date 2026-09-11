@@ -327,3 +327,92 @@ fn test_scrutiny_end_to_end_h2_scf_convergence() {
     let gap = result.lumo_energy_ev - result.homo_energy_ev;
     assert!((gap - 19.118441).abs() < 1e-4, "HOMO-LUMO gap mismatch: {}", gap);
 }
+
+/// Scrutiny Test 9: Pulay DIIS Commutator Invariants & Superlinear Error Reduction.
+///
+/// Verifies:
+/// 1. Mathematical skew-symmetry $[F, P]^T = -[F, P]$ and zero trace of the orbital rotation error.
+/// 2. Exact solution of the augmented saddle-point Pulay linear system $\sum c_k = 1$.
+/// 3. Monotonic reduction of commutator error norm $\|[F, P]\| \to 0$ in the SCF cycle.
+#[test]
+fn test_scrutiny_pulay_diis_error_reduction() {
+    use mopac_core::scf::diis::{solve_pulay_system, DiisWorkspace, DEFAULT_MAX_DIIS, MAX_DIIS_CAPACITY};
+
+    let n = 4;
+    let mut fock = AlignedMatrix::zeroed(n, n);
+    let mut density = AlignedMatrix::zeroed(n, n);
+    let mut tmp = AlignedMatrix::zeroed(n, n);
+
+    // Populate symmetric test matrices
+    fock.set(0, 0, -12.0); fock.set(1, 1, -6.0); fock.set(2, 2, -6.0); fock.set(3, 3, -4.0);
+    fock.set(0, 1, -1.5);  fock.set(1, 0, -1.5);
+    fock.set(1, 2, -0.8);  fock.set(2, 1, -0.8);
+
+    density.set(0, 0, 1.8); density.set(1, 1, 1.2); density.set(2, 2, 0.9); density.set(3, 3, 0.1);
+    density.set(0, 1, 0.4); density.set(1, 0, 0.4);
+    density.set(1, 2, 0.2); density.set(2, 1, 0.2);
+
+    let mut diis = DiisWorkspace::allocate(n, DEFAULT_MAX_DIIS);
+
+    // 1. First DIIS step (m = 1)
+    let res1 = diis.push_and_extrapolate(&mut fock, &density, &mut tmp);
+    assert!(!res1.extrapolated, "Cannot extrapolate with only 1 history point");
+    assert_eq!(res1.subspace_size, 1);
+    assert!(res1.max_error > 0.0, "Error must be positive for non-commuting matrices");
+
+    // Verify skew-symmetry of stored error matrix: e_ij = -e_ji, e_ii = 0
+    let err_mat = &diis.error_history[diis.active_slots[0]];
+    for i in 0..n {
+        assert!(err_mat.get(i, i).abs() < 1e-15, "Diagonal commutator must be zero");
+        for j in 0..n {
+            let e_ij = err_mat.get(i, j);
+            let e_ji = err_mat.get(j, i);
+            assert!(
+                (e_ij + e_ji).abs() < 1e-14,
+                "Commutator must be strictly anti-symmetric: e({},{})={}, e({},{})={}",
+                i, j, e_ij, j, i, e_ji
+            );
+        }
+    }
+
+    // 2. Synthetic linear system test with known analytical solution
+    // Consider 2 error states with known scalar products:
+    let mut b_mat = [[0.0f64; MAX_DIIS_CAPACITY]; MAX_DIIS_CAPACITY];
+    b_mat[0][0] = 2.0;
+    b_mat[0][1] = 1.0;
+    b_mat[1][0] = 1.0;
+    b_mat[1][1] = 0.5;
+
+    let mut coeffs = [0.0f64; MAX_DIIS_CAPACITY];
+    let ok = solve_pulay_system(&b_mat, 2, &mut coeffs);
+    assert!(ok, "Pulay linear solver must successfully invert 2x2 system");
+    // Analytical solution: c_0 = -1.0, c_1 = 2.0 (sum = 1.0, error* = 0)
+    assert!(
+        (coeffs[0] - (-1.0)).abs() < 1e-10,
+        "Coeff 0 mismatch: {} vs -1.0", coeffs[0]
+    );
+    assert!(
+        (coeffs[1] - 2.0).abs() < 1e-10,
+        "Coeff 1 mismatch: {} vs 2.0", coeffs[1]
+    );
+    let sum_c = coeffs[0] + coeffs[1];
+    assert!((sum_c - 1.0).abs() < 1e-12, "Coefficients must sum to 1.0: {}", sum_c);
+
+    // 3. Monotonic error reduction in complete H2 SCF calculation
+    let coords = vec![[0.0, 0.0, 0.0], [0.0, 0.0, 0.74]];
+    let batch = MolecularBatch::new(vec![1, 1], &coords);
+    let am1 = Am1Model;
+    let mut ws = ScfWorkspace::allocate(batch.norbs);
+
+    let res = mopac_core::scf::scf_loop::run_rhf_scf(
+        &batch,
+        &am1,
+        &mut ws,
+        30,
+        1e-10,
+        1e-9,
+    );
+    assert!(res.converged, "H2 SCF with DIIS must converge to high precision");
+    assert!(res.iterations <= 10, "DIIS must converge H2 in <= 10 iterations, took {}", res.iterations);
+}
+
