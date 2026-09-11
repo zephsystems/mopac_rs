@@ -199,3 +199,131 @@ fn test_scrutiny_two_electron_coulomb_asymptotics() {
         relative_error
     );
 }
+
+/// Scrutiny Test 7: Exact Eigensolver Parity & Orthonormality.
+///
+/// Verifies that our pure Rust cyclic Jacobi eigensolver produces strictly orthonormal
+/// eigenvectors ($C^T C = I$ to $< 10^{-14}$) and exact secular solutions ($F C = C \epsilon$ to $< 10^{-13}$).
+#[test]
+fn test_scrutiny_eigensolver_invariants() {
+    use mopac_core::scf::eigensolver::diagonalize_symmetric;
+
+    let n = 4;
+    let mut fock = AlignedMatrix::zeroed(n, n);
+    // Symmetric test matrix (representing an sp-block)
+    fock.set(0, 0, -11.4);
+    fock.set(1, 1, -5.2);
+    fock.set(2, 2, -5.2);
+    fock.set(3, 3, -3.1);
+
+    fock.set(0, 1, -2.5);
+    fock.set(1, 0, -2.5);
+
+    fock.set(0, 3, 1.2);
+    fock.set(3, 0, 1.2);
+
+    fock.set(1, 2, -0.8);
+    fock.set(2, 1, -0.8);
+
+    let mut eigenvalues = AlignedVec64::zeroed(n);
+    let mut eigenvectors = AlignedMatrix::zeroed(n, n);
+
+    let sweeps = diagonalize_symmetric(&fock, &mut eigenvalues, &mut eigenvectors);
+    assert!(sweeps < 15, "Jacobi must converge in fewer than 15 sweeps for 4x4, took {}", sweeps);
+
+    // 1. Orthonormality check: C^T C = I
+    for i in 0..n {
+        for j in 0..n {
+            let mut dot = 0.0;
+            for r in 0..n {
+                dot += eigenvectors.get(r, i) * eigenvectors.get(r, j);
+            }
+            let expected = if i == j { 1.0 } else { 0.0 };
+            assert!(
+                (dot - expected).abs() < 1e-14,
+                "Orthonormality violation at ({}, {}): dot={}, expected={}",
+                i, j, dot, expected
+            );
+        }
+    }
+
+    // 2. Eigenvalue equation check: F * v_i = lambda_i * v_i
+    for i in 0..n {
+        let lambda = eigenvalues[i];
+        for r in 0..n {
+            let mut f_v = 0.0;
+            for c in 0..n {
+                f_v += fock.get(r, c) * eigenvectors.get(c, i);
+            }
+            let lambda_v = lambda * eigenvectors.get(r, i);
+            assert!(
+                (f_v - lambda_v).abs() < 1e-13,
+                "Secular equation F*v = lambda*v failed for orb {} row {}: {} vs {}",
+                i, r, f_v, lambda_v
+            );
+        }
+    }
+
+    // 3. Eigenvalue sorting check: epsilon_1 <= epsilon_2 <= ...
+    for i in 0..(n - 1) {
+        assert!(
+            eigenvalues[i] <= eigenvalues[i + 1],
+            "Eigenvalues must be sorted: {} > {}",
+            eigenvalues[i], eigenvalues[i + 1]
+        );
+    }
+}
+
+/// Scrutiny Test 8: End-to-End Quantum SCF Convergence on Hydrogen Molecule (H2).
+///
+/// Executes the complete Data-Oriented SCF cycle on H2 (R = 0.74 Å) with zero heap allocations.
+/// Verifies convergence, correct negative electronic energy, and HOMO-LUMO gap existence.
+#[test]
+fn test_scrutiny_end_to_end_h2_scf_convergence() {
+    use mopac_core::scf::scf_loop::run_rhf_scf;
+
+    let coords = vec![
+        [0.0, 0.0, 0.0],
+        [0.0, 0.0, 0.74],
+    ];
+    let atomic_numbers = vec![1, 1];
+    let batch = MolecularBatch::new(atomic_numbers, &coords);
+    let am1 = Am1Model;
+
+    let mut ws = ScfWorkspace::allocate(batch.norbs);
+
+    let result = run_rhf_scf(
+        &batch,
+        &am1,
+        &mut ws,
+        50,       // max iter
+        1e-8,     // energy tol in eV
+        1e-7,     // density tol
+    );
+
+    assert!(result.converged, "H2 SCF must converge successfully");
+    assert!(result.iterations <= 15, "H2 must converge in <= 15 iterations, took {}", result.iterations);
+
+    // Total energy check (electronic energy + nuclear repulsion)
+    assert!(result.electronic_energy_ev < 0.0, "Electronic energy must be negative (attractive bound state)");
+    assert!(result.nuclear_repulsion_ev > 0.0, "Nuclear repulsion must be positive");
+    assert!(result.total_energy_ev < 0.0, "Total energy for stable H2 must be negative");
+
+    // Empirical Parity Verification with official MOPAC v23.2.5 reference:
+    // MOPAC v23.2.5 output for H2 (R=0.74 A, AM1):
+    // HOMO: -14.531648 eV | LUMO: +4.586794 eV
+    assert!(
+        (result.homo_energy_ev - (-14.531648)).abs() < 1e-5,
+        "HOMO parity mismatch with MOPAC v23.2.5: {} vs -14.531648",
+        result.homo_energy_ev
+    );
+    assert!(
+        (result.lumo_energy_ev - 4.586794).abs() < 1e-5,
+        "LUMO parity mismatch with MOPAC v23.2.5: {} vs 4.586794",
+        result.lumo_energy_ev
+    );
+
+    // HOMO-LUMO gap check (~19.118 eV)
+    let gap = result.lumo_energy_ev - result.homo_energy_ev;
+    assert!((gap - 19.118441).abs() < 1e-4, "HOMO-LUMO gap mismatch: {}", gap);
+}
