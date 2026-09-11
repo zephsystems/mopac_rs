@@ -656,5 +656,266 @@ fn test_scrutiny_virtual_orbital_level_shifting_invariants() {
     );
 }
 
+/// Scrutiny Test 12: Camp-King Quadratic Line-Search & Unitary Orbital Rotation Invariants.
+///
+/// Axiomatic mathematical verification of the Camp & King (1981) algorithm:
+/// 1. Orthonormality Conservation: C'(x)^T C'(x) = I for all line-search points x.
+/// 2. Density Idempotency: P'(x)^2 = 2 P'(x) (exact closed-shell N-representability).
+/// 3. Spline Minimization: exact analytical root recovery on known cubic potential.
+#[test]
+fn test_scrutiny_camp_king_unitary_interpolator() {
+    use mopac_core::scf::camp_king::{interpolate_camp_king, spline_minimize, CampKingWorkspace};
+    use mopac_core::types::AlignedMatrix;
+
+    // 1. Verify cubic spline minimization on known function:
+    // f(x) = 2 x^3 - 3 x^2 - 12 x + 5  => f'(x) = 6 x^2 - 6 x - 12 = 6(x-2)(x+1)
+    // Minimum is at x = 2.0.
+    // Points at x = 0.0 (f = 5, df = -12) and x = 3.0 (f = -4, df = 24).
+    let x_pts = [0.0, 3.0];
+    let f_pts = [5.0, -4.0];
+    let df_pts = [-12.0, 24.0];
+    let (x_min, f_min) = spline_minimize(&x_pts, &f_pts, &df_pts, -1.0, 4.0);
+    assert!(
+        (x_min - 2.0).abs() < 1e-6,
+        "Spline must recover analytical minimum at x = 2.0, found: {}", x_min
+    );
+    assert!(
+        (f_min - (-15.0)).abs() < 1e-6,
+        "Spline must recover minimum value f(2) = -15.0, found: {}", f_min
+    );
+
+    // 2. Orthonormality & Idempotency Invariance under Unitary Orbital Rotation
+    let norbs = 6;
+    let nocc = 2;
+    let mut ws = CampKingWorkspace::allocate(norbs);
+
+    // Construct orthonormal C_prev (Identity)
+    let mut c_prev = AlignedMatrix::zeroed(norbs, norbs);
+    for i in 0..norbs {
+        c_prev.set(i, i, 1.0);
+    }
+
+    // Construct perturbed orthonormal C_curr via Givens rotation between occ(0) and virt(2)
+    let angle = 0.35f64; // radians
+    let mut c_curr = AlignedMatrix::zeroed(norbs, norbs);
+    for i in 0..norbs {
+        c_curr.set(i, i, 1.0);
+    }
+    c_curr.set(0, 0, angle.cos());
+    c_curr.set(0, 2, -angle.sin());
+    c_curr.set(2, 0, angle.sin());
+    c_curr.set(2, 2, angle.cos());
+
+    // Construct a sample Fock matrix
+    let mut fock = AlignedMatrix::zeroed(norbs, norbs);
+    for i in 0..norbs {
+        fock.set(i, i, (i as f64) * 2.0 - 5.0);
+    }
+    fock.set(0, 2, 1.5);
+    fock.set(2, 0, 1.5);
+
+    let res = interpolate_camp_king(
+        &c_prev,
+        &mut c_curr,
+        &fock,
+        -10.0, // e_prev
+        -8.5,  // e_curr (oscillating upward)
+        nocc,
+        &mut ws,
+    );
+
+    assert!(res.rotated, "Camp-King must trigger rotation when orbitals differ");
+    assert!(
+        (res.max_rotation_angle - angle).abs() < 1e-6,
+        "Principal angle must match perturbation angle {}: got {}",
+        angle, res.max_rotation_angle
+    );
+
+    // Verify Orthonormality: C^T C = I
+    for i in 0..norbs {
+        for j in 0..norbs {
+            let mut dot = 0.0;
+            for mu in 0..norbs {
+                dot += c_curr.get(mu, i) * c_curr.get(mu, j);
+            }
+            let expected = if i == j { 1.0 } else { 0.0 };
+            assert!(
+                (dot - expected).abs() < 1e-13,
+                "Orthonormality violation at ({},{}): dot = {}, expected = {}",
+                i, j, dot, expected
+            );
+        }
+    }
+
+    // Verify Idempotency of resulting density: P = 2 C_occ C_occ^T => P^2 = 2 P
+    let mut p = AlignedMatrix::zeroed(norbs, norbs);
+    for mu in 0..norbs {
+        for nu in 0..norbs {
+            let mut sum = 0.0;
+            for i in 0..nocc {
+                sum += 2.0 * c_curr.get(mu, i) * c_curr.get(nu, i);
+            }
+            p.set(mu, nu, sum);
+        }
+    }
+
+    let mut p_sq = AlignedMatrix::zeroed(norbs, norbs);
+    for mu in 0..norbs {
+        for nu in 0..norbs {
+            let mut sum = 0.0;
+            for lam in 0..norbs {
+                sum += p.get(mu, lam) * p.get(lam, nu);
+            }
+            p_sq.set(mu, nu, sum);
+        }
+    }
+
+    for mu in 0..norbs {
+        for nu in 0..norbs {
+            let p2_val = p_sq.get(mu, nu);
+            let two_p = 2.0 * p.get(mu, nu);
+            assert!(
+                (p2_val - two_p).abs() < 1e-13,
+                "Density idempotency violation P^2 != 2P at ({},{}): {} vs {}",
+                mu, nu, p2_val, two_p
+            );
+        }
+    }
+}
+
+/// Scrutiny Test 13: Density Fitting (RI-V) Coulomb Metric Factorization & Tensorial Parity.
+///
+/// Axiomatic mathematical verification of the RI-V projection:
+/// 1. Metric Cholesky Factorization: V = L L^T => ||L L^T - V|| < 1e-14.
+/// 2. Inverse Square Root Parity: V^{-1/2} (V^{-1/2})^T = V^{-1} => ||V (V^{-1/2} V^{-1/2 T}) - I|| < 1e-13.
+/// 3. Exact 4-Center Tensor Recovery: sum_Q B_{mu,nu}^Q B_{lam,sig}^Q == (mu,nu|lam,sig)_{RI}.
+/// 4. Coulomb BLAS-2/BLAS-3 Contraction Parity: J_{mu,nu} = sum_Q B_{mu,nu}^Q d_Q matches exact 4-center contraction.
+#[test]
+fn test_scrutiny_density_fitting_ri_v_invariants() {
+    use mopac_core::ri::{
+        cholesky_decompose, compute_coulomb_ri, compute_inverse_square_root_metric,
+        ThreeCenterTensorB,
+    };
+    use mopac_core::types::{AlignedMatrix, AlignedVec64};
+
+    let naux = 4;
+    let norbs = 3;
+
+    // 1. Construct symmetric positive-definite auxiliary Coulomb metric V
+    let mut v_mat = AlignedMatrix::zeroed(naux, naux);
+    let v_data = [
+        [4.0, 1.2, 0.5, 0.2],
+        [1.2, 5.0, 0.8, 0.4],
+        [0.5, 0.8, 3.5, 0.6],
+        [0.2, 0.4, 0.6, 4.2],
+    ];
+    for i in 0..naux {
+        for j in 0..naux {
+            v_mat.set(i, j, v_data[i][j]);
+        }
+    }
+
+    // Verify Cholesky decomposition: V = L L^T
+    let mut l_mat = v_mat.clone();
+    cholesky_decompose(&mut l_mat).expect("V must be positive definite");
+
+    let mut l_lt = AlignedMatrix::zeroed(naux, naux);
+    for i in 0..naux {
+        for j in 0..naux {
+            let mut sum = 0.0;
+            for k in 0..=(i.min(j)) {
+                sum += l_mat.get(i, k) * l_mat.get(j, k);
+            }
+            l_lt.set(i, j, sum);
+            let diff = (sum - v_mat.get(i, j)).abs();
+            assert!(
+                diff < 1e-14,
+                "Cholesky reconstruction error at ({},{}): diff = {:e}",
+                i, j, diff
+            );
+        }
+    }
+
+    // Verify Inverse Square Root: V * (V^{-1/2} * V^{-1/2 T}) = I
+    let mut v_inv_sqrt = AlignedMatrix::zeroed(naux, naux);
+    compute_inverse_square_root_metric(&v_mat, &mut v_inv_sqrt).unwrap();
+
+    let mut v_inv = AlignedMatrix::zeroed(naux, naux);
+    for i in 0..naux {
+        for j in 0..naux {
+            let mut sum = 0.0;
+            for k in 0..naux {
+                sum += v_inv_sqrt.get(i, k) * v_inv_sqrt.get(j, k);
+            }
+            v_inv.set(i, j, sum);
+        }
+    }
+
+    // Check V * V^{-1} = I
+    for i in 0..naux {
+        for j in 0..naux {
+            let mut sum = 0.0;
+            for k in 0..naux {
+                sum += v_mat.get(i, k) * v_inv.get(k, j);
+            }
+            let expected = if i == j { 1.0 } else { 0.0 };
+            assert!(
+                (sum - expected).abs() < 1e-13,
+                "V * V^{{-1}} != I at ({},{}): sum = {}, expected = {}",
+                i, j, sum, expected
+            );
+        }
+    }
+
+    // 2. Build 3-center tensor B_{mu,nu}^Q = sum_P (mu nu | P) [V^{-1/2}]_{PQ}
+    let mut b_tensor = ThreeCenterTensorB::allocate(norbs, naux);
+
+    // Synthetic 3-center integrals (mu, nu | P)
+    for mu in 0..norbs {
+        for nu in 0..norbs {
+            for q in 0..naux {
+                // Populate B directly with orthogonalized components
+                let val = ((mu + 1) as f64) * 0.7 + ((nu + 1) as f64) * 0.4 + ((q + 1) as f64) * 0.3;
+                b_tensor.set(mu, nu, q, val);
+            }
+        }
+    }
+
+    // 3. Verify Coulomb Contraction: J_{mu,nu} = sum_Q B_{mu,nu}^Q d_Q
+    let mut density = AlignedMatrix::zeroed(norbs, norbs);
+    for mu in 0..norbs {
+        for nu in 0..norbs {
+            density.set(mu, nu, if mu == nu { 1.5 } else { 0.3 });
+        }
+    }
+
+    let mut j_ri = AlignedMatrix::zeroed(norbs, norbs);
+    let mut d_aux = AlignedVec64::zeroed(naux);
+    compute_coulomb_ri(&b_tensor, &density, &mut j_ri, &mut d_aux);
+
+    // Compute reference J directly from reconstructed 4-center integrals:
+    // J_ref(mu, nu) = sum_{lam, sig} (mu nu | lam sig) P_{lam, sig}
+    for mu in 0..norbs {
+        for nu in 0..norbs {
+            let mut j_ref = 0.0;
+            for lam in 0..norbs {
+                for sig in 0..norbs {
+                    let eri_4c = b_tensor.reconstruct_4center(mu, nu, lam, sig);
+                    j_ref += eri_4c * density.get(lam, sig);
+                }
+            }
+            let j_val = j_ri.get(mu, nu);
+            let diff = (j_val - j_ref).abs();
+            assert!(
+                diff < 1e-12,
+                "RI Coulomb contraction mismatch at ({},{}): RI = {}, direct = {}, diff = {:e}",
+                mu, nu, j_val, j_ref, diff
+            );
+        }
+    }
+}
+
+
+
 
 

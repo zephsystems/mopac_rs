@@ -272,7 +272,7 @@ pub fn solve_pulay_system(
     m: usize,
     coeffs: &mut [f64; MAX_DIIS_CAPACITY],
 ) -> bool {
-    assert!(m >= 2 && m <= MAX_DIIS_CAPACITY);
+    assert!((2..=MAX_DIIS_CAPACITY).contains(&m));
     let k_dim = m + 1;
     const MAX_K: usize = MAX_DIIS_CAPACITY + 1;
 
@@ -329,9 +329,7 @@ pub fn solve_pulay_system(
                 a[k][col] = a[pivot_row][col];
                 a[pivot_row][col] = tmp;
             }
-            let tmp_b = b[k];
-            b[k] = b[pivot_row];
-            b[pivot_row] = tmp_b;
+            b.swap(k, pivot_row);
         }
 
         // Eliminate column k in rows below k

@@ -104,7 +104,7 @@ pub mod codata2018 {
 
     /// Conversion factor from electron-volts (eV) to kcal/mol:
     /// Evaluated as: $\frac{e \times N_A \times 10^{-3}}{4.184} = 23.060547830619029 \text{ kcal/(mol}\cdot\text{eV)}$.
-    pub const EV_TO_KCAL_MOL: f64 = 23.060547830619029;
+    pub const EV_TO_KCAL_MOL: f64 = 23.060_547_830_619_03;
 }
 
 /// Modern CODATA 2022 Fundamental Physical Constants (Released May 2024).
@@ -128,7 +128,7 @@ pub mod codata2022 {
     pub const EV_ANGSTROM_FACTOR: f64 = 14.399645478456;
 
     /// Conversion factor from eV to kcal/mol.
-    pub const EV_TO_KCAL_MOL: f64 = 23.060547830619029;
+    pub const EV_TO_KCAL_MOL: f64 = 23.060_547_830_619_03;
 
     /// Gas constant R in cal/(mol·K).
     pub const GAS_CONSTANT_CAL: f64 = 1.987204258640832;

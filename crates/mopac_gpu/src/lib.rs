@@ -8,6 +8,8 @@
 
 pub mod context;
 pub mod coulomb;
+pub mod coulomb_fp32;
 
 pub use context::{VulkanContext, VulkanDeviceInfo, VulkanError};
 pub use coulomb::{AtomGpu, GpuCoulombCalculator, GpuWorkspace};
+pub use coulomb_fp32::{AtomGpuFP32, GpuBatchVramManager, GpuCoulombCalculatorFP32, GpuWorkspaceFP32};

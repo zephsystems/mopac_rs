@@ -72,8 +72,8 @@ impl VulkanContext {
     pub fn new() -> Result<Self, VulkanError> {
         let entry = unsafe { ash::Entry::load()? };
 
-        let app_name = unsafe { CStr::from_bytes_with_nul_unchecked(b"mopac_rs\0") };
-        let engine_name = unsafe { CStr::from_bytes_with_nul_unchecked(b"mopac_compute\0") };
+        let app_name = c"mopac_rs";
+        let engine_name = c"mopac_compute";
 
         let app_info = vk::ApplicationInfo::default()
             .application_name(app_name)

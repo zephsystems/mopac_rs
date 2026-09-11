@@ -1,0 +1,53 @@
+#version 450
+
+layout(local_size_x = 16, local_size_y = 16, local_size_z = 1) in;
+
+struct AtomDataFP32 {
+    float x;
+    float y;
+    float z;
+    float gss;
+};
+
+layout(std430, set = 0, binding = 0) readonly buffer AtomBuffer {
+    AtomDataFP32 atoms[];
+};
+
+layout(std430, set = 0, binding = 1) writeonly buffer CoulombBuffer {
+    float gamma_ab[];
+};
+
+layout(push_constant) uniform PushConstants {
+    uint num_atoms;
+    uint batch_offset;
+    float ev_angstrom_factor;
+    float pad0;
+} pc;
+
+void main() {
+    uint i = gl_GlobalInvocationID.x;
+    uint j = gl_GlobalInvocationID.y;
+
+    if (i >= pc.num_atoms || j >= pc.num_atoms) {
+        return;
+    }
+
+    uint idx_a = pc.batch_offset + i;
+    uint idx_b = pc.batch_offset + j;
+
+    float dx = atoms[idx_a].x - atoms[idx_b].x;
+    float dy = atoms[idx_a].y - atoms[idx_b].y;
+    float dz = atoms[idx_a].z - atoms[idx_b].z;
+    float r2 = dx * dx + dy * dy + dz * dz;
+
+    float gss_a = atoms[idx_a].gss;
+    float gss_b = atoms[idx_b].gss;
+
+    float rho_a = pc.ev_angstrom_factor / (2.0f * gss_a);
+    float rho_b = pc.ev_angstrom_factor / (2.0f * gss_b);
+    float rho_sum = rho_a + rho_b;
+
+    float gamma = pc.ev_angstrom_factor * inversesqrt(r2 + rho_sum * rho_sum);
+
+    gamma_ab[i * pc.num_atoms + j] = gamma;
+}

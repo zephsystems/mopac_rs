@@ -116,7 +116,7 @@ pub fn compute_diatomic_overlap_block(
         row.fill(0.0);
     }
 
-    if r_angstrom < 1e-10 || r_angstrom > 20.0 {
+    if !(1e-10..=20.0).contains(&r_angstrom) {
         return;
     }
 
