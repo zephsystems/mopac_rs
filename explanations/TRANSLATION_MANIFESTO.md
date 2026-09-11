@@ -1,4 +1,4 @@
-# 📜 MOPAC-RS: Translation & Modernization Manifesto
+# 📜 MOPAC_RS: Translation & Modernization Manifesto
 ## Fortran to Rust Semi-Empirical Quantum Chemistry Engine
 
 ```text
@@ -10,7 +10,7 @@
  Modern Data-Oriented Semi-Empirical Quantum Mechanics
 ```
 
-* **Project Identifier:** `mopacrs` (`05_mopacrs`)
+* **Project Identifier:** `mopac_rs` (`05_mopac_rs`)
 * **Upstream Ancestry:** OpenMOPAC (MOPAC v22 / v23 Fortran 77/90/2003 Engine)
 * **License:** Apache License 2.0 (Apache-2.0)
 * **Target Language & Toolchain:** Rust (Edition 2021 / 2024), Strict `no-std` mathematical core capability, explicit SIMD (AVX2/AVX-512)
@@ -28,7 +28,7 @@ However, the legacy Fortran codebase suffers from structural limitations accumul
 * **Tightly Coupled I/O and Computation:** File parsing, disk operations, error handling, and core quantum mathematical algorithms are deeply intertwined, making modular embedding, testing, and modern concurrency difficult.
 * **Cache-Hostile Memory Access:** Fortran column-major layouts translated without alignment guarantees, hindering modern SIMD vectorization and data prefetching.
 
-**The Mission of `mopacrs`:**  
+**The Mission of `mopac_rs`:**  
 To rescue, preserve, and modernize the foundational mathematical pillars of MOPAC into an uncompromised, thread-safe, high-performance, and mathematically verifiable Rust implementation structured strictly under a **Data-Oriented Programming (DOP)** paradigm.
 
 ---
@@ -109,11 +109,11 @@ The core quantum-mechanical engine to be rescued and translated encompasses:
 
 ## 4. Architectural Dictum: Modern Data-Oriented Programming (DOP)
 
-To eliminate the inefficiencies of legacy Fortran, `mopacrs` adopts a rigorous **Data-Oriented Programming** architecture designed around hardware cache lines and register throughput:
+To eliminate the inefficiencies of legacy Fortran, `mopac_rs` adopts a rigorous **Data-Oriented Programming** architecture designed around hardware cache lines and register throughput:
 
 ```text
 ┌─────────────────────────────────────────────────────────────────────────────────────────┐
-│                           MOPAC-RS DATA-ORIENTED TOPOLOGY                               │
+│                           MOPAC_RS DATA-ORIENTED TOPOLOGY                               │
 ├─────────────────────────────────────────────────────────────────────────────────────────┤
 │                                                                                         │
 │   [ATOMIC BATCH (SoA)]                   [PRE-ALLOCATED SCF WORKSPACE]                  │
@@ -162,7 +162,7 @@ In strict alignment with the engineering integrity of our platform:
 ## 6. Project Directory Layout
 
 ```text
-05_mopacrs/
+05_mopac_rs/
 ├── LICENSE                        # Apache License 2.0
 ├── Cargo.toml                     # Workspace & build configuration
 ├── explanations/

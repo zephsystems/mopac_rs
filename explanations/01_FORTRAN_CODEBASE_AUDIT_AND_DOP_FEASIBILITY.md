@@ -10,7 +10,7 @@
 ```
 
 * **Document ID:** `EXPLANATION-001-FORTRAN-AUDIT-DOP-FEASIBILITY`
-* **Target Module:** `mopacrs` Core Architecture
+* **Target Module:** `mopac_rs` Core Architecture
 * **Upstream Reference:** OpenMOPAC v22/v23 Fortran Codebase (`/src/` tree)
 * **License:** Apache License 2.0 (Apache-2.0)
 * **Language:** English

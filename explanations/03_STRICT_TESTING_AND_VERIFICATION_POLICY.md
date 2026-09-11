@@ -1,4 +1,4 @@
-# 🧪 MOPAC-RS: Strict Testing, Verification & Mathematical Parity Policy
+# 🧪 MOPAC_RS: Strict Testing, Verification & Mathematical Parity Policy
 
 ```text
   ____ _____ ____  ___ ____ _____   ____   ___  _     ___ ______   __
@@ -10,7 +10,7 @@
 ```
 
 * **Document ID:** `EXPLANATION-003-STRICT-TESTING-POLICY`
-* **Target Project:** `mopacrs` (`05_mopacrs`)
+* **Target Project:** `mopac_rs` (`05_mopac_rs`)
 * **Reference Upstream Standard:** MOPAC v23.2.5 Official Fortran Engine
 * **License:** Apache License 2.0 (Apache-2.0)
 * **Language:** English
@@ -21,7 +21,7 @@
 
 In computational quantum chemistry, numerical accuracy is paramount. A single error in orbital phase, two-electron integral screening, or core-core repulsion can compromise molecular geometries, vibrational spectra, and thermodynamic heats of formation.
 
-To ensure total integrity, `mopacrs` enforces the following axioms:
+To ensure total integrity, `mopac_rs` enforces the following axioms:
 
 1. **Axiom of Zero Mock Data:**  
    No unit test, integration test, or benchmark may utilize synthetic, mocked, or placeholder return values. Every test assertion must execute the actual physical and mathematical implementation against genuine molecular inputs.
@@ -34,7 +34,7 @@ To ensure total integrity, `mopacrs` enforces the following axioms:
 
 ## 2. Quantitative Tolerance Thresholds
 
-All tests in `mopacrs` are evaluated against strict numerical tolerances:
+All tests in `mopac_rs` are evaluated against strict numerical tolerances:
 
 | Physical Metric | Notation | Maximum Allowed Error | Benchmark Source |
 | :--- | :--- | :--- | :--- |
@@ -127,7 +127,7 @@ When calculations are dispatched to the Universal GPU Compute backend (Vulkan / 
 Every Pull Request and commit must pass the automated GitHub Actions CI pipeline:
 
 ```yaml
-name: mopacrs CI & Mathematical Parity Gate
+name: mopac_rs CI & Mathematical Parity Gate
 on: [push, pull_request]
 
 jobs:
@@ -158,4 +158,4 @@ A Pull Request **CANNOT be merged** if:
 
 ---
 
-*This policy establishes the uncompromising standard of engineering and mathematical rigor for the MOPAC-RS project.*
+*This policy establishes the uncompromising standard of engineering and mathematical rigor for the MOPAC_RS project.*

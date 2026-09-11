@@ -10,7 +10,7 @@
 ```
 
 * **Document ID:** `EXPLANATION-002-UNIVERSAL-GPU-VULKAN-WGPU`
-* **Target Architecture:** Universal GPU Compute Engine for `mopacrs`
+* **Target Architecture:** Universal GPU Compute Engine for `mopac_rs`
 * **Target Hardware:** Any modern GPU (NVIDIA, AMD Radeon, Intel Arc/Xe, Apple Silicon M-series via Metal, Qualcomm Adreno, Mali)
 * **License:** Apache License 2.0 (Apache-2.0)
 * **Language:** English
@@ -34,11 +34,11 @@ This legacy attempt failed for three structural reasons:
 
 ## 2. The Universal Solution: Vendor-Agnostic Compute in Rust
 
-To enable **every user on any consumer or workstation hardware** to accelerate semi-empirical quantum calculations, `mopacrs` adopts a **universal, vendor-agnostic compute architecture**:
+To enable **every user on any consumer or workstation hardware** to accelerate semi-empirical quantum calculations, `mopac_rs` adopts a **universal, vendor-agnostic compute architecture**:
 
 ```text
 ┌─────────────────────────────────────────────────────────────────────────────────────────┐
-│                        MOPAC-RS UNIVERSAL COMPUTE PIPELINE                              │
+│                        MOPAC_RS UNIVERSAL COMPUTE PIPELINE                              │
 ├─────────────────────────────────────────────────────────────────────────────────────────┤
 │                                                                                         │
 │                      [HIGH-LEVEL QUANTUM ALGORITHMS]                                    │
@@ -64,7 +64,7 @@ To enable **every user on any consumer or workstation hardware** to accelerate s
 ```
 
 ### 2.1. Technology Selection: `wgpu` + SPIR-V / WGSL
-Rather than tying the codebase to proprietary APIs, `mopacrs` uses **`wgpu`** (the Rust native WebGPU implementation) and **direct Vulkan compute shaders**:
+Rather than tying the codebase to proprietary APIs, `mopac_rs` uses **`wgpu`** (the Rust native WebGPU implementation) and **direct Vulkan compute shaders**:
 * **Universal Hardware Portability:**
   * **Linux / Windows / Android:** Dispatches natively through **Vulkan 1.2+** (running on NVIDIA GeForce/RTX, AMD Radeon/RDNA, Intel Arc/Iris, and Qualcomm GPUs).
   * **macOS / iOS:** Dispatches natively through **Apple Metal 3** (running on Apple Silicon M1/M2/M3/M4 unified memory architecture with zero-copy buffer sharing).
@@ -110,7 +110,7 @@ Semi-empirical NDDO methods possess computational characteristics that map natur
 
 ## 4. Dynamic Hybrid CPU-GPU Dispatch Strategy
 
-GPU acceleration is not advantageous for all problem sizes due to host-to-device PCIe bus latency and shader launch overhead. `mopacrs` implements an **autonomous dynamic crossover dispatcher**:
+GPU acceleration is not advantageous for all problem sizes due to host-to-device PCIe bus latency and shader launch overhead. `mopac_rs` implements an **autonomous dynamic crossover dispatcher**:
 
 ```text
                ┌────────────────────────────────────────────────────────┐

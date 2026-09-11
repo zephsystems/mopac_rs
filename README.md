@@ -1,4 +1,4 @@
-# ⚛️ MOPAC-RS (`05_mopacrs`)
+# ⚛️ MOPAC_RS (`05_mopac_rs`)
 > **Modern High-Performance Data-Oriented Semi-Empirical Quantum Chemistry Engine in Rust**
 
 [![License: Apache 2.0](https://img.shields.io/badge/License-Apache_2.0-blue.svg)](https://opensource.org/licenses/Apache-2.0)
@@ -10,7 +10,7 @@
 
 ## 🏛️ Project Overview
 
-`mopacrs` is a complete rewrite and modernization of the legendary **MOPAC** (Molecular Orbital PACkage) from legacy Fortran into **Rust**, built strictly around a **Data-Oriented Programming (DOP)** architecture.
+`mopac_rs` is a complete rewrite and modernization of the legendary **MOPAC** (Molecular Orbital PACkage) from legacy Fortran into **Rust**, built strictly around a **Data-Oriented Programming (DOP)** architecture.
 
 ### Key Architectural Highlights
 * **Data-Oriented Memory Layout:** Struct of Arrays (SoA) aligned to 64-byte hardware cache lines, eliminating pointer-chasing and non-contiguous triangular index arithmetic.
