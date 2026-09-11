@@ -1,0 +1,103 @@
+#version 450
+#extension GL_EXT_shader_explicit_arithmetic_types_float64 : require
+
+layout(local_size_x = 16, local_size_y = 16, local_size_z = 1) in;
+
+struct GaussianParam {
+    double a;
+    double b;
+    double c;
+    double pad;
+};
+
+struct ElementGpuParams {
+    double x;
+    double y;
+    double z;
+    double gss;
+    double alpha;
+    double core_charge;
+    uint z_num;
+    uint num_gaussians;
+    GaussianParam gaussians[4];
+};
+
+layout(std430, set = 0, binding = 0) readonly buffer AtomBuffer {
+    ElementGpuParams atoms[];
+};
+
+layout(std430, set = 0, binding = 1) writeonly buffer EnergyMatrixBuffer {
+    double e_core_core[];
+};
+
+layout(push_constant) uniform PushConstants {
+    uint num_atoms;
+    uint pad0;
+    double ev_angstrom_factor;
+} pc;
+
+void main() {
+    uint i = gl_GlobalInvocationID.x;
+    uint j = gl_GlobalInvocationID.y;
+
+    if (i >= pc.num_atoms || j >= pc.num_atoms) {
+        return;
+    }
+
+    if (i == j) {
+        e_core_core[i * pc.num_atoms + j] = 0.0;
+        return;
+    }
+
+    double dx = atoms[i].x - atoms[j].x;
+    double dy = atoms[i].y - atoms[j].y;
+    double dz = atoms[i].z - atoms[j].z;
+    double r2 = dx * dx + dy * dy + dz * dz;
+    double r = sqrt(r2);
+
+    if (r < 1e-10) {
+        e_core_core[i * pc.num_atoms + j] = 0.0;
+        return;
+    }
+
+    double gss_a = atoms[i].gss;
+    double gss_b = atoms[j].gss;
+
+    double rho_a = pc.ev_angstrom_factor / (2.0 * gss_a);
+    double rho_b = pc.ev_angstrom_factor / (2.0 * gss_b);
+    double rho_sum = rho_a + rho_b;
+    double gamma = pc.ev_angstrom_factor / sqrt(r2 + rho_sum * rho_sum);
+
+    double h_scale_a = 1.0;
+    if (atoms[i].z_num == 1 && (atoms[j].z_num == 7 || atoms[j].z_num == 8)) {
+        h_scale_a = r;
+    }
+    double h_scale_b = 1.0;
+    if (atoms[j].z_num == 1 && (atoms[i].z_num == 7 || atoms[i].z_num == 8)) {
+        h_scale_b = r;
+    }
+
+    double exp_a = h_scale_a * exp(-atoms[i].alpha * r);
+    double exp_b = h_scale_b * exp(-atoms[j].alpha * r);
+    double base_scale = 1.0 + exp_a + exp_b;
+    double base_rep = atoms[i].core_charge * atoms[j].core_charge * gamma * base_scale;
+
+    double g_sum = 0.0;
+    for (uint k = 0; k < atoms[i].num_gaussians; ++k) {
+        double dr = r - atoms[i].gaussians[k].c;
+        double expnt = atoms[i].gaussians[k].b * dr * dr;
+        if (expnt < 25.0) {
+            g_sum += atoms[i].gaussians[k].a * exp(-expnt);
+        }
+    }
+    for (uint k = 0; k < atoms[j].num_gaussians; ++k) {
+        double dr = r - atoms[j].gaussians[k].c;
+        double expnt = atoms[j].gaussians[k].b * dr * dr;
+        if (expnt < 25.0) {
+            g_sum += atoms[j].gaussians[k].a * exp(-expnt);
+        }
+    }
+
+    double gauss_term = (atoms[i].core_charge * atoms[j].core_charge / r) * g_sum;
+    e_core_core[i * pc.num_atoms + j] = base_rep + gauss_term;
+}

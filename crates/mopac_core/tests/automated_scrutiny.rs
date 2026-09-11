@@ -530,4 +530,131 @@ fn test_scrutiny_diatomic_overlap_block_invariants_and_rotation() {
     }
 }
 
+/// Scrutiny Test 11: Saunders-Hillier Virtual Orbital Level Shifting Mathematical Invariants.
+///
+/// Axiomatically proves from MOPAC iter.F90 lines 450-456:
+/// 1. S_shift * c_occ = 0 (occupied orbitals experience exactly 0 shift).
+/// 2. S_shift * c_virt = sigma * c_virt (virtual orbitals experience exactly +sigma shift).
+/// 3. Commutator [S_shift, P] = 0 (shift operator commutes with occupied projector).
+/// 4. End-to-end H2 SCF convergence parity: total energy, HOMO, and unshifted LUMO
+///    are invariant with or without level shifting to < 1e-7 eV.
+#[test]
+fn test_scrutiny_virtual_orbital_level_shifting_invariants() {
+    use mopac_core::scf::scf_loop::{apply_level_shift, run_rhf_scf_with_options, ScfOptions};
+    use mopac_core::scf::density::compute_density_matrix;
+    use mopac_core::scf::eigensolver::diagonalize_symmetric;
+    use mopac_core::types::{MolecularBatch, ScfWorkspace, AlignedMatrix};
+    use mopac_core::parameters::am1::Am1Model;
+
+    let am1 = Am1Model;
+    let h2_coords = [[0.0, 0.0, 0.0], [0.0, 0.0, 0.74144]];
+    let batch = MolecularBatch::new(vec![1, 1], &h2_coords);
+    let mut ws = ScfWorkspace::allocate(batch.norbs);
+    let nocc = 1; // H2 has 1 occupied orbital, 1 virtual orbital
+
+    // 1. Generate an orthonormal eigensystem C
+    mopac_core::hamiltonian::build_hcore(&batch, &am1, &mut ws.h_core);
+    diagonalize_symmetric(&ws.h_core, &mut ws.eigenvalues, &mut ws.eigenvectors);
+    compute_density_matrix(&ws.eigenvectors, nocc, &mut ws.density);
+
+    // 2. Form shift operator S = sigma * (I - 0.5 * P)
+    let sigma = 8.0f64;
+    let mut s_shift = AlignedMatrix::zeroed(batch.norbs, batch.norbs);
+    apply_level_shift(&mut s_shift, &ws.density, sigma);
+
+    // Verify S * c_occ = 0:
+    let mut s_c_occ = [0.0f64; 2];
+    for i in 0..2 {
+        for j in 0..2 {
+            s_c_occ[i] += s_shift.get(i, j) * ws.eigenvectors.get(j, 0); // c_0 is occupied
+        }
+    }
+    let occ_shift_norm = (s_c_occ[0] * s_c_occ[0] + s_c_occ[1] * s_c_occ[1]).sqrt();
+    assert!(
+        occ_shift_norm < 1e-12,
+        "Occupied orbital experienced non-zero level shift: norm = {:e}", occ_shift_norm
+    );
+
+    // Verify S * c_virt = sigma * c_virt:
+    let mut s_c_virt = [0.0f64; 2];
+    for i in 0..2 {
+        for j in 0..2 {
+            s_c_virt[i] += s_shift.get(i, j) * ws.eigenvectors.get(j, 1); // c_1 is virtual
+        }
+    }
+    for i in 0..2 {
+        let expected = sigma * ws.eigenvectors.get(i, 1);
+        assert!(
+            (s_c_virt[i] - expected).abs() < 1e-12,
+            "Virtual orbital level shift mismatch at component {}: {} vs expected {}",
+            i, s_c_virt[i], expected
+        );
+    }
+
+    // 3. Commutator [S, P] = S*P - P*S = 0
+    for i in 0..2 {
+        for j in 0..2 {
+            let mut sp_ij = 0.0f64;
+            let mut ps_ij = 0.0f64;
+            for k in 0..2 {
+                sp_ij += s_shift.get(i, k) * ws.density.get(k, j);
+                ps_ij += ws.density.get(i, k) * s_shift.get(k, j);
+            }
+            assert!(
+                (sp_ij - ps_ij).abs() < 1e-12,
+                "Shift operator commutator violation: [S, P]({},{}) = {:e}",
+                i, j, (sp_ij - ps_ij).abs()
+            );
+        }
+    }
+
+    // 4. End-to-end H2 SCF with and without level shifting
+    ws.reset();
+    let res_unshifted = run_rhf_scf_with_options(
+        &batch,
+        &am1,
+        &mut ws,
+        &ScfOptions {
+            max_iter: 60,
+            energy_tol_ev: 1e-9,
+            density_tol: 1e-7,
+            level_shift_ev: 0.0,
+            damping: 0.5,
+        },
+    );
+
+    ws.reset();
+    let res_shifted = run_rhf_scf_with_options(
+        &batch,
+        &am1,
+        &mut ws,
+        &ScfOptions {
+            max_iter: 60,
+            energy_tol_ev: 1e-9,
+            density_tol: 1e-7,
+            level_shift_ev: 8.0,
+            damping: 0.5,
+        },
+    );
+
+    assert!(res_unshifted.converged, "Unshifted H2 must converge");
+    assert!(res_shifted.converged, "Shifted H2 must converge");
+    assert!(
+        (res_shifted.total_energy_ev - res_unshifted.total_energy_ev).abs() < 1e-7,
+        "Total energy mismatch with level shifting: {} vs {}",
+        res_shifted.total_energy_ev, res_unshifted.total_energy_ev
+    );
+    assert!(
+        (res_shifted.homo_energy_ev - res_unshifted.homo_energy_ev).abs() < 1e-7,
+        "HOMO energy mismatch with level shifting: {} vs {}",
+        res_shifted.homo_energy_ev, res_unshifted.homo_energy_ev
+    );
+    assert!(
+        (res_shifted.lumo_energy_ev - res_unshifted.lumo_energy_ev).abs() < 1e-7,
+        "LUMO energy mismatch with level shifting: {} vs {}",
+        res_shifted.lumo_energy_ev, res_unshifted.lumo_energy_ev
+    );
+}
+
+
 

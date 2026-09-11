@@ -1,6 +1,7 @@
 [workspace]
 members = [
     "crates/mopac_core",
+    "crates/mopac_gpu",
 ]
 resolver = "2"
 

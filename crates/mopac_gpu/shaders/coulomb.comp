@@ -1,0 +1,50 @@
+#version 450
+#extension GL_EXT_shader_explicit_arithmetic_types_float64 : require
+
+layout(local_size_x = 16, local_size_y = 16, local_size_z = 1) in;
+
+struct AtomData {
+    double x;
+    double y;
+    double z;
+    double gss;
+};
+
+layout(std430, set = 0, binding = 0) readonly buffer AtomBuffer {
+    AtomData atoms[];
+};
+
+layout(std430, set = 0, binding = 1) writeonly buffer CoulombBuffer {
+    double gamma_ab[];
+};
+
+layout(push_constant) uniform PushConstants {
+    uint num_atoms;
+    uint pad0;
+    double ev_angstrom_factor;
+} pc;
+
+void main() {
+    uint i = gl_GlobalInvocationID.x;
+    uint j = gl_GlobalInvocationID.y;
+
+    if (i >= pc.num_atoms || j >= pc.num_atoms) {
+        return;
+    }
+
+    double dx = atoms[i].x - atoms[j].x;
+    double dy = atoms[i].y - atoms[j].y;
+    double dz = atoms[i].z - atoms[j].z;
+    double r2 = dx * dx + dy * dy + dz * dz;
+
+    double gss_a = atoms[i].gss;
+    double gss_b = atoms[j].gss;
+
+    double rho_a = pc.ev_angstrom_factor / (2.0 * gss_a);
+    double rho_b = pc.ev_angstrom_factor / (2.0 * gss_b);
+    double rho_sum = rho_a + rho_b;
+
+    double gamma = pc.ev_angstrom_factor / sqrt(r2 + rho_sum * rho_sum);
+
+    gamma_ab[i * pc.num_atoms + j] = gamma;
+}

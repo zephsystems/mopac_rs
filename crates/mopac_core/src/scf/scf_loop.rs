@@ -23,16 +23,75 @@ pub struct ScfResult {
     pub lumo_energy_ev: f64,
 }
 
-/// Run a complete closed-shell (RHF) Self-Consistent Field calculation.
+/// Configuration options for the Self-Consistent Field (SCF) solver.
+#[derive(Debug, Clone, Copy, PartialEq)]
+pub struct ScfOptions {
+    /// Maximum allowed SCF iterations (default: 60)
+    pub max_iter: usize,
+    /// Energy convergence threshold in eV (default: 1e-7)
+    pub energy_tol_ev: f64,
+    /// Density matrix maximum element difference threshold (default: 1e-6)
+    pub density_tol: f64,
+    /// Virtual orbital level shift in eV (default: 0.0, or 8.0 eV for difficult systems).
+    ///
+    /// Implements Saunders-Hillier level shifting matching MOPAC's `shift = -8.D0` (`iter.F90`).
+    /// Shifts virtual eigenvalues upward by `level_shift_ev` while keeping occupied eigenvalues unchanged.
+    pub level_shift_ev: f64,
+    /// Linear damping factor applied when DIIS is not yet active (default: 0.5)
+    pub damping: f64,
+}
+
+impl Default for ScfOptions {
+    fn default() -> Self {
+        Self {
+            max_iter: 60,
+            energy_tol_ev: 1e-7,
+            density_tol: 1e-6,
+            level_shift_ev: 0.0,
+            damping: 0.5,
+        }
+    }
+}
+
+/// Apply virtual orbital level shift to the Fock matrix:
+/// $$\tilde{F} = F + \sigma \left( I - \frac{1}{2} P \right)$$
+///
+/// Axiomatic properties matching MOPAC `iter.F90` lines 450-456:
+/// - Occupied molecular orbitals $\psi_k$ ($P \psi_k = 2 \psi_k$) experience **zero shift**:
+///   $$\sigma \left(I - \frac{1}{2} P\right) \psi_k = \sigma (1 - 1) \psi_k = 0$$
+/// - Virtual molecular orbitals $\psi_a$ ($P \psi_a = 0$) are shifted **upward by $\sigma$**:
+///   $$\sigma \left(I - \frac{1}{2} P\right) \psi_a = \sigma (1 - 0) \psi_a = \sigma \psi_a$$
+pub fn apply_level_shift(
+    fock: &mut crate::types::AlignedMatrix<f64>,
+    density: &crate::types::AlignedMatrix<f64>,
+    shift_ev: f64,
+) {
+    if shift_ev.abs() < 1e-12 {
+        return;
+    }
+    let norbs = fock.rows;
+    for i in 0..norbs {
+        for j in 0..norbs {
+            let f_val = fock.get(i, j);
+            let p_val = density.get(i, j);
+            let shift_term = if i == j {
+                shift_ev - 0.5 * shift_ev * p_val
+            } else {
+                -0.5 * shift_ev * p_val
+            };
+            fock.set(i, j, f_val + shift_term);
+        }
+    }
+}
+
+/// Run a complete closed-shell (RHF) Self-Consistent Field calculation with explicit options.
 ///
 /// Guaranteed to perform **zero heap allocations (`0 malloc`)** during the iterative loop.
-pub fn run_rhf_scf(
+pub fn run_rhf_scf_with_options(
     batch: &MolecularBatch,
     model: &dyn ParameterModel,
     ws: &mut ScfWorkspace,
-    max_iter: usize,
-    energy_tol_ev: f64,
-    density_tol: f64,
+    options: &ScfOptions,
 ) -> ScfResult {
     assert_eq!(ws.norbs, batch.norbs);
 
@@ -61,21 +120,25 @@ pub fn run_rhf_scf(
     let mut prev_energy = 0.0f64;
     let mut converged = false;
     let mut iters_done = 0;
-    let damping = 0.5; // Linear damping fallback when DIIS has not yet engaged
 
     // 5. SCF Iteration Loop (ZERO dynamic heap allocations)
-    for iter in 1..=max_iter {
+    for iter in 1..=options.max_iter {
         iters_done = iter;
 
         // Build Fock matrix F = H_core + G(P)
         build_fock(batch, model, &ws.h_core, &ws.density, &mut ws.fock);
 
-        // Compute electronic energy of the current physical state (P, F)
+        // Compute physical electronic energy of the current state before level shift
         let e_elec = compute_electronic_energy(&ws.density, &ws.h_core, &ws.fock);
         let e_total = e_elec + enuc;
 
         // Apply Pulay DIIS acceleration (modifies ws.fock in-place if m >= 2)
         let diis_res = ws.diis.push_and_extrapolate(&mut ws.fock, &ws.density, &mut ws.tmp2);
+
+        // Apply Saunders-Hillier level shifting if enabled (MOPAC iter.F90 lines 450-456)
+        if options.level_shift_ev > 0.0 && iter > 2 {
+            apply_level_shift(&mut ws.fock, &ws.density, options.level_shift_ev);
+        }
 
         // Diagonalize Fock matrix: F C = C epsilon
         diagonalize_symmetric(&ws.fock, &mut ws.eigenvalues, &mut ws.eigenvectors);
@@ -87,7 +150,7 @@ pub fn run_rhf_scf(
         let delta_e = (e_total - prev_energy).abs();
         let delta_p = max_density_diff(&ws.tmp1, &ws.density);
 
-        if iter > 1 && delta_e < energy_tol_ev && (delta_p < density_tol || diis_res.max_error < density_tol) {
+        if iter > 1 && delta_e < options.energy_tol_ev && (delta_p < options.density_tol || diis_res.max_error < options.density_tol) {
             converged = true;
             ws.density.data.copy_from_slice(&ws.tmp1.data);
             break;
@@ -97,15 +160,16 @@ pub fn run_rhf_scf(
 
         // Update density for next iteration
         if diis_res.extrapolated {
-            // Under DIIS extrapolation, adopt the stationary solution directly (no damping)
+            // Under DIIS extrapolation, adopt the stationary solution directly
             ws.density.data.copy_from_slice(&ws.tmp1.data);
         } else {
             // Linear damping fallback (e.g. iteration 1 or if DIIS reset)
+            let d = options.damping;
             for i in 0..ws.norbs {
                 for j in 0..ws.norbs {
                     let p_new = ws.tmp1.get(i, j);
                     let p_old = ws.density.get(i, j);
-                    ws.density.set(i, j, (1.0 - damping) * p_new + damping * p_old);
+                    ws.density.set(i, j, (1.0 - d) * p_new + d * p_old);
                 }
             }
         }
@@ -113,7 +177,11 @@ pub fn run_rhf_scf(
 
     let homo = ws.eigenvalues[nocc - 1];
     let lumo = if nocc < ws.norbs {
-        ws.eigenvalues[nocc]
+        if options.level_shift_ev > 0.0 && iters_done > 2 {
+            ws.eigenvalues[nocc] - options.level_shift_ev
+        } else {
+            ws.eigenvalues[nocc]
+        }
     } else {
         0.0
     };
@@ -129,4 +197,29 @@ pub fn run_rhf_scf(
         homo_energy_ev: homo,
         lumo_energy_ev: lumo,
     }
+}
+
+/// Run a complete closed-shell (RHF) Self-Consistent Field calculation with standard defaults.
+///
+/// Guaranteed to perform **zero heap allocations (`0 malloc`)** during the iterative loop.
+pub fn run_rhf_scf(
+    batch: &MolecularBatch,
+    model: &dyn ParameterModel,
+    ws: &mut ScfWorkspace,
+    max_iter: usize,
+    energy_tol_ev: f64,
+    density_tol: f64,
+) -> ScfResult {
+    run_rhf_scf_with_options(
+        batch,
+        model,
+        ws,
+        &ScfOptions {
+            max_iter,
+            energy_tol_ev,
+            density_tol,
+            level_shift_ev: 0.0,
+            damping: 0.5,
+        },
+    )
 }

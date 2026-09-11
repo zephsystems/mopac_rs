@@ -1,0 +1,11 @@
+[package]
+name = "mopac_gpu"
+version = "0.1.0"
+edition = "2021"
+authors = ["zeph.sys <zeph.systems@gmail.com>"]
+license = "Apache-2.0"
+description = "High-Performance Direct Vulkan GPU Compute Acceleration for MOPAC_RS"
+
+[dependencies]
+ash = "0.38"
+mopac_core = { path = "../mopac_core" }
