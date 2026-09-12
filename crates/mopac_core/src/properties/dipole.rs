@@ -50,9 +50,7 @@ pub fn compute_dipole_moment<M: ?Sized + ParameterModel>(
 
     for a in 0..natoms {
         let z = batch.atomic_numbers[a];
-        let p = model
-            .get_element(z)
-            .unwrap_or_else(|| panic!("Parameters missing for element Z={}", z));
+        let core_charge = model.get_element(z).map(|p| p.core_charge).unwrap_or(0.0);
         let orb_start = batch.orbital_offsets[a];
         let norbs = batch.basis_types[a].num_orbitals();
 
@@ -60,7 +58,7 @@ pub fn compute_dipole_moment<M: ?Sized + ParameterModel>(
         for o in 0..norbs {
             pop += density.get(orb_start + o, orb_start + o);
         }
-        let q = p.core_charge - pop;
+        let q = core_charge - pop;
         charges.push(q);
         net_charge += q;
     }

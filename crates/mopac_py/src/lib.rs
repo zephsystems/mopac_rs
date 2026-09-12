@@ -162,6 +162,8 @@ fn run_calculation_internal(
     max_iter: usize,
     energy_tol_ev: f64,
     density_tol: f64,
+    level_shift_ev: f64,
+    damping: f64,
 ) -> PyResult<CalculationResult> {
     let natoms = atomic_numbers.len();
     if natoms == 0 {
@@ -177,6 +179,26 @@ fn run_calculation_internal(
 
     let model = get_model(method)?;
 
+    let mut total_valence_elecs = 0.0;
+    for &z in atomic_numbers {
+        if let Some(p) = model.get_element(z) {
+            total_valence_elecs += p.core_charge;
+        } else {
+            return Err(PyValueError::new_err(format!(
+                "Unsupported element Z={} for semi-empirical method '{}'",
+                z, method
+            )));
+        }
+    }
+
+    let nelec = total_valence_elecs.round() as usize;
+    if nelec % 2 != 0 {
+        return Err(PyValueError::new_err(format!(
+            "Open-shell radical detected ({} valence electrons). Closed-shell RHF requires an even number of valence electrons (requires UHF/ROHF).",
+            nelec
+        )));
+    }
+
     let mut batch = MolecularBatch::new(atomic_numbers.to_vec(), coordinates);
     let mut scf_ws = ScfWorkspace::allocate(batch.norbs);
 
@@ -189,8 +211,8 @@ fn run_calculation_internal(
         max_iter,
         energy_tol_ev,
         density_tol,
-        level_shift_ev: 0.0,
-        damping: 0.5,
+        level_shift_ev,
+        damping,
         use_nddo,
         cosmo,
     };
@@ -322,7 +344,9 @@ fn run_calculation_internal(
     use_nddo = true,
     max_iter = 60,
     energy_tol_ev = 1e-7,
-    density_tol = 1e-6
+    density_tol = 1e-6,
+    level_shift_ev = 0.0,
+    damping = 0.5
 ))]
 pub fn calculate(
     atomic_numbers: Vec<u8>,
@@ -335,6 +359,8 @@ pub fn calculate(
     max_iter: Option<usize>,
     energy_tol_ev: Option<f64>,
     density_tol: Option<f64>,
+    level_shift_ev: Option<f64>,
+    damping: Option<f64>,
 ) -> PyResult<CalculationResult> {
     run_calculation_internal(
         &atomic_numbers,
@@ -347,6 +373,8 @@ pub fn calculate(
         max_iter.unwrap_or(60),
         energy_tol_ev.unwrap_or(1e-7),
         density_tol.unwrap_or(1e-6),
+        level_shift_ev.unwrap_or(0.0),
+        damping.unwrap_or(0.5),
     )
 }
 
@@ -390,6 +418,26 @@ pub fn optimize(
     let m_name = method.unwrap_or("PM6");
     let model = get_model(m_name)?;
 
+    let mut total_valence_elecs = 0.0;
+    for &z in &atomic_numbers {
+        if let Some(p) = model.get_element(z) {
+            total_valence_elecs += p.core_charge;
+        } else {
+            return Err(PyValueError::new_err(format!(
+                "Unsupported element Z={} for semi-empirical method '{}'",
+                z, m_name
+            )));
+        }
+    }
+
+    let nelec = total_valence_elecs.round() as usize;
+    if nelec % 2 != 0 {
+        return Err(PyValueError::new_err(format!(
+            "Open-shell radical detected ({} valence electrons). Closed-shell RHF requires an even number of valence electrons (requires UHF/ROHF).",
+            nelec
+        )));
+    }
+
     let mut batch = MolecularBatch::new(atomic_numbers.clone(), &coordinates);
     let mut scf_ws = ScfWorkspace::allocate(batch.norbs);
     let mut grad_ws = GradientWorkspace::allocate(batch.norbs);
@@ -426,6 +474,8 @@ pub fn optimize(
         60,
         1e-7,
         1e-6,
+        0.0,
+        0.5,
     )?;
 
     Ok(OptimizationPyResult {
@@ -504,6 +554,8 @@ impl MopacCalculator {
             self.max_iter,
             1e-7,
             1e-6,
+            0.0,
+            0.5,
         )
     }
 

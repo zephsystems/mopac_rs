@@ -1,0 +1,5661 @@
+{
+  "summary": {
+    "total_compounds": 71,
+    "methods": [
+      "PM6",
+      "AM1",
+      "RM1",
+      "PM3",
+      "MNDO"
+    ],
+    "timestamp": 1789200851.783729
+  },
+  "by_method": {
+    "PM6": {
+      "attempted": 71,
+      "converged": 65,
+      "failed": 2,
+      "unsupported": 4
+    },
+    "AM1": {
+      "attempted": 71,
+      "converged": 65,
+      "failed": 2,
+      "unsupported": 4
+    },
+    "RM1": {
+      "attempted": 71,
+      "converged": 66,
+      "failed": 1,
+      "unsupported": 4
+    },
+    "PM3": {
+      "attempted": 71,
+      "converged": 63,
+      "failed": 4,
+      "unsupported": 4
+    },
+    "MNDO": {
+      "attempted": 71,
+      "converged": 66,
+      "failed": 1,
+      "unsupported": 4
+    }
+  },
+  "categories": {
+    "Carbonyl": {
+      "total": 3,
+      "converged_pm6": 3
+    },
+    "Amide": {
+      "total": 2,
+      "converged_pm6": 2
+    },
+    "Carboxylic acid": {
+      "total": 2,
+      "converged_pm6": 2
+    },
+    "Nitrile": {
+      "total": 1,
+      "converged_pm6": 1
+    },
+    "Hydrocarbon": {
+      "total": 7,
+      "converged_pm6": 7
+    },
+    "Amino acid": {
+      "total": 2,
+      "converged_pm6": 2
+    },
+    "Inorganic/N": {
+      "total": 1,
+      "converged_pm6": 1
+    },
+    "Aromatic amine": {
+      "total": 1,
+      "converged_pm6": 0
+    },
+    "Pharmaceutical": {
+      "total": 4,
+      "converged_pm6": 4
+    },
+    "Aromatic": {
+      "total": 2,
+      "converged_pm6": 2
+    },
+    "Aromatic halide (Br)": {
+      "total": 1,
+      "converged_pm6": 1
+    },
+    "Halide (Br)": {
+      "total": 1,
+      "converged_pm6": 1
+    },
+    "Inorganic/O": {
+      "total": 2,
+      "converged_pm6": 2
+    },
+    "Halide (Cl)": {
+      "total": 4,
+      "converged_pm6": 4
+    },
+    "Aromatic halide (Cl)": {
+      "total": 1,
+      "converged_pm6": 1
+    },
+    "Hydrocarbon (strained)": {
+      "total": 2,
+      "converged_pm6": 2
+    },
+    "Ether": {
+      "total": 1,
+      "converged_pm6": 1
+    },
+    "Thioether": {
+      "total": 1,
+      "converged_pm6": 1
+    },
+    "Sulfoxide": {
+      "total": 1,
+      "converged_pm6": 1
+    },
+    "Amine (2nd)": {
+      "total": 1,
+      "converged_pm6": 1
+    },
+    "Alcohol": {
+      "total": 2,
+      "converged_pm6": 2
+    },
+    "Unsupported metal (Fe)": {
+      "total": 1,
+      "converged_pm6": 0
+    },
+    "Aromatic halide (F)": {
+      "total": 1,
+      "converged_pm6": 1
+    },
+    "Halide (F)": {
+      "total": 1,
+      "converged_pm6": 1
+    },
+    "Mixed polyhalide": {
+      "total": 1,
+      "converged_pm6": 1
+    },
+    "Nitrile/Inorganic": {
+      "total": 1,
+      "converged_pm6": 1
+    },
+    "Inorganic/S": {
+      "total": 2,
+      "converged_pm6": 2
+    },
+    "Heterocycle (N)": {
+      "total": 4,
+      "converged_pm6": 4
+    },
+    "Aromatic halide (I)": {
+      "total": 1,
+      "converged_pm6": 1
+    },
+    "Halide (I)": {
+      "total": 1,
+      "converged_pm6": 1
+    },
+    "Thiol": {
+      "total": 1,
+      "converged_pm6": 1
+    },
+    "Ester": {
+      "total": 1,
+      "converged_pm6": 1
+    },
+    "Amine (1st)": {
+      "total": 1,
+      "converged_pm6": 1
+    },
+    "Polyaromatic": {
+      "total": 1,
+      "converged_pm6": 0
+    },
+    "Open-shell radical": {
+      "total": 2,
+      "converged_pm6": 0
+    },
+    "Inorganic/P": {
+      "total": 1,
+      "converged_pm6": 1
+    },
+    "Unsupported element (Si)": {
+      "total": 1,
+      "converged_pm6": 0
+    },
+    "Stress / Steric clash": {
+      "total": 1,
+      "converged_pm6": 1
+    },
+    "Ether (cyclic)": {
+      "total": 1,
+      "converged_pm6": 1
+    },
+    "Heterocycle (S)": {
+      "total": 1,
+      "converged_pm6": 1
+    },
+    "Phosphate": {
+      "total": 1,
+      "converged_pm6": 1
+    },
+    "Amine (3rd)": {
+      "total": 1,
+      "converged_pm6": 1
+    },
+    "Phosphine": {
+      "total": 1,
+      "converged_pm6": 1
+    },
+    "Amide/Urea": {
+      "total": 1,
+      "converged_pm6": 1
+    },
+    "Non-covalent complex": {
+      "total": 1,
+      "converged_pm6": 1
+    }
+  },
+  "failures": [
+    {
+      "compound": "aniline",
+      "method": "PM6",
+      "category": "Aromatic amine",
+      "type": "SCF_NON_CONVERGENCE",
+      "detail": "Reached max_iter (60) without satisfying density/energy tol"
+    },
+    {
+      "compound": "aniline",
+      "method": "PM3",
+      "category": "Aromatic amine",
+      "type": "SCF_NON_CONVERGENCE",
+      "detail": "Reached max_iter (60) without satisfying density/energy tol"
+    },
+    {
+      "compound": "ferrocene",
+      "method": "PM6",
+      "category": "Unsupported metal (Fe)",
+      "type": "UNSUPPORTED_ELEMENT",
+      "detail": "Unsupported element Z=26 for semi-empirical method 'PM6'"
+    },
+    {
+      "compound": "ferrocene",
+      "method": "AM1",
+      "category": "Unsupported metal (Fe)",
+      "type": "UNSUPPORTED_ELEMENT",
+      "detail": "Unsupported element Z=26 for semi-empirical method 'AM1'"
+    },
+    {
+      "compound": "ferrocene",
+      "method": "RM1",
+      "category": "Unsupported metal (Fe)",
+      "type": "UNSUPPORTED_ELEMENT",
+      "detail": "Unsupported element Z=26 for semi-empirical method 'RM1'"
+    },
+    {
+      "compound": "ferrocene",
+      "method": "PM3",
+      "category": "Unsupported metal (Fe)",
+      "type": "UNSUPPORTED_ELEMENT",
+      "detail": "Unsupported element Z=26 for semi-empirical method 'PM3'"
+    },
+    {
+      "compound": "ferrocene",
+      "method": "MNDO",
+      "category": "Unsupported metal (Fe)",
+      "type": "UNSUPPORTED_ELEMENT",
+      "detail": "Unsupported element Z=26 for semi-empirical method 'MNDO'"
+    },
+    {
+      "compound": "ibuprofen",
+      "method": "AM1",
+      "category": "Pharmaceutical",
+      "type": "SCF_NON_CONVERGENCE",
+      "detail": "Reached max_iter (60) without satisfying density/energy tol"
+    },
+    {
+      "compound": "iodobenzene",
+      "method": "PM3",
+      "category": "Aromatic halide (I)",
+      "type": "SCF_NON_CONVERGENCE",
+      "detail": "Reached max_iter (60) without satisfying density/energy tol"
+    },
+    {
+      "compound": "methyl_acetate",
+      "method": "PM3",
+      "category": "Ester",
+      "type": "SCF_NON_CONVERGENCE",
+      "detail": "Reached max_iter (60) without satisfying density/energy tol"
+    },
+    {
+      "compound": "naphthalene",
+      "method": "PM6",
+      "category": "Polyaromatic",
+      "type": "SCF_NON_CONVERGENCE",
+      "detail": "Reached max_iter (60) without satisfying density/energy tol"
+    },
+    {
+      "compound": "naphthalene",
+      "method": "AM1",
+      "category": "Polyaromatic",
+      "type": "SCF_NON_CONVERGENCE",
+      "detail": "Reached max_iter (60) without satisfying density/energy tol"
+    },
+    {
+      "compound": "naphthalene",
+      "method": "RM1",
+      "category": "Polyaromatic",
+      "type": "SCF_NON_CONVERGENCE",
+      "detail": "Reached max_iter (60) without satisfying density/energy tol"
+    },
+    {
+      "compound": "nitric_oxide",
+      "method": "PM6",
+      "category": "Open-shell radical",
+      "type": "OPEN_SHELL_RADICAL",
+      "detail": "Open-shell radical detected (11 valence electrons). Closed-shell RHF requires an even number of valence electrons (requires UHF/ROHF)."
+    },
+    {
+      "compound": "nitric_oxide",
+      "method": "AM1",
+      "category": "Open-shell radical",
+      "type": "OPEN_SHELL_RADICAL",
+      "detail": "Open-shell radical detected (11 valence electrons). Closed-shell RHF requires an even number of valence electrons (requires UHF/ROHF)."
+    },
+    {
+      "compound": "nitric_oxide",
+      "method": "RM1",
+      "category": "Open-shell radical",
+      "type": "OPEN_SHELL_RADICAL",
+      "detail": "Open-shell radical detected (11 valence electrons). Closed-shell RHF requires an even number of valence electrons (requires UHF/ROHF)."
+    },
+    {
+      "compound": "nitric_oxide",
+      "method": "PM3",
+      "category": "Open-shell radical",
+      "type": "OPEN_SHELL_RADICAL",
+      "detail": "Open-shell radical detected (11 valence electrons). Closed-shell RHF requires an even number of valence electrons (requires UHF/ROHF)."
+    },
+    {
+      "compound": "nitric_oxide",
+      "method": "MNDO",
+      "category": "Open-shell radical",
+      "type": "OPEN_SHELL_RADICAL",
+      "detail": "Open-shell radical detected (11 valence electrons). Closed-shell RHF requires an even number of valence electrons (requires UHF/ROHF)."
+    },
+    {
+      "compound": "nitrogen_dioxide",
+      "method": "PM6",
+      "category": "Open-shell radical",
+      "type": "OPEN_SHELL_RADICAL",
+      "detail": "Open-shell radical detected (17 valence electrons). Closed-shell RHF requires an even number of valence electrons (requires UHF/ROHF)."
+    },
+    {
+      "compound": "nitrogen_dioxide",
+      "method": "AM1",
+      "category": "Open-shell radical",
+      "type": "OPEN_SHELL_RADICAL",
+      "detail": "Open-shell radical detected (17 valence electrons). Closed-shell RHF requires an even number of valence electrons (requires UHF/ROHF)."
+    },
+    {
+      "compound": "nitrogen_dioxide",
+      "method": "RM1",
+      "category": "Open-shell radical",
+      "type": "OPEN_SHELL_RADICAL",
+      "detail": "Open-shell radical detected (17 valence electrons). Closed-shell RHF requires an even number of valence electrons (requires UHF/ROHF)."
+    },
+    {
+      "compound": "nitrogen_dioxide",
+      "method": "PM3",
+      "category": "Open-shell radical",
+      "type": "OPEN_SHELL_RADICAL",
+      "detail": "Open-shell radical detected (17 valence electrons). Closed-shell RHF requires an even number of valence electrons (requires UHF/ROHF)."
+    },
+    {
+      "compound": "nitrogen_dioxide",
+      "method": "MNDO",
+      "category": "Open-shell radical",
+      "type": "OPEN_SHELL_RADICAL",
+      "detail": "Open-shell radical detected (17 valence electrons). Closed-shell RHF requires an even number of valence electrons (requires UHF/ROHF)."
+    },
+    {
+      "compound": "paracetamol",
+      "method": "PM3",
+      "category": "Pharmaceutical",
+      "type": "SCF_NON_CONVERGENCE",
+      "detail": "Reached max_iter (60) without satisfying density/energy tol"
+    },
+    {
+      "compound": "silane",
+      "method": "PM6",
+      "category": "Unsupported element (Si)",
+      "type": "UNSUPPORTED_ELEMENT",
+      "detail": "Unsupported element Z=14 for semi-empirical method 'PM6'"
+    },
+    {
+      "compound": "silane",
+      "method": "AM1",
+      "category": "Unsupported element (Si)",
+      "type": "UNSUPPORTED_ELEMENT",
+      "detail": "Unsupported element Z=14 for semi-empirical method 'AM1'"
+    },
+    {
+      "compound": "silane",
+      "method": "RM1",
+      "category": "Unsupported element (Si)",
+      "type": "UNSUPPORTED_ELEMENT",
+      "detail": "Unsupported element Z=14 for semi-empirical method 'RM1'"
+    },
+    {
+      "compound": "silane",
+      "method": "PM3",
+      "category": "Unsupported element (Si)",
+      "type": "UNSUPPORTED_ELEMENT",
+      "detail": "Unsupported element Z=14 for semi-empirical method 'PM3'"
+    },
+    {
+      "compound": "silane",
+      "method": "MNDO",
+      "category": "Unsupported element (Si)",
+      "type": "UNSUPPORTED_ELEMENT",
+      "detail": "Unsupported element Z=14 for semi-empirical method 'MNDO'"
+    },
+    {
+      "compound": "toluene",
+      "method": "MNDO",
+      "category": "Aromatic",
+      "type": "SCF_NON_CONVERGENCE",
+      "detail": "Reached max_iter (60) without satisfying density/energy tol"
+    }
+  ],
+  "detailed": {
+    "acetaldehyde": {
+      "name": "acetaldehyde",
+      "category": "Carbonyl",
+      "natoms": 7,
+      "elements": [
+        1,
+        6,
+        8
+      ],
+      "methods": {
+        "PM6": {
+          "status": "CONVERGED",
+          "iterations": 15,
+          "time_ms": 3.02,
+          "total_energy_ev": -595.918293,
+          "heat_of_formation_kcal": -160.477,
+          "dipole_debye": 3.086,
+          "max_grad_ev_a": 11.1725,
+          "homo_lumo_gap_ev": 7.708
+        },
+        "AM1": {
+          "status": "CONVERGED",
+          "iterations": 18,
+          "time_ms": 3.69,
+          "total_energy_ev": -642.259302,
+          "heat_of_formation_kcal": -288.288,
+          "dipole_debye": 2.768,
+          "max_grad_ev_a": 23.9952,
+          "homo_lumo_gap_ev": 8.05
+        },
+        "RM1": {
+          "status": "CONVERGED",
+          "iterations": 18,
+          "time_ms": 4.17,
+          "total_energy_ev": -632.248126,
+          "heat_of_formation_kcal": -234.97,
+          "dipole_debye": 2.458,
+          "max_grad_ev_a": 20.5783,
+          "homo_lumo_gap_ev": 8.125
+        },
+        "PM3": {
+          "status": "CONVERGED",
+          "iterations": 21,
+          "time_ms": 4.58,
+          "total_energy_ev": -602.145565,
+          "heat_of_formation_kcal": -267.712,
+          "dipole_debye": 2.909,
+          "max_grad_ev_a": 23.1457,
+          "homo_lumo_gap_ev": 7.875
+        },
+        "MNDO": {
+          "status": "CONVERGED",
+          "iterations": 19,
+          "time_ms": 3.27,
+          "total_energy_ev": -644.714422,
+          "heat_of_formation_kcal": -271.618,
+          "dipole_debye": 2.255,
+          "max_grad_ev_a": 23.6778,
+          "homo_lumo_gap_ev": 8.386
+        }
+      },
+      "features": {
+        "COSMO": {
+          "converged": true,
+          "time_ms": 4.0,
+          "solv_energy_ev": -596.192674,
+          "diel_stabilization_kcal": -6.327,
+          "gas_dipole": 3.086,
+          "solv_dipole": 3.982
+        },
+        "Dispersion_PM6_DH+": {
+          "converged": true,
+          "heat_of_formation_kcal": -160.556,
+          "disp_delta_kcal": -0.079
+        }
+      }
+    },
+    "acetamide": {
+      "name": "acetamide",
+      "category": "Amide",
+      "natoms": 9,
+      "elements": [
+        1,
+        6,
+        7,
+        8
+      ],
+      "methods": {
+        "PM6": {
+          "status": "CONVERGED",
+          "iterations": 18,
+          "time_ms": 6.21,
+          "total_energy_ev": -805.752319,
+          "heat_of_formation_kcal": -540.426,
+          "dipole_debye": 4.278,
+          "max_grad_ev_a": 19.9933,
+          "homo_lumo_gap_ev": 8.214
+        },
+        "AM1": {
+          "status": "CONVERGED",
+          "iterations": 19,
+          "time_ms": 6.6,
+          "total_energy_ev": -879.38145,
+          "heat_of_formation_kcal": -668.175,
+          "dipole_debye": 4.021,
+          "max_grad_ev_a": 18.7964,
+          "homo_lumo_gap_ev": 7.668
+        },
+        "RM1": {
+          "status": "CONVERGED",
+          "iterations": 19,
+          "time_ms": 6.41,
+          "total_energy_ev": -875.880378,
+          "heat_of_formation_kcal": -682.908,
+          "dipole_debye": 3.862,
+          "max_grad_ev_a": 22.8196,
+          "homo_lumo_gap_ev": 7.813
+        },
+        "PM3": {
+          "status": "CONVERGED",
+          "iterations": 21,
+          "time_ms": 6.89,
+          "total_energy_ev": -792.332211,
+          "heat_of_formation_kcal": -552.281,
+          "dipole_debye": 2.999,
+          "max_grad_ev_a": 17.2421,
+          "homo_lumo_gap_ev": 8.201
+        },
+        "MNDO": {
+          "status": "CONVERGED",
+          "iterations": 20,
+          "time_ms": 7.85,
+          "total_energy_ev": -882.277078,
+          "heat_of_formation_kcal": -638.988,
+          "dipole_debye": 3.263,
+          "max_grad_ev_a": 20.0736,
+          "homo_lumo_gap_ev": 7.357
+        }
+      },
+      "features": {
+        "COSMO": {
+          "converged": true,
+          "time_ms": 12.72,
+          "solv_energy_ev": -806.281073,
+          "diel_stabilization_kcal": -12.193,
+          "gas_dipole": 4.278,
+          "solv_dipole": 5.26
+        },
+        "Dispersion_PM6_DH+": {
+          "converged": true,
+          "heat_of_formation_kcal": -540.681,
+          "disp_delta_kcal": -0.255
+        }
+      }
+    },
+    "acetic_acid": {
+      "name": "acetic_acid",
+      "category": "Carboxylic acid",
+      "natoms": 8,
+      "elements": [
+        1,
+        6,
+        8
+      ],
+      "methods": {
+        "PM6": {
+          "status": "CONVERGED",
+          "iterations": 22,
+          "time_ms": 5.77,
+          "total_energy_ev": -895.878991,
+          "heat_of_formation_kcal": -396.865,
+          "dipole_debye": 1.878,
+          "max_grad_ev_a": 12.3831,
+          "homo_lumo_gap_ev": 6.788
+        },
+        "AM1": {
+          "status": "CONVERGED",
+          "iterations": 17,
+          "time_ms": 4.86,
+          "total_energy_ev": -977.650823,
+          "heat_of_formation_kcal": -673.613,
+          "dipole_debye": 1.778,
+          "max_grad_ev_a": 22.4242,
+          "homo_lumo_gap_ev": 8.088
+        },
+        "RM1": {
+          "status": "CONVERGED",
+          "iterations": 18,
+          "time_ms": 4.75,
+          "total_energy_ev": -964.344097,
+          "heat_of_formation_kcal": -637.904,
+          "dipole_debye": 1.639,
+          "max_grad_ev_a": 21.69,
+          "homo_lumo_gap_ev": 7.795
+        },
+        "PM3": {
+          "status": "CONVERGED",
+          "iterations": 18,
+          "time_ms": 4.94,
+          "total_energy_ev": -905.149619,
+          "heat_of_formation_kcal": -523.203,
+          "dipole_debye": 1.331,
+          "max_grad_ev_a": 17.25,
+          "homo_lumo_gap_ev": 8.345
+        },
+        "MNDO": {
+          "status": "CONVERGED",
+          "iterations": 17,
+          "time_ms": 4.59,
+          "total_energy_ev": -982.435808,
+          "heat_of_formation_kcal": -669.877,
+          "dipole_debye": 1.355,
+          "max_grad_ev_a": 23.8908,
+          "homo_lumo_gap_ev": 7.549
+        }
+      },
+      "features": {
+        "COSMO": {
+          "converged": true,
+          "time_ms": 7.46,
+          "solv_energy_ev": -896.266801,
+          "diel_stabilization_kcal": -8.943,
+          "gas_dipole": 1.878,
+          "solv_dipole": 2.531
+        },
+        "Dispersion_PM6_DH+": {
+          "converged": true,
+          "heat_of_formation_kcal": -397.042,
+          "disp_delta_kcal": -0.177
+        }
+      }
+    },
+    "acetone": {
+      "name": "acetone",
+      "category": "Carbonyl",
+      "natoms": 10,
+      "elements": [
+        1,
+        6,
+        8
+      ],
+      "methods": {
+        "PM6": {
+          "status": "CONVERGED",
+          "iterations": 18,
+          "time_ms": 6.97,
+          "total_energy_ev": -754.643103,
+          "heat_of_formation_kcal": -370.331,
+          "dipole_debye": 7.239,
+          "max_grad_ev_a": 12.156,
+          "homo_lumo_gap_ev": 5.278
+        },
+        "AM1": {
+          "status": "CONVERGED",
+          "iterations": 17,
+          "time_ms": 6.7,
+          "total_energy_ev": -813.268774,
+          "heat_of_formation_kcal": -645.072,
+          "dipole_debye": 6.111,
+          "max_grad_ev_a": 25.7789,
+          "homo_lumo_gap_ev": 8.178
+        },
+        "RM1": {
+          "status": "CONVERGED",
+          "iterations": 19,
+          "time_ms": 7.16,
+          "total_energy_ev": -800.583141,
+          "heat_of_formation_kcal": -572.048,
+          "dipole_debye": 4.353,
+          "max_grad_ev_a": 17.2924,
+          "homo_lumo_gap_ev": 7.465
+        },
+        "PM3": {
+          "status": "CONVERGED",
+          "iterations": 16,
+          "time_ms": 6.64,
+          "total_energy_ev": -763.917152,
+          "heat_of_formation_kcal": -555.181,
+          "dipole_debye": 5.042,
+          "max_grad_ev_a": 24.1571,
+          "homo_lumo_gap_ev": 9.463
+        },
+        "MNDO": {
+          "status": "CONVERGED",
+          "iterations": 20,
+          "time_ms": 7.44,
+          "total_energy_ev": -815.513152,
+          "heat_of_formation_kcal": -607.296,
+          "dipole_debye": 3.631,
+          "max_grad_ev_a": 20.7243,
+          "homo_lumo_gap_ev": 7.651
+        }
+      },
+      "features": {
+        "COSMO": {
+          "converged": true,
+          "time_ms": 12.48,
+          "solv_energy_ev": -755.482427,
+          "diel_stabilization_kcal": -19.355,
+          "gas_dipole": 7.239,
+          "solv_dipole": 9.208
+        },
+        "Dispersion_PM6_DH+": {
+          "converged": true,
+          "heat_of_formation_kcal": -370.617,
+          "disp_delta_kcal": -0.286
+        }
+      }
+    },
+    "acetonitrile": {
+      "name": "acetonitrile",
+      "category": "Nitrile",
+      "natoms": 6,
+      "elements": [
+        1,
+        6,
+        7
+      ],
+      "methods": {
+        "PM6": {
+          "status": "CONVERGED",
+          "iterations": 12,
+          "time_ms": 1.63,
+          "total_energy_ev": -464.840983,
+          "heat_of_formation_kcal": 17.381,
+          "dipole_debye": 3.666,
+          "max_grad_ev_a": 2.2826,
+          "homo_lumo_gap_ev": 13.995
+        },
+        "AM1": {
+          "status": "CONVERGED",
+          "iterations": 14,
+          "time_ms": 1.8,
+          "total_energy_ev": -503.370944,
+          "heat_of_formation_kcal": 24.026,
+          "dipole_debye": 3.646,
+          "max_grad_ev_a": 2.1892,
+          "homo_lumo_gap_ev": 14.212
+        },
+        "RM1": {
+          "status": "CONVERGED",
+          "iterations": 12,
+          "time_ms": 1.69,
+          "total_energy_ev": -502.423705,
+          "heat_of_formation_kcal": 17.984,
+          "dipole_debye": 3.144,
+          "max_grad_ev_a": 1.0456,
+          "homo_lumo_gap_ev": 14.355
+        },
+        "PM3": {
+          "status": "CONVERGED",
+          "iterations": 11,
+          "time_ms": 1.59,
+          "total_energy_ev": -444.527066,
+          "heat_of_formation_kcal": 29.188,
+          "dipole_debye": 3.329,
+          "max_grad_ev_a": 1.3058,
+          "homo_lumo_gap_ev": 13.089
+        },
+        "MNDO": {
+          "status": "CONVERGED",
+          "iterations": 15,
+          "time_ms": 1.74,
+          "total_energy_ev": -504.735985,
+          "heat_of_formation_kcal": 24.201,
+          "dipole_debye": 2.612,
+          "max_grad_ev_a": 1.1362,
+          "homo_lumo_gap_ev": 14.392
+        }
+      },
+      "features": {
+        "COSMO": {
+          "converged": true,
+          "time_ms": 2.8,
+          "solv_energy_ev": -465.101276,
+          "diel_stabilization_kcal": -6.002,
+          "gas_dipole": 3.666,
+          "solv_dipole": 4.735
+        },
+        "Dispersion_PM6_DH+": {
+          "converged": true,
+          "heat_of_formation_kcal": 17.263,
+          "disp_delta_kcal": -0.118
+        }
+      }
+    },
+    "acetylene": {
+      "name": "acetylene",
+      "category": "Hydrocarbon",
+      "natoms": 4,
+      "elements": [
+        1,
+        6
+      ],
+      "methods": {
+        "PM6": {
+          "status": "CONVERGED",
+          "iterations": 8,
+          "time_ms": 0.43,
+          "total_energy_ev": -271.201984,
+          "heat_of_formation_kcal": 23.863,
+          "dipole_debye": 0.0,
+          "max_grad_ev_a": 5.398,
+          "homo_lumo_gap_ev": 13.256
+        },
+        "AM1": {
+          "status": "CONVERGED",
+          "iterations": 8,
+          "time_ms": 0.39,
+          "total_energy_ev": -281.338287,
+          "heat_of_formation_kcal": 55.941,
+          "dipole_debye": 0.0,
+          "max_grad_ev_a": 0.3037,
+          "homo_lumo_gap_ev": 13.497
+        },
+        "RM1": {
+          "status": "CONVERGED",
+          "iterations": 8,
+          "time_ms": 0.37,
+          "total_energy_ev": -276.90132,
+          "heat_of_formation_kcal": 48.298,
+          "dipole_debye": 0.0,
+          "max_grad_ev_a": 1.5717,
+          "homo_lumo_gap_ev": 13.461
+        },
+        "PM3": {
+          "status": "CONVERGED",
+          "iterations": 8,
+          "time_ms": 0.36,
+          "total_energy_ev": -265.715472,
+          "heat_of_formation_kcal": 51.441,
+          "dipole_debye": 0.0,
+          "max_grad_ev_a": 1.0672,
+          "homo_lumo_gap_ev": 13.48
+        },
+        "MNDO": {
+          "status": "CONVERGED",
+          "iterations": 8,
+          "time_ms": 0.37,
+          "total_energy_ev": -281.604496,
+          "heat_of_formation_kcal": 58.781,
+          "dipole_debye": 0.0,
+          "max_grad_ev_a": 0.6784,
+          "homo_lumo_gap_ev": 13.078
+        }
+      },
+      "features": {
+        "COSMO": {
+          "converged": true,
+          "time_ms": 0.91,
+          "solv_energy_ev": -271.231916,
+          "diel_stabilization_kcal": -0.69,
+          "gas_dipole": 0.0,
+          "solv_dipole": 0.0
+        },
+        "Dispersion_PM6_DH+": {
+          "converged": true,
+          "heat_of_formation_kcal": 23.845,
+          "disp_delta_kcal": -0.018
+        }
+      }
+    },
+    "alanine": {
+      "name": "alanine",
+      "category": "Amino acid",
+      "natoms": 13,
+      "elements": [
+        1,
+        6,
+        7,
+        8
+      ],
+      "methods": {
+        "PM6": {
+          "status": "CONVERGED",
+          "iterations": 20,
+          "time_ms": 19.83,
+          "total_energy_ev": -1282.894143,
+          "heat_of_formation_kcal": -1412.28,
+          "dipole_debye": 8.062,
+          "max_grad_ev_a": 21.3988,
+          "homo_lumo_gap_ev": 6.344
+        },
+        "AM1": {
+          "status": "CONVERGED",
+          "iterations": 20,
+          "time_ms": 20.18,
+          "total_energy_ev": -1405.486014,
+          "heat_of_formation_kcal": -1864.66,
+          "dipole_debye": 4.871,
+          "max_grad_ev_a": 30.2134,
+          "homo_lumo_gap_ev": 7.171
+        },
+        "RM1": {
+          "status": "CONVERGED",
+          "iterations": 21,
+          "time_ms": 20.66,
+          "total_energy_ev": -1392.935154,
+          "heat_of_formation_kcal": -1806.274,
+          "dipole_debye": 4.167,
+          "max_grad_ev_a": 27.8411,
+          "homo_lumo_gap_ev": 7.157
+        },
+        "PM3": {
+          "status": "CONVERGED",
+          "iterations": 22,
+          "time_ms": 26.19,
+          "total_energy_ev": -1280.704321,
+          "heat_of_formation_kcal": -1639.388,
+          "dipole_debye": 4.229,
+          "max_grad_ev_a": 29.6273,
+          "homo_lumo_gap_ev": 6.751
+        },
+        "MNDO": {
+          "status": "CONVERGED",
+          "iterations": 20,
+          "time_ms": 19.41,
+          "total_energy_ev": -1408.058217,
+          "heat_of_formation_kcal": -1770.974,
+          "dipole_debye": 3.847,
+          "max_grad_ev_a": 27.8412,
+          "homo_lumo_gap_ev": 7.177
+        }
+      },
+      "features": {
+        "COSMO": {
+          "converged": true,
+          "time_ms": 29.41,
+          "solv_energy_ev": -1284.449899,
+          "diel_stabilization_kcal": -35.877,
+          "gas_dipole": 8.062,
+          "solv_dipole": 12.7
+        },
+        "Dispersion_PM6_DH+": {
+          "converged": true,
+          "heat_of_formation_kcal": -1413.029,
+          "disp_delta_kcal": -0.749
+        }
+      }
+    },
+    "ammonia": {
+      "name": "ammonia",
+      "category": "Inorganic/N",
+      "natoms": 4,
+      "elements": [
+        1,
+        7
+      ],
+      "methods": {
+        "PM6": {
+          "status": "CONVERGED",
+          "iterations": 8,
+          "time_ms": 0.27,
+          "total_energy_ev": -222.457403,
+          "heat_of_formation_kcal": -48.124,
+          "dipole_debye": 2.2,
+          "max_grad_ev_a": 3.635,
+          "homo_lumo_gap_ev": 16.269
+        },
+        "AM1": {
+          "status": "CONVERGED",
+          "iterations": 9,
+          "time_ms": 0.22,
+          "total_energy_ev": -250.497659,
+          "heat_of_formation_kcal": -58.514,
+          "dipole_debye": 2.23,
+          "max_grad_ev_a": 3.4789,
+          "homo_lumo_gap_ev": 15.994
+        },
+        "RM1": {
+          "status": "CONVERGED",
+          "iterations": 9,
+          "time_ms": 0.22,
+          "total_energy_ev": -255.272675,
+          "heat_of_formation_kcal": -60.529,
+          "dipole_debye": 1.919,
+          "max_grad_ev_a": 4.4318,
+          "homo_lumo_gap_ev": 16.057
+        },
+        "PM3": {
+          "status": "CONVERGED",
+          "iterations": 10,
+          "time_ms": 0.23,
+          "total_energy_ev": -210.018572,
+          "heat_of_formation_kcal": -34.743,
+          "dipole_debye": 1.602,
+          "max_grad_ev_a": 4.2684,
+          "homo_lumo_gap_ev": 13.553
+        },
+        "MNDO": {
+          "status": "CONVERGED",
+          "iterations": 9,
+          "time_ms": 0.24,
+          "total_energy_ev": -251.635348,
+          "heat_of_formation_kcal": -38.56,
+          "dipole_debye": 1.702,
+          "max_grad_ev_a": 4.0786,
+          "homo_lumo_gap_ev": 16.116
+        }
+      },
+      "features": {
+        "COSMO": {
+          "converged": true,
+          "time_ms": 0.46,
+          "solv_energy_ev": -222.698633,
+          "diel_stabilization_kcal": -5.563,
+          "gas_dipole": 2.2,
+          "solv_dipole": 2.315
+        },
+        "Dispersion_PM6_DH+": {
+          "converged": true,
+          "heat_of_formation_kcal": -48.125,
+          "disp_delta_kcal": -0.001
+        }
+      }
+    },
+    "aniline": {
+      "name": "aniline",
+      "category": "Aromatic amine",
+      "natoms": 14,
+      "elements": [
+        1,
+        6,
+        7
+      ],
+      "methods": {
+        "PM6": {
+          "status": "NOT_CONVERGED",
+          "iterations": 60,
+          "time_ms": 65.88
+        },
+        "AM1": {
+          "status": "CONVERGED",
+          "iterations": 34,
+          "time_ms": 38.26,
+          "total_energy_ev": -1164.30783,
+          "heat_of_formation_kcal": -2130.028,
+          "dipole_debye": 1.412,
+          "max_grad_ev_a": 29.7173,
+          "homo_lumo_gap_ev": 3.983
+        },
+        "RM1": {
+          "status": "CONVERGED",
+          "iterations": 32,
+          "time_ms": 42.82,
+          "total_energy_ev": -1145.956233,
+          "heat_of_formation_kcal": -1954.64,
+          "dipole_debye": 4.346,
+          "max_grad_ev_a": 27.531,
+          "homo_lumo_gap_ev": 3.83
+        },
+        "PM3": {
+          "status": "NOT_CONVERGED",
+          "iterations": 60,
+          "time_ms": 60.36
+        },
+        "MNDO": {
+          "status": "CONVERGED",
+          "iterations": 23,
+          "time_ms": 29.4,
+          "total_energy_ev": -1157.206165,
+          "heat_of_formation_kcal": -1916.65,
+          "dipole_debye": 2.589,
+          "max_grad_ev_a": 28.0845,
+          "homo_lumo_gap_ev": 5.098
+        }
+      },
+      "features": {}
+    },
+    "aspirin": {
+      "name": "aspirin",
+      "category": "Pharmaceutical",
+      "natoms": 21,
+      "elements": [
+        1,
+        6,
+        8
+      ],
+      "methods": {
+        "PM6": {
+          "status": "CONVERGED",
+          "iterations": 26,
+          "time_ms": 147.12,
+          "total_energy_ev": -2520.702943,
+          "heat_of_formation_kcal": -3466.093,
+          "dipole_debye": 8.31,
+          "max_grad_ev_a": 24.2646,
+          "homo_lumo_gap_ev": 5.24
+        },
+        "AM1": {
+          "status": "CONVERGED",
+          "iterations": 28,
+          "time_ms": 146.92,
+          "total_energy_ev": -2737.024451,
+          "heat_of_formation_kcal": -4589.341,
+          "dipole_debye": 3.944,
+          "max_grad_ev_a": 45.4954,
+          "homo_lumo_gap_ev": 5.7
+        },
+        "RM1": {
+          "status": "CONVERGED",
+          "iterations": 28,
+          "time_ms": 144.22,
+          "total_energy_ev": -2690.078688,
+          "heat_of_formation_kcal": -4389.012,
+          "dipole_debye": 5.119,
+          "max_grad_ev_a": 42.9767,
+          "homo_lumo_gap_ev": 6.009
+        },
+        "PM3": {
+          "status": "CONVERGED",
+          "iterations": 29,
+          "time_ms": 155.93,
+          "total_energy_ev": -2524.480099,
+          "heat_of_formation_kcal": -3836.244,
+          "dipole_debye": 4.456,
+          "max_grad_ev_a": 34.8385,
+          "homo_lumo_gap_ev": 5.433
+        },
+        "MNDO": {
+          "status": "CONVERGED",
+          "iterations": 26,
+          "time_ms": 137.0,
+          "total_energy_ev": -2736.202784,
+          "heat_of_formation_kcal": -4378.574,
+          "dipole_debye": 3.37,
+          "max_grad_ev_a": 47.6378,
+          "homo_lumo_gap_ev": 5.483
+        }
+      },
+      "features": {
+        "COSMO": {
+          "converged": true,
+          "time_ms": 222.3,
+          "solv_energy_ev": -2522.598008,
+          "diel_stabilization_kcal": -43.701,
+          "gas_dipole": 8.31,
+          "solv_dipole": 11.544
+        },
+        "Dispersion_PM6_DH+": {
+          "converged": true,
+          "heat_of_formation_kcal": -3469.169,
+          "disp_delta_kcal": -3.076
+        }
+      }
+    },
+    "benzene": {
+      "name": "benzene",
+      "category": "Aromatic",
+      "natoms": 12,
+      "elements": [
+        1,
+        6
+      ],
+      "methods": {
+        "PM6": {
+          "status": "CONVERGED",
+          "iterations": 15,
+          "time_ms": 14.73,
+          "total_energy_ev": -882.116269,
+          "heat_of_formation_kcal": -1508.297,
+          "dipole_debye": 0.001,
+          "max_grad_ev_a": 21.6921,
+          "homo_lumo_gap_ev": 5.739
+        },
+        "AM1": {
+          "status": "CONVERGED",
+          "iterations": 16,
+          "time_ms": 15.78,
+          "total_energy_ev": -928.433425,
+          "heat_of_formation_kcal": -1778.914,
+          "dipole_debye": 0.001,
+          "max_grad_ev_a": 28.8571,
+          "homo_lumo_gap_ev": 4.673
+        },
+        "RM1": {
+          "status": "CONVERGED",
+          "iterations": 17,
+          "time_ms": 16.13,
+          "total_energy_ev": -908.139051,
+          "heat_of_formation_kcal": -1640.8,
+          "dipole_debye": 0.001,
+          "max_grad_ev_a": 26.72,
+          "homo_lumo_gap_ev": 4.972
+        },
+        "PM3": {
+          "status": "CONVERGED",
+          "iterations": 19,
+          "time_ms": 17.15,
+          "total_energy_ev": -871.045573,
+          "heat_of_formation_kcal": -1549.832,
+          "dipole_debye": 0.001,
+          "max_grad_ev_a": 28.2708,
+          "homo_lumo_gap_ev": 4.232
+        },
+        "MNDO": {
+          "status": "CONVERGED",
+          "iterations": 18,
+          "time_ms": 20.64,
+          "total_energy_ev": -920.831859,
+          "heat_of_formation_kcal": -1576.684,
+          "dipole_debye": 0.001,
+          "max_grad_ev_a": 27.767,
+          "homo_lumo_gap_ev": 4.441
+        }
+      },
+      "features": {
+        "COSMO": {
+          "converged": true,
+          "time_ms": 27.39,
+          "solv_energy_ev": -882.980338,
+          "diel_stabilization_kcal": -19.926,
+          "gas_dipole": 0.001,
+          "solv_dipole": 0.012
+        },
+        "Dispersion_PM6_DH+": {
+          "converged": true,
+          "heat_of_formation_kcal": -1509.009,
+          "disp_delta_kcal": -0.712
+        }
+      }
+    },
+    "bromobenzene": {
+      "name": "bromobenzene",
+      "category": "Aromatic halide (Br)",
+      "natoms": 12,
+      "elements": [
+        1,
+        6,
+        35
+      ],
+      "methods": {
+        "PM6": {
+          "status": "CONVERGED",
+          "iterations": 22,
+          "time_ms": 23.51,
+          "total_energy_ev": -1097.384608,
+          "heat_of_formation_kcal": -1523.383,
+          "dipole_debye": 2.322,
+          "max_grad_ev_a": 28.2275,
+          "homo_lumo_gap_ev": 3.867
+        },
+        "AM1": {
+          "status": "CONVERGED",
+          "iterations": 32,
+          "time_ms": 32.01,
+          "total_energy_ev": -1273.136964,
+          "heat_of_formation_kcal": -1891.578,
+          "dipole_debye": 1.717,
+          "max_grad_ev_a": 26.9468,
+          "homo_lumo_gap_ev": 3.591
+        },
+        "RM1": {
+          "status": "CONVERGED",
+          "iterations": 21,
+          "time_ms": 23.02,
+          "total_energy_ev": -1257.843733,
+          "heat_of_formation_kcal": -1771.063,
+          "dipole_debye": 0.899,
+          "max_grad_ev_a": 27.0706,
+          "homo_lumo_gap_ev": 4.28
+        },
+        "PM3": {
+          "status": "CONVERGED",
+          "iterations": 32,
+          "time_ms": 28.97,
+          "total_energy_ev": -1215.66247,
+          "heat_of_formation_kcal": -1693.963,
+          "dipole_debye": 0.879,
+          "max_grad_ev_a": 23.4091,
+          "homo_lumo_gap_ev": 3.877
+        },
+        "MNDO": {
+          "status": "CONVERGED",
+          "iterations": 38,
+          "time_ms": 32.36,
+          "total_energy_ev": -1258.976465,
+          "heat_of_formation_kcal": -1679.751,
+          "dipole_debye": 2.42,
+          "max_grad_ev_a": 24.0931,
+          "homo_lumo_gap_ev": 3.755
+        }
+      },
+      "features": {
+        "COSMO": {
+          "converged": true,
+          "time_ms": 48.36,
+          "solv_energy_ev": -1098.763126,
+          "diel_stabilization_kcal": -31.789,
+          "gas_dipole": 2.322,
+          "solv_dipole": 18.722
+        },
+        "Dispersion_PM6_DH+": {
+          "converged": true,
+          "heat_of_formation_kcal": -1524.502,
+          "disp_delta_kcal": -1.119
+        }
+      }
+    },
+    "bromomethane": {
+      "name": "bromomethane",
+      "category": "Halide (Br)",
+      "natoms": 5,
+      "elements": [
+        1,
+        6,
+        35
+      ],
+      "methods": {
+        "PM6": {
+          "status": "CONVERGED",
+          "iterations": 21,
+          "time_ms": 0.95,
+          "total_energy_ev": -386.70089,
+          "heat_of_formation_kcal": 104.939,
+          "dipole_debye": 3.019,
+          "max_grad_ev_a": 5.3751,
+          "homo_lumo_gap_ev": 8.559
+        },
+        "AM1": {
+          "status": "CONVERGED",
+          "iterations": 11,
+          "time_ms": 0.94,
+          "total_energy_ev": -518.949214,
+          "heat_of_formation_kcal": 85.743,
+          "dipole_debye": 2.463,
+          "max_grad_ev_a": 4.0242,
+          "homo_lumo_gap_ev": 9.662
+        },
+        "RM1": {
+          "status": "CONVERGED",
+          "iterations": 12,
+          "time_ms": 0.86,
+          "total_energy_ev": -523.278498,
+          "heat_of_formation_kcal": 67.692,
+          "dipole_debye": 3.185,
+          "max_grad_ev_a": 4.9242,
+          "homo_lumo_gap_ev": 9.166
+        },
+        "PM3": {
+          "status": "CONVERGED",
+          "iterations": 12,
+          "time_ms": 0.82,
+          "total_energy_ev": -515.207888,
+          "heat_of_formation_kcal": 72.18,
+          "dipole_debye": 2.8,
+          "max_grad_ev_a": 5.2277,
+          "homo_lumo_gap_ev": 9.065
+        },
+        "MNDO": {
+          "status": "CONVERGED",
+          "iterations": 10,
+          "time_ms": 0.77,
+          "total_energy_ev": -514.771802,
+          "heat_of_formation_kcal": 80.181,
+          "dipole_debye": 3.464,
+          "max_grad_ev_a": 4.6137,
+          "homo_lumo_gap_ev": 9.73
+        }
+      },
+      "features": {
+        "COSMO": {
+          "converged": true,
+          "time_ms": 1.51,
+          "solv_energy_ev": -386.932951,
+          "diel_stabilization_kcal": -5.351,
+          "gas_dipole": 3.019,
+          "solv_dipole": 4.078
+        },
+        "Dispersion_PM6_DH+": {
+          "converged": true,
+          "heat_of_formation_kcal": 104.929,
+          "disp_delta_kcal": -0.01
+        }
+      }
+    },
+    "caffeine": {
+      "name": "caffeine",
+      "category": "Pharmaceutical",
+      "natoms": 24,
+      "elements": [
+        1,
+        6,
+        7,
+        8
+      ],
+      "methods": {
+        "PM6": {
+          "status": "CONVERGED",
+          "iterations": 28,
+          "time_ms": 198.69,
+          "total_energy_ev": -2663.743985,
+          "heat_of_formation_kcal": -5741.109,
+          "dipole_debye": 5.021,
+          "max_grad_ev_a": 32.7106,
+          "homo_lumo_gap_ev": 3.321
+        },
+        "AM1": {
+          "status": "CONVERGED",
+          "iterations": 44,
+          "time_ms": 279.86,
+          "total_energy_ev": -2907.562621,
+          "heat_of_formation_kcal": -6453.69,
+          "dipole_debye": 3.67,
+          "max_grad_ev_a": 39.8077,
+          "homo_lumo_gap_ev": 3.287
+        },
+        "RM1": {
+          "status": "CONVERGED",
+          "iterations": 29,
+          "time_ms": 217.86,
+          "total_energy_ev": -2891.445003,
+          "heat_of_formation_kcal": -6406.789,
+          "dipole_debye": 3.145,
+          "max_grad_ev_a": 38.2008,
+          "homo_lumo_gap_ev": 3.581
+        },
+        "PM3": {
+          "status": "CONVERGED",
+          "iterations": 37,
+          "time_ms": 245.35,
+          "total_energy_ev": -2588.669106,
+          "heat_of_formation_kcal": -5818.488,
+          "dipole_debye": 4.204,
+          "max_grad_ev_a": 32.9802,
+          "homo_lumo_gap_ev": 3.844
+        },
+        "MNDO": {
+          "status": "CONVERGED",
+          "iterations": 27,
+          "time_ms": 191.68,
+          "total_energy_ev": -2900.072986,
+          "heat_of_formation_kcal": -6096.287,
+          "dipole_debye": 3.807,
+          "max_grad_ev_a": 35.0294,
+          "homo_lumo_gap_ev": 3.799
+        }
+      },
+      "features": {
+        "COSMO": {
+          "converged": true,
+          "time_ms": 278.48,
+          "solv_energy_ev": -2666.442556,
+          "diel_stabilization_kcal": -62.231,
+          "gas_dipole": 5.021,
+          "solv_dipole": 16.888
+        },
+        "Dispersion_PM6_DH+": {
+          "converged": true,
+          "heat_of_formation_kcal": -5744.762,
+          "disp_delta_kcal": -3.653
+        }
+      }
+    },
+    "carbon_dioxide": {
+      "name": "carbon_dioxide",
+      "category": "Inorganic/O",
+      "natoms": 3,
+      "elements": [
+        6,
+        8
+      ],
+      "methods": {
+        "PM6": {
+          "status": "CONVERGED",
+          "iterations": 9,
+          "time_ms": 0.37,
+          "total_energy_ev": -705.589724,
+          "heat_of_formation_kcal": -82.044,
+          "dipole_debye": 0.0,
+          "max_grad_ev_a": 2.7715,
+          "homo_lumo_gap_ev": 12.924
+        },
+        "AM1": {
+          "status": "CONVERGED",
+          "iterations": 8,
+          "time_ms": 0.35,
+          "total_energy_ev": -768.843565,
+          "heat_of_formation_kcal": -75.011,
+          "dipole_debye": 0.0,
+          "max_grad_ev_a": 0.6989,
+          "homo_lumo_gap_ev": 13.983
+        },
+        "RM1": {
+          "status": "CONVERGED",
+          "iterations": 8,
+          "time_ms": 0.32,
+          "total_energy_ev": -757.753919,
+          "heat_of_formation_kcal": -74.484,
+          "dipole_debye": 0.0,
+          "max_grad_ev_a": 2.33,
+          "homo_lumo_gap_ev": 13.623
+        },
+        "PM3": {
+          "status": "CONVERGED",
+          "iterations": 8,
+          "time_ms": 0.31,
+          "total_energy_ev": -705.230202,
+          "heat_of_formation_kcal": -63.184,
+          "dipole_debye": 0.0,
+          "max_grad_ev_a": 0.5993,
+          "homo_lumo_gap_ev": 13.627
+        },
+        "MNDO": {
+          "status": "CONVERGED",
+          "iterations": 8,
+          "time_ms": 0.33,
+          "total_energy_ev": -771.791986,
+          "heat_of_formation_kcal": -68.684,
+          "dipole_debye": 0.0,
+          "max_grad_ev_a": 1.1511,
+          "homo_lumo_gap_ev": 13.513
+        }
+      },
+      "features": {
+        "COSMO": {
+          "converged": true,
+          "time_ms": 1.12,
+          "solv_energy_ev": -705.721592,
+          "diel_stabilization_kcal": -3.041,
+          "gas_dipole": 0.0,
+          "solv_dipole": 0.001
+        },
+        "Dispersion_PM6_DH+": {
+          "converged": true,
+          "heat_of_formation_kcal": -82.051,
+          "disp_delta_kcal": -0.007
+        }
+      }
+    },
+    "carbon_tetrachloride": {
+      "name": "carbon_tetrachloride",
+      "category": "Halide (Cl)",
+      "natoms": 5,
+      "elements": [
+        6,
+        17
+      ],
+      "methods": {
+        "PM6": {
+          "status": "CONVERGED",
+          "iterations": 11,
+          "time_ms": 2.63,
+          "total_energy_ev": -1213.028331,
+          "heat_of_formation_kcal": -1700.721,
+          "dipole_debye": 1.772,
+          "max_grad_ev_a": 41.2029,
+          "homo_lumo_gap_ev": 11.884
+        },
+        "AM1": {
+          "status": "CONVERGED",
+          "iterations": 11,
+          "time_ms": 2.77,
+          "total_energy_ev": -1645.988636,
+          "heat_of_formation_kcal": -552.072,
+          "dipole_debye": 2.906,
+          "max_grad_ev_a": 19.417,
+          "homo_lumo_gap_ev": 9.889
+        },
+        "RM1": {
+          "status": "CONVERGED",
+          "iterations": 11,
+          "time_ms": 2.64,
+          "total_energy_ev": -1684.374605,
+          "heat_of_formation_kcal": -557.786,
+          "dipole_debye": 2.34,
+          "max_grad_ev_a": 18.554,
+          "homo_lumo_gap_ev": 9.637
+        },
+        "PM3": {
+          "status": "CONVERGED",
+          "iterations": 11,
+          "time_ms": 2.64,
+          "total_energy_ev": -1437.32178,
+          "heat_of_formation_kcal": -1219.282,
+          "dipole_debye": 2.713,
+          "max_grad_ev_a": 32.8573,
+          "homo_lumo_gap_ev": 11.287
+        },
+        "MNDO": {
+          "status": "CONVERGED",
+          "iterations": 11,
+          "time_ms": 2.62,
+          "total_energy_ev": -1572.321517,
+          "heat_of_formation_kcal": -620.588,
+          "dipole_debye": 3.254,
+          "max_grad_ev_a": 20.1969,
+          "homo_lumo_gap_ev": 9.886
+        }
+      },
+      "features": {
+        "COSMO": {
+          "converged": true,
+          "time_ms": 5.03,
+          "solv_energy_ev": -1213.139222,
+          "diel_stabilization_kcal": -2.557,
+          "gas_dipole": 1.772,
+          "solv_dipole": 1.867
+        },
+        "Dispersion_PM6_DH+": {
+          "converged": true,
+          "heat_of_formation_kcal": -1700.947,
+          "disp_delta_kcal": -0.226
+        }
+      }
+    },
+    "chlorobenzene": {
+      "name": "chlorobenzene",
+      "category": "Aromatic halide (Cl)",
+      "natoms": 12,
+      "elements": [
+        1,
+        6,
+        17
+      ],
+      "methods": {
+        "PM6": {
+          "status": "CONVERGED",
+          "iterations": 23,
+          "time_ms": 28.25,
+          "total_energy_ev": -1127.480195,
+          "heat_of_formation_kcal": -1616.768,
+          "dipole_debye": 0.034,
+          "max_grad_ev_a": 22.6692,
+          "homo_lumo_gap_ev": 4.689
+        },
+        "AM1": {
+          "status": "CONVERGED",
+          "iterations": 23,
+          "time_ms": 23.01,
+          "total_energy_ev": -1296.638247,
+          "heat_of_formation_kcal": -1972.739,
+          "dipole_debye": 2.226,
+          "max_grad_ev_a": 29.7035,
+          "homo_lumo_gap_ev": 4.027
+        },
+        "RM1": {
+          "status": "CONVERGED",
+          "iterations": 21,
+          "time_ms": 21.85,
+          "total_energy_ev": -1286.405244,
+          "heat_of_formation_kcal": -1842.788,
+          "dipole_debye": 0.866,
+          "max_grad_ev_a": 27.7954,
+          "homo_lumo_gap_ev": 4.829
+        },
+        "PM3": {
+          "status": "CONVERGED",
+          "iterations": 33,
+          "time_ms": 29.3,
+          "total_energy_ev": -1181.721026,
+          "heat_of_formation_kcal": -1770.199,
+          "dipole_debye": 1.172,
+          "max_grad_ev_a": 29.9778,
+          "homo_lumo_gap_ev": 3.731
+        },
+        "MNDO": {
+          "status": "CONVERGED",
+          "iterations": 23,
+          "time_ms": 28.2,
+          "total_energy_ev": -1268.92752,
+          "heat_of_formation_kcal": -1758.551,
+          "dipole_debye": 2.556,
+          "max_grad_ev_a": 28.0178,
+          "homo_lumo_gap_ev": 3.847
+        }
+      },
+      "features": {
+        "COSMO": {
+          "converged": false,
+          "time_ms": 75.5,
+          "solv_energy_ev": -1127.086054,
+          "diel_stabilization_kcal": 9.089,
+          "gas_dipole": 0.034,
+          "solv_dipole": 11.825
+        },
+        "Dispersion_PM6_DH+": {
+          "converged": true,
+          "heat_of_formation_kcal": -1617.823,
+          "disp_delta_kcal": -1.055
+        }
+      }
+    },
+    "chloroform": {
+      "name": "chloroform",
+      "category": "Halide (Cl)",
+      "natoms": 5,
+      "elements": [
+        1,
+        6,
+        17
+      ],
+      "methods": {
+        "PM6": {
+          "status": "CONVERGED",
+          "iterations": 14,
+          "time_ms": 2.01,
+          "total_energy_ev": -927.297377,
+          "heat_of_formation_kcal": -661.365,
+          "dipole_debye": 1.764,
+          "max_grad_ev_a": 3465.1418,
+          "homo_lumo_gap_ev": 8.755
+        },
+        "AM1": {
+          "status": "CONVERGED",
+          "iterations": 14,
+          "time_ms": 2.0,
+          "total_energy_ev": -1274.189359,
+          "heat_of_formation_kcal": -275.357,
+          "dipole_debye": 3.383,
+          "max_grad_ev_a": 5640.156,
+          "homo_lumo_gap_ev": 8.762
+        },
+        "RM1": {
+          "status": "CONVERGED",
+          "iterations": 13,
+          "time_ms": 1.94,
+          "total_energy_ev": -1305.82778,
+          "heat_of_formation_kcal": -349.327,
+          "dipole_debye": 2.495,
+          "max_grad_ev_a": 4502.4177,
+          "homo_lumo_gap_ev": 8.615
+        },
+        "PM3": {
+          "status": "CONVERGED",
+          "iterations": 16,
+          "time_ms": 2.17,
+          "total_energy_ev": -1101.34905,
+          "heat_of_formation_kcal": -415.545,
+          "dipole_debye": 2.724,
+          "max_grad_ev_a": 8010.5652,
+          "homo_lumo_gap_ev": 7.772
+        },
+        "MNDO": {
+          "status": "CONVERGED",
+          "iterations": 12,
+          "time_ms": 1.94,
+          "total_energy_ev": -1217.266191,
+          "heat_of_formation_kcal": -278.227,
+          "dipole_debye": 3.378,
+          "max_grad_ev_a": 5406.6705,
+          "homo_lumo_gap_ev": 8.663
+        }
+      },
+      "features": {
+        "COSMO": {
+          "converged": true,
+          "time_ms": 3.75,
+          "solv_energy_ev": -927.407323,
+          "diel_stabilization_kcal": -2.535,
+          "gas_dipole": 1.764,
+          "solv_dipole": 1.852
+        },
+        "Dispersion_PM6_DH+": {
+          "converged": true,
+          "heat_of_formation_kcal": -661.485,
+          "disp_delta_kcal": -0.12
+        }
+      }
+    },
+    "chloromethane": {
+      "name": "chloromethane",
+      "category": "Halide (Cl)",
+      "natoms": 5,
+      "elements": [
+        1,
+        6,
+        17
+      ],
+      "methods": {
+        "PM6": {
+          "status": "CONVERGED",
+          "iterations": 12,
+          "time_ms": 0.74,
+          "total_energy_ev": -414.500512,
+          "heat_of_formation_kcal": 64.5,
+          "dipole_debye": 2.7,
+          "max_grad_ev_a": 4.3118,
+          "homo_lumo_gap_ev": 10.257
+        },
+        "AM1": {
+          "status": "CONVERGED",
+          "iterations": 10,
+          "time_ms": 0.7,
+          "total_energy_ev": -540.440096,
+          "heat_of_formation_kcal": 50.943,
+          "dipole_debye": 2.366,
+          "max_grad_ev_a": 3.5102,
+          "homo_lumo_gap_ev": 11.545
+        },
+        "RM1": {
+          "status": "CONVERGED",
+          "iterations": 11,
+          "time_ms": 0.71,
+          "total_energy_ev": -550.054483,
+          "heat_of_formation_kcal": 37.143,
+          "dipole_debye": 2.867,
+          "max_grad_ev_a": 3.8889,
+          "homo_lumo_gap_ev": 10.819
+        },
+        "PM3": {
+          "status": "CONVERGED",
+          "iterations": 12,
+          "time_ms": 0.75,
+          "total_energy_ev": -478.960778,
+          "heat_of_formation_kcal": 49.113,
+          "dipole_debye": 1.923,
+          "max_grad_ev_a": 4.1896,
+          "homo_lumo_gap_ev": 10.594
+        },
+        "MNDO": {
+          "status": "CONVERGED",
+          "iterations": 10,
+          "time_ms": 0.67,
+          "total_energy_ev": -522.811636,
+          "heat_of_formation_kcal": 45.456,
+          "dipole_debye": 2.83,
+          "max_grad_ev_a": 4.9077,
+          "homo_lumo_gap_ev": 11.987
+        }
+      },
+      "features": {
+        "COSMO": {
+          "converged": true,
+          "time_ms": 1.33,
+          "solv_energy_ev": -414.674528,
+          "diel_stabilization_kcal": -4.013,
+          "gas_dipole": 2.7,
+          "solv_dipole": 3.429
+        },
+        "Dispersion_PM6_DH+": {
+          "converged": true,
+          "heat_of_formation_kcal": 64.493,
+          "disp_delta_kcal": -0.007
+        }
+      }
+    },
+    "cyclobutane": {
+      "name": "cyclobutane",
+      "category": "Hydrocarbon (strained)",
+      "natoms": 12,
+      "elements": [
+        1,
+        6
+      ],
+      "methods": {
+        "PM6": {
+          "status": "CONVERGED",
+          "iterations": 15,
+          "time_ms": 8.73,
+          "total_energy_ev": -627.861361,
+          "heat_of_formation_kcal": -677.117,
+          "dipole_debye": 1.529,
+          "max_grad_ev_a": 15.6407,
+          "homo_lumo_gap_ev": 8.113
+        },
+        "AM1": {
+          "status": "CONVERGED",
+          "iterations": 17,
+          "time_ms": 13.19,
+          "total_energy_ev": -660.061778,
+          "heat_of_formation_kcal": -874.234,
+          "dipole_debye": 1.474,
+          "max_grad_ev_a": 22.369,
+          "homo_lumo_gap_ev": 7.432
+        },
+        "RM1": {
+          "status": "CONVERGED",
+          "iterations": 17,
+          "time_ms": 10.31,
+          "total_energy_ev": -649.288084,
+          "heat_of_formation_kcal": -793.663,
+          "dipole_debye": 1.489,
+          "max_grad_ev_a": 19.4024,
+          "homo_lumo_gap_ev": 7.424
+        },
+        "PM3": {
+          "status": "CONVERGED",
+          "iterations": 15,
+          "time_ms": 8.39,
+          "total_energy_ev": -632.988312,
+          "heat_of_formation_kcal": -824.766,
+          "dipole_debye": 1.547,
+          "max_grad_ev_a": 20.5006,
+          "homo_lumo_gap_ev": 8.052
+        },
+        "MNDO": {
+          "status": "CONVERGED",
+          "iterations": 16,
+          "time_ms": 8.75,
+          "total_energy_ev": -658.317084,
+          "heat_of_formation_kcal": -769.015,
+          "dipole_debye": 1.269,
+          "max_grad_ev_a": 19.7493,
+          "homo_lumo_gap_ev": 7.139
+        }
+      },
+      "features": {
+        "COSMO": {
+          "converged": true,
+          "time_ms": 11.84,
+          "solv_energy_ev": -628.238408,
+          "diel_stabilization_kcal": -8.695,
+          "gas_dipole": 1.529,
+          "solv_dipole": 1.781
+        },
+        "Dispersion_PM6_DH+": {
+          "converged": true,
+          "heat_of_formation_kcal": -677.351,
+          "disp_delta_kcal": -0.234
+        }
+      }
+    },
+    "cyclohexane": {
+      "name": "cyclohexane",
+      "category": "Hydrocarbon",
+      "natoms": 18,
+      "elements": [
+        1,
+        6
+      ],
+      "methods": {
+        "PM6": {
+          "status": "CONVERGED",
+          "iterations": 17,
+          "time_ms": 30.84,
+          "total_energy_ev": -956.506976,
+          "heat_of_formation_kcal": -1355.009,
+          "dipole_debye": 0.992,
+          "max_grad_ev_a": 19.9233,
+          "homo_lumo_gap_ev": 6.831
+        },
+        "AM1": {
+          "status": "CONVERGED",
+          "iterations": 18,
+          "time_ms": 36.1,
+          "total_energy_ev": -1007.08864,
+          "heat_of_formation_kcal": -1703.287,
+          "dipole_debye": 1.004,
+          "max_grad_ev_a": 29.4142,
+          "homo_lumo_gap_ev": 6.582
+        },
+        "RM1": {
+          "status": "CONVERGED",
+          "iterations": 22,
+          "time_ms": 34.86,
+          "total_energy_ev": -989.600262,
+          "heat_of_formation_kcal": -1551.81,
+          "dipole_debye": 0.841,
+          "max_grad_ev_a": 25.8137,
+          "homo_lumo_gap_ev": 6.327
+        },
+        "PM3": {
+          "status": "CONVERGED",
+          "iterations": 17,
+          "time_ms": 30.48,
+          "total_energy_ev": -965.854914,
+          "heat_of_formation_kcal": -1614.707,
+          "dipole_debye": 0.847,
+          "max_grad_ev_a": 31.8572,
+          "homo_lumo_gap_ev": 7.474
+        },
+        "MNDO": {
+          "status": "CONVERGED",
+          "iterations": 18,
+          "time_ms": 36.3,
+          "total_energy_ev": -1002.307755,
+          "heat_of_formation_kcal": -1495.559,
+          "dipole_debye": 0.942,
+          "max_grad_ev_a": 27.2317,
+          "homo_lumo_gap_ev": 6.593
+        }
+      },
+      "features": {
+        "COSMO": {
+          "converged": true,
+          "time_ms": 39.48,
+          "solv_energy_ev": -956.899757,
+          "diel_stabilization_kcal": -9.058,
+          "gas_dipole": 0.992,
+          "solv_dipole": 1.16
+        },
+        "Dispersion_PM6_DH+": {
+          "converged": true,
+          "heat_of_formation_kcal": -1356.083,
+          "disp_delta_kcal": -1.074
+        }
+      }
+    },
+    "cyclopentane": {
+      "name": "cyclopentane",
+      "category": "Hydrocarbon",
+      "natoms": 15,
+      "elements": [
+        1,
+        6
+      ],
+      "methods": {
+        "PM6": {
+          "status": "CONVERGED",
+          "iterations": 16,
+          "time_ms": 16.98,
+          "total_energy_ev": -791.062967,
+          "heat_of_formation_kcal": -990.208,
+          "dipole_debye": 1.62,
+          "max_grad_ev_a": 16.0152,
+          "homo_lumo_gap_ev": 8.178
+        },
+        "AM1": {
+          "status": "CONVERGED",
+          "iterations": 16,
+          "time_ms": 17.85,
+          "total_energy_ev": -832.793995,
+          "heat_of_formation_kcal": -1270.745,
+          "dipole_debye": 1.955,
+          "max_grad_ev_a": 22.5989,
+          "homo_lumo_gap_ev": 7.734
+        },
+        "RM1": {
+          "status": "CONVERGED",
+          "iterations": 16,
+          "time_ms": 18.68,
+          "total_energy_ev": -818.440159,
+          "heat_of_formation_kcal": -1149.583,
+          "dipole_debye": 1.716,
+          "max_grad_ev_a": 19.6627,
+          "homo_lumo_gap_ev": 7.57
+        },
+        "PM3": {
+          "status": "CONVERGED",
+          "iterations": 14,
+          "time_ms": 20.9,
+          "total_energy_ev": -798.266202,
+          "heat_of_formation_kcal": -1193.092,
+          "dipole_debye": 1.367,
+          "max_grad_ev_a": 20.8904,
+          "homo_lumo_gap_ev": 8.504
+        },
+        "MNDO": {
+          "status": "CONVERGED",
+          "iterations": 16,
+          "time_ms": 16.94,
+          "total_energy_ev": -829.294899,
+          "heat_of_formation_kcal": -1108.822,
+          "dipole_debye": 1.745,
+          "max_grad_ev_a": 19.5391,
+          "homo_lumo_gap_ev": 7.704
+        }
+      },
+      "features": {
+        "COSMO": {
+          "converged": true,
+          "time_ms": 23.01,
+          "solv_energy_ev": -791.431805,
+          "diel_stabilization_kcal": -8.506,
+          "gas_dipole": 1.62,
+          "solv_dipole": 1.871
+        },
+        "Dispersion_PM6_DH+": {
+          "converged": true,
+          "heat_of_formation_kcal": -990.797,
+          "disp_delta_kcal": -0.589
+        }
+      }
+    },
+    "cyclopropane": {
+      "name": "cyclopropane",
+      "category": "Hydrocarbon (strained)",
+      "natoms": 9,
+      "elements": [
+        1,
+        6
+      ],
+      "methods": {
+        "PM6": {
+          "status": "CONVERGED",
+          "iterations": 12,
+          "time_ms": 3.27,
+          "total_energy_ev": -464.813456,
+          "heat_of_formation_kcal": -367.57,
+          "dipole_debye": 1.424,
+          "max_grad_ev_a": 15.0429,
+          "homo_lumo_gap_ev": 11.374
+        },
+        "AM1": {
+          "status": "CONVERGED",
+          "iterations": 12,
+          "time_ms": 3.28,
+          "total_energy_ev": -486.957535,
+          "heat_of_formation_kcal": -469.143,
+          "dipole_debye": 1.938,
+          "max_grad_ev_a": 21.3954,
+          "homo_lumo_gap_ev": 10.588
+        },
+        "RM1": {
+          "status": "CONVERGED",
+          "iterations": 13,
+          "time_ms": 3.34,
+          "total_energy_ev": -479.470301,
+          "heat_of_formation_kcal": -422.391,
+          "dipole_debye": 1.8,
+          "max_grad_ev_a": 19.0047,
+          "homo_lumo_gap_ev": 10.627
+        },
+        "PM3": {
+          "status": "CONVERGED",
+          "iterations": 12,
+          "time_ms": 3.36,
+          "total_energy_ev": -466.311658,
+          "heat_of_formation_kcal": -424.184,
+          "dipole_debye": 2.162,
+          "max_grad_ev_a": 20.2316,
+          "homo_lumo_gap_ev": 10.83
+        },
+        "MNDO": {
+          "status": "CONVERGED",
+          "iterations": 13,
+          "time_ms": 3.36,
+          "total_energy_ev": -486.237467,
+          "heat_of_formation_kcal": -403.799,
+          "dipole_debye": 1.74,
+          "max_grad_ev_a": 19.0651,
+          "homo_lumo_gap_ev": 10.309
+        }
+      },
+      "features": {
+        "COSMO": {
+          "converged": true,
+          "time_ms": 5.16,
+          "solv_energy_ev": -465.039423,
+          "diel_stabilization_kcal": -5.211,
+          "gas_dipole": 1.424,
+          "solv_dipole": 1.709
+        },
+        "Dispersion_PM6_DH+": {
+          "converged": true,
+          "heat_of_formation_kcal": -367.656,
+          "disp_delta_kcal": -0.086
+        }
+      }
+    },
+    "dichloromethane": {
+      "name": "dichloromethane",
+      "category": "Halide (Cl)",
+      "natoms": 5,
+      "elements": [
+        1,
+        6,
+        17
+      ],
+      "methods": {
+        "PM6": {
+          "status": "CONVERGED",
+          "iterations": 12,
+          "time_ms": 2.11,
+          "total_energy_ev": -661.790987,
+          "heat_of_formation_kcal": -88.398,
+          "dipole_debye": 3.681,
+          "max_grad_ev_a": 12.2115,
+          "homo_lumo_gap_ev": 9.199
+        },
+        "AM1": {
+          "status": "CONVERGED",
+          "iterations": 11,
+          "time_ms": 2.06,
+          "total_energy_ev": -909.734539,
+          "heat_of_formation_kcal": -168.009,
+          "dipole_debye": 4.686,
+          "max_grad_ev_a": 17.0479,
+          "homo_lumo_gap_ev": 9.988
+        },
+        "RM1": {
+          "status": "CONVERGED",
+          "iterations": 12,
+          "time_ms": 2.11,
+          "total_energy_ev": -929.594651,
+          "heat_of_formation_kcal": -194.223,
+          "dipole_debye": 4.032,
+          "max_grad_ev_a": 15.9448,
+          "homo_lumo_gap_ev": 10.06
+        },
+        "PM3": {
+          "status": "CONVERGED",
+          "iterations": 14,
+          "time_ms": 2.3,
+          "total_energy_ev": -788.96552,
+          "heat_of_formation_kcal": -155.788,
+          "dipole_debye": 5.103,
+          "max_grad_ev_a": 18.2206,
+          "homo_lumo_gap_ev": 8.425
+        },
+        "MNDO": {
+          "status": "CONVERGED",
+          "iterations": 12,
+          "time_ms": 1.33,
+          "total_energy_ev": -871.622801,
+          "heat_of_formation_kcal": -152.911,
+          "dipole_debye": 4.818,
+          "max_grad_ev_a": 15.3001,
+          "homo_lumo_gap_ev": 10.425
+        }
+      },
+      "features": {
+        "COSMO": {
+          "converged": true,
+          "time_ms": 2.17,
+          "solv_energy_ev": -662.159949,
+          "diel_stabilization_kcal": -8.508,
+          "gas_dipole": 3.681,
+          "solv_dipole": 4.183
+        },
+        "Dispersion_PM6_DH+": {
+          "converged": true,
+          "heat_of_formation_kcal": -88.445,
+          "disp_delta_kcal": -0.047
+        }
+      }
+    },
+    "diethyl_ether": {
+      "name": "diethyl_ether",
+      "category": "Ether",
+      "natoms": 15,
+      "elements": [
+        1,
+        6,
+        8
+      ],
+      "methods": {
+        "PM6": {
+          "status": "CONVERGED",
+          "iterations": 14,
+          "time_ms": 16.62,
+          "total_energy_ev": -936.312095,
+          "heat_of_formation_kcal": -486.364,
+          "dipole_debye": 2.423,
+          "max_grad_ev_a": 16.9379,
+          "homo_lumo_gap_ev": 11.096
+        },
+        "AM1": {
+          "status": "CONVERGED",
+          "iterations": 16,
+          "time_ms": 18.19,
+          "total_energy_ev": -999.584863,
+          "heat_of_formation_kcal": -725.015,
+          "dipole_debye": 3.55,
+          "max_grad_ev_a": 30.2305,
+          "homo_lumo_gap_ev": 8.77
+        },
+        "RM1": {
+          "status": "CONVERGED",
+          "iterations": 17,
+          "time_ms": 18.38,
+          "total_energy_ev": -984.90825,
+          "heat_of_formation_kcal": -622.024,
+          "dipole_debye": 3.157,
+          "max_grad_ev_a": 26.5583,
+          "homo_lumo_gap_ev": 8.91
+        },
+        "PM3": {
+          "status": "CONVERGED",
+          "iterations": 18,
+          "time_ms": 18.64,
+          "total_energy_ev": -948.027578,
+          "heat_of_formation_kcal": -650.636,
+          "dipole_debye": 3.279,
+          "max_grad_ev_a": 29.7502,
+          "homo_lumo_gap_ev": 8.395
+        },
+        "MNDO": {
+          "status": "CONVERGED",
+          "iterations": 15,
+          "time_ms": 21.93,
+          "total_energy_ev": -1001.475466,
+          "heat_of_formation_kcal": -639.32,
+          "dipole_debye": 3.39,
+          "max_grad_ev_a": 27.3791,
+          "homo_lumo_gap_ev": 9.297
+        }
+      },
+      "features": {
+        "COSMO": {
+          "converged": true,
+          "time_ms": 22.76,
+          "solv_energy_ev": -936.768644,
+          "diel_stabilization_kcal": -10.528,
+          "gas_dipole": 2.423,
+          "solv_dipole": 2.809
+        },
+        "Dispersion_PM6_DH+": {
+          "converged": true,
+          "heat_of_formation_kcal": -486.959,
+          "disp_delta_kcal": -0.595
+        }
+      }
+    },
+    "dimethyl_sulfide": {
+      "name": "dimethyl_sulfide",
+      "category": "Thioether",
+      "natoms": 9,
+      "elements": [
+        1,
+        6,
+        16
+      ],
+      "methods": {
+        "PM6": {
+          "status": "CONVERGED",
+          "iterations": 11,
+          "time_ms": 3.18,
+          "total_energy_ev": -517.440513,
+          "heat_of_formation_kcal": -381.792,
+          "dipole_debye": 2.098,
+          "max_grad_ev_a": 14.5206,
+          "homo_lumo_gap_ev": 8.569
+        },
+        "AM1": {
+          "status": "CONVERGED",
+          "iterations": 10,
+          "time_ms": 3.17,
+          "total_energy_ev": -550.344885,
+          "heat_of_formation_kcal": -400.009,
+          "dipole_debye": 3.084,
+          "max_grad_ev_a": 15.8364,
+          "homo_lumo_gap_ev": 9.175
+        },
+        "RM1": {
+          "status": "CONVERGED",
+          "iterations": 12,
+          "time_ms": 3.4,
+          "total_energy_ev": -544.662802,
+          "heat_of_formation_kcal": -473.235,
+          "dipole_debye": 2.813,
+          "max_grad_ev_a": 17.1676,
+          "homo_lumo_gap_ev": 8.363
+        },
+        "PM3": {
+          "status": "CONVERGED",
+          "iterations": 11,
+          "time_ms": 3.2,
+          "total_energy_ev": -536.511876,
+          "heat_of_formation_kcal": -482.009,
+          "dipole_debye": 2.902,
+          "max_grad_ev_a": 16.9193,
+          "homo_lumo_gap_ev": 8.845
+        },
+        "MNDO": {
+          "status": "CONVERGED",
+          "iterations": 11,
+          "time_ms": 3.26,
+          "total_energy_ev": -582.102962,
+          "heat_of_formation_kcal": -285.84,
+          "dipole_debye": 3.639,
+          "max_grad_ev_a": 13.3679,
+          "homo_lumo_gap_ev": 9.5
+        }
+      },
+      "features": {
+        "COSMO": {
+          "converged": true,
+          "time_ms": 4.99,
+          "solv_energy_ev": -517.578948,
+          "diel_stabilization_kcal": -3.192,
+          "gas_dipole": 2.098,
+          "solv_dipole": 2.334
+        },
+        "Dispersion_PM6_DH+": {
+          "converged": true,
+          "heat_of_formation_kcal": -381.966,
+          "disp_delta_kcal": -0.174
+        }
+      }
+    },
+    "dimethyl_sulfoxide": {
+      "name": "dimethyl_sulfoxide",
+      "category": "Sulfoxide",
+      "natoms": 10,
+      "elements": [
+        1,
+        6,
+        8,
+        16
+      ],
+      "methods": {
+        "PM6": {
+          "status": "CONVERGED",
+          "iterations": 13,
+          "time_ms": 5.84,
+          "total_energy_ev": -813.697957,
+          "heat_of_formation_kcal": -532.781,
+          "dipole_debye": 7.646,
+          "max_grad_ev_a": 25.0922,
+          "homo_lumo_gap_ev": 7.925
+        },
+        "AM1": {
+          "status": "CONVERGED",
+          "iterations": 21,
+          "time_ms": 7.41,
+          "total_energy_ev": -891.078329,
+          "heat_of_formation_kcal": -908.522,
+          "dipole_debye": 7.791,
+          "max_grad_ev_a": 38.5138,
+          "homo_lumo_gap_ev": 6.009
+        },
+        "RM1": {
+          "status": "CONVERGED",
+          "iterations": 19,
+          "time_ms": 10.43,
+          "total_energy_ev": -875.11451,
+          "heat_of_formation_kcal": -838.252,
+          "dipole_debye": 6.694,
+          "max_grad_ev_a": 38.1279,
+          "homo_lumo_gap_ev": 6.918
+        },
+        "PM3": {
+          "status": "CONVERGED",
+          "iterations": 21,
+          "time_ms": 9.28,
+          "total_energy_ev": -848.185662,
+          "heat_of_formation_kcal": -937.428,
+          "dipole_debye": 7.133,
+          "max_grad_ev_a": 44.313,
+          "homo_lumo_gap_ev": 6.104
+        },
+        "MNDO": {
+          "status": "CONVERGED",
+          "iterations": 22,
+          "time_ms": 7.73,
+          "total_energy_ev": -920.085676,
+          "heat_of_formation_kcal": -690.126,
+          "dipole_debye": 7.543,
+          "max_grad_ev_a": 31.7214,
+          "homo_lumo_gap_ev": 5.396
+        }
+      },
+      "features": {
+        "COSMO": {
+          "converged": true,
+          "time_ms": 9.15,
+          "solv_energy_ev": -815.140103,
+          "diel_stabilization_kcal": -33.257,
+          "gas_dipole": 7.646,
+          "solv_dipole": 9.606
+        },
+        "Dispersion_PM6_DH+": {
+          "converged": true,
+          "heat_of_formation_kcal": -533.087,
+          "disp_delta_kcal": -0.306
+        }
+      }
+    },
+    "dimethylamine": {
+      "name": "dimethylamine",
+      "category": "Amine (2nd)",
+      "natoms": 10,
+      "elements": [
+        1,
+        6,
+        7
+      ],
+      "methods": {
+        "PM6": {
+          "status": "CONVERGED",
+          "iterations": 10,
+          "time_ms": 3.88,
+          "total_energy_ev": -535.62468,
+          "heat_of_formation_kcal": -369.078,
+          "dipole_debye": 2.891,
+          "max_grad_ev_a": 20.3135,
+          "homo_lumo_gap_ev": 13.933
+        },
+        "AM1": {
+          "status": "CONVERGED",
+          "iterations": 12,
+          "time_ms": 4.12,
+          "total_energy_ev": -574.121053,
+          "heat_of_formation_kcal": -347.871,
+          "dipole_debye": 3.789,
+          "max_grad_ev_a": 18.6992,
+          "homo_lumo_gap_ev": 12.5
+        },
+        "RM1": {
+          "status": "CONVERGED",
+          "iterations": 12,
+          "time_ms": 4.2,
+          "total_energy_ev": -576.735669,
+          "heat_of_formation_kcal": -384.004,
+          "dipole_debye": 3.152,
+          "max_grad_ev_a": 21.3496,
+          "homo_lumo_gap_ev": 12.615
+        },
+        "PM3": {
+          "status": "CONVERGED",
+          "iterations": 12,
+          "time_ms": 4.14,
+          "total_energy_ev": -521.224036,
+          "heat_of_formation_kcal": -325.167,
+          "dipole_debye": 3.213,
+          "max_grad_ev_a": 18.785,
+          "homo_lumo_gap_ev": 12.277
+        },
+        "MNDO": {
+          "status": "CONVERGED",
+          "iterations": 11,
+          "time_ms": 4.03,
+          "total_energy_ev": -576.636279,
+          "heat_of_formation_kcal": -327.19,
+          "dipole_debye": 3.037,
+          "max_grad_ev_a": 19.0736,
+          "homo_lumo_gap_ev": 12.858
+        }
+      },
+      "features": {
+        "COSMO": {
+          "converged": true,
+          "time_ms": 5.9,
+          "solv_energy_ev": -535.864044,
+          "diel_stabilization_kcal": -5.52,
+          "gas_dipole": 2.891,
+          "solv_dipole": 3.224
+        },
+        "Dispersion_PM6_DH+": {
+          "converged": true,
+          "heat_of_formation_kcal": -369.25,
+          "disp_delta_kcal": -0.172
+        }
+      }
+    },
+    "ethane": {
+      "name": "ethane",
+      "category": "Hydrocarbon",
+      "natoms": 8,
+      "elements": [
+        1,
+        6
+      ],
+      "methods": {
+        "PM6": {
+          "status": "CONVERGED",
+          "iterations": 11,
+          "time_ms": 1.79,
+          "total_energy_ev": -327.267253,
+          "heat_of_formation_kcal": -23.181,
+          "dipole_debye": 0.113,
+          "max_grad_ev_a": 1.6034,
+          "homo_lumo_gap_ev": 15.947
+        },
+        "AM1": {
+          "status": "CONVERGED",
+          "iterations": 10,
+          "time_ms": 1.75,
+          "total_energy_ev": -339.384474,
+          "heat_of_formation_kcal": -22.996,
+          "dipole_debye": 0.177,
+          "max_grad_ev_a": 2.6189,
+          "homo_lumo_gap_ev": 15.298
+        },
+        "RM1": {
+          "status": "CONVERGED",
+          "iterations": 11,
+          "time_ms": 1.82,
+          "total_energy_ev": -336.894784,
+          "heat_of_formation_kcal": -23.497,
+          "dipole_debye": 0.159,
+          "max_grad_ev_a": 2.3377,
+          "homo_lumo_gap_ev": 15.25
+        },
+        "PM3": {
+          "status": "CONVERGED",
+          "iterations": 11,
+          "time_ms": 1.71,
+          "total_energy_ev": -330.469551,
+          "heat_of_formation_kcal": -27.504,
+          "dipole_debye": 0.207,
+          "max_grad_ev_a": 3.1887,
+          "homo_lumo_gap_ev": 14.835
+        },
+        "MNDO": {
+          "status": "CONVERGED",
+          "iterations": 10,
+          "time_ms": 1.66,
+          "total_energy_ev": -341.903336,
+          "heat_of_formation_kcal": -25.075,
+          "dipole_debye": 0.16,
+          "max_grad_ev_a": 2.2376,
+          "homo_lumo_gap_ev": 15.888
+        }
+      },
+      "features": {
+        "COSMO": {
+          "converged": true,
+          "time_ms": 2.6,
+          "solv_energy_ev": -327.292447,
+          "diel_stabilization_kcal": -0.581,
+          "gas_dipole": 0.113,
+          "solv_dipole": 0.128
+        },
+        "Dispersion_PM6_DH+": {
+          "converged": true,
+          "heat_of_formation_kcal": -23.225,
+          "disp_delta_kcal": -0.044
+        }
+      }
+    },
+    "ethanol": {
+      "name": "ethanol",
+      "category": "Alcohol",
+      "natoms": 9,
+      "elements": [
+        1,
+        6,
+        8
+      ],
+      "methods": {
+        "PM6": {
+          "status": "CONVERGED",
+          "iterations": 13,
+          "time_ms": 3.48,
+          "total_energy_ev": -626.580232,
+          "heat_of_formation_kcal": -244.632,
+          "dipole_debye": 2.454,
+          "max_grad_ev_a": 13.3573,
+          "homo_lumo_gap_ev": 11.625
+        },
+        "AM1": {
+          "status": "CONVERGED",
+          "iterations": 18,
+          "time_ms": 4.03,
+          "total_energy_ev": -671.7386,
+          "heat_of_formation_kcal": -338.277,
+          "dipole_debye": 2.184,
+          "max_grad_ev_a": 24.1207,
+          "homo_lumo_gap_ev": 9.236
+        },
+        "RM1": {
+          "status": "CONVERGED",
+          "iterations": 19,
+          "time_ms": 6.02,
+          "total_energy_ev": -662.439821,
+          "heat_of_formation_kcal": -275.363,
+          "dipole_debye": 2.073,
+          "max_grad_ev_a": 19.1023,
+          "homo_lumo_gap_ev": 9.163
+        },
+        "PM3": {
+          "status": "CONVERGED",
+          "iterations": 19,
+          "time_ms": 6.71,
+          "total_energy_ev": -635.092913,
+          "heat_of_formation_kcal": -320.336,
+          "dipole_debye": 2.097,
+          "max_grad_ev_a": 24.3116,
+          "homo_lumo_gap_ev": 8.862
+        },
+        "MNDO": {
+          "status": "CONVERGED",
+          "iterations": 18,
+          "time_ms": 5.11,
+          "total_energy_ev": -673.671474,
+          "heat_of_formation_kcal": -286.049,
+          "dipole_debye": 1.964,
+          "max_grad_ev_a": 22.787,
+          "homo_lumo_gap_ev": 9.099
+        }
+      },
+      "features": {
+        "COSMO": {
+          "converged": true,
+          "time_ms": 5.1,
+          "solv_energy_ev": -627.051416,
+          "diel_stabilization_kcal": -10.866,
+          "gas_dipole": 2.454,
+          "solv_dipole": 2.772
+        },
+        "Dispersion_PM6_DH+": {
+          "converged": true,
+          "heat_of_formation_kcal": -244.744,
+          "disp_delta_kcal": -0.112
+        }
+      }
+    },
+    "ethylene": {
+      "name": "ethylene",
+      "category": "Hydrocarbon",
+      "natoms": 6,
+      "elements": [
+        1,
+        6
+      ],
+      "methods": {
+        "PM6": {
+          "status": "CONVERGED",
+          "iterations": 10,
+          "time_ms": 0.94,
+          "total_energy_ev": -298.734951,
+          "heat_of_formation_kcal": 11.864,
+          "dipole_debye": 0.011,
+          "max_grad_ev_a": 2.8846,
+          "homo_lumo_gap_ev": 10.84
+        },
+        "AM1": {
+          "status": "CONVERGED",
+          "iterations": 9,
+          "time_ms": 1.07,
+          "total_energy_ev": -310.45634,
+          "heat_of_formation_kcal": 14.283,
+          "dipole_debye": 0.008,
+          "max_grad_ev_a": 0.7623,
+          "homo_lumo_gap_ev": 11.287
+        },
+        "RM1": {
+          "status": "CONVERGED",
+          "iterations": 10,
+          "time_ms": 1.33,
+          "total_energy_ev": -306.915355,
+          "heat_of_formation_kcal": 12.002,
+          "dipole_debye": 0.009,
+          "max_grad_ev_a": 0.5867,
+          "homo_lumo_gap_ev": 11.111
+        },
+        "PM3": {
+          "status": "CONVERGED",
+          "iterations": 10,
+          "time_ms": 1.35,
+          "total_energy_ev": -298.11859,
+          "heat_of_formation_kcal": 11.367,
+          "dipole_debye": 0.011,
+          "max_grad_ev_a": 0.6963,
+          "homo_lumo_gap_ev": 10.855
+        },
+        "MNDO": {
+          "status": "CONVERGED",
+          "iterations": 9,
+          "time_ms": 1.0,
+          "total_energy_ev": -312.141309,
+          "heat_of_formation_kcal": 7.919,
+          "dipole_debye": 0.008,
+          "max_grad_ev_a": 0.2866,
+          "homo_lumo_gap_ev": 11.488
+        }
+      },
+      "features": {
+        "COSMO": {
+          "converged": true,
+          "time_ms": 1.6,
+          "solv_energy_ev": -298.74026,
+          "diel_stabilization_kcal": -0.122,
+          "gas_dipole": 0.011,
+          "solv_dipole": 0.014
+        },
+        "Dispersion_PM6_DH+": {
+          "converged": true,
+          "heat_of_formation_kcal": 11.837,
+          "disp_delta_kcal": -0.027
+        }
+      }
+    },
+    "ferrocene": {
+      "name": "ferrocene",
+      "category": "Unsupported metal (Fe)",
+      "natoms": 11,
+      "elements": [
+        1,
+        6,
+        26
+      ],
+      "methods": {
+        "PM6": {
+          "status": "UNSUPPORTED_ELEMENT",
+          "error": "Unsupported element Z=26 for semi-empirical method 'PM6'",
+          "time_ms": 0.02
+        },
+        "AM1": {
+          "status": "UNSUPPORTED_ELEMENT",
+          "error": "Unsupported element Z=26 for semi-empirical method 'AM1'",
+          "time_ms": 0.01
+        },
+        "RM1": {
+          "status": "UNSUPPORTED_ELEMENT",
+          "error": "Unsupported element Z=26 for semi-empirical method 'RM1'",
+          "time_ms": 0.01
+        },
+        "PM3": {
+          "status": "UNSUPPORTED_ELEMENT",
+          "error": "Unsupported element Z=26 for semi-empirical method 'PM3'",
+          "time_ms": 0.0
+        },
+        "MNDO": {
+          "status": "UNSUPPORTED_ELEMENT",
+          "error": "Unsupported element Z=26 for semi-empirical method 'MNDO'",
+          "time_ms": 0.0
+        }
+      },
+      "features": {}
+    },
+    "fluorobenzene": {
+      "name": "fluorobenzene",
+      "category": "Aromatic halide (F)",
+      "natoms": 12,
+      "elements": [
+        1,
+        6,
+        9
+      ],
+      "methods": {
+        "PM6": {
+          "status": "CONVERGED",
+          "iterations": 25,
+          "time_ms": 24.46,
+          "total_energy_ev": -1352.066543,
+          "heat_of_formation_kcal": -1842.21,
+          "dipole_debye": 1.02,
+          "max_grad_ev_a": 23.0738,
+          "homo_lumo_gap_ev": 5.208
+        },
+        "AM1": {
+          "status": "CONVERGED",
+          "iterations": 20,
+          "time_ms": 21.22,
+          "total_energy_ev": -1418.876456,
+          "heat_of_formation_kcal": -2262.934,
+          "dipole_debye": 0.675,
+          "max_grad_ev_a": 32.4766,
+          "homo_lumo_gap_ev": 4.784
+        },
+        "RM1": {
+          "status": "CONVERGED",
+          "iterations": 17,
+          "time_ms": 22.44,
+          "total_energy_ev": -1398.2152,
+          "heat_of_formation_kcal": -2076.214,
+          "dipole_debye": 1.342,
+          "max_grad_ev_a": 29.6924,
+          "homo_lumo_gap_ev": 4.885
+        },
+        "PM3": {
+          "status": "CONVERGED",
+          "iterations": 21,
+          "time_ms": 23.96,
+          "total_energy_ev": -1312.542057,
+          "heat_of_formation_kcal": -1976.287,
+          "dipole_debye": 1.079,
+          "max_grad_ev_a": 30.0077,
+          "homo_lumo_gap_ev": 4.803
+        },
+        "MNDO": {
+          "status": "CONVERGED",
+          "iterations": 20,
+          "time_ms": 21.84,
+          "total_energy_ev": -1404.633592,
+          "heat_of_formation_kcal": -2048.605,
+          "dipole_debye": 1.927,
+          "max_grad_ev_a": 31.0639,
+          "homo_lumo_gap_ev": 4.985
+        }
+      },
+      "features": {
+        "COSMO": {
+          "converged": true,
+          "time_ms": 70.1,
+          "solv_energy_ev": -1352.088008,
+          "diel_stabilization_kcal": -0.495,
+          "gas_dipole": 1.02,
+          "solv_dipole": 2.15
+        },
+        "Dispersion_PM6_DH+": {
+          "converged": true,
+          "heat_of_formation_kcal": -1843.029,
+          "disp_delta_kcal": -0.819
+        }
+      }
+    },
+    "fluoromethane": {
+      "name": "fluoromethane",
+      "category": "Halide (F)",
+      "natoms": 5,
+      "elements": [
+        1,
+        6,
+        9
+      ],
+      "methods": {
+        "PM6": {
+          "status": "CONVERGED",
+          "iterations": 10,
+          "time_ms": 0.71,
+          "total_energy_ev": -634.422137,
+          "heat_of_formation_kcal": -53.371,
+          "dipole_debye": 1.621,
+          "max_grad_ev_a": 2.1819,
+          "homo_lumo_gap_ev": 15.938
+        },
+        "AM1": {
+          "status": "CONVERGED",
+          "iterations": 11,
+          "time_ms": 0.73,
+          "total_energy_ev": -654.971482,
+          "heat_of_formation_kcal": -61.528,
+          "dipole_debye": 1.64,
+          "max_grad_ev_a": 3.2786,
+          "homo_lumo_gap_ev": 15.065
+        },
+        "RM1": {
+          "status": "CONVERGED",
+          "iterations": 11,
+          "time_ms": 0.7,
+          "total_energy_ev": -655.51422,
+          "heat_of_formation_kcal": -49.844,
+          "dipole_debye": 1.805,
+          "max_grad_ev_a": 2.7486,
+          "homo_lumo_gap_ev": 15.524
+        },
+        "PM3": {
+          "status": "CONVERGED",
+          "iterations": 12,
+          "time_ms": 0.71,
+          "total_energy_ev": -604.814103,
+          "heat_of_formation_kcal": -42.416,
+          "dipole_debye": 1.762,
+          "max_grad_ev_a": 4.2772,
+          "homo_lumo_gap_ev": 14.704
+        },
+        "MNDO": {
+          "status": "CONVERGED",
+          "iterations": 10,
+          "time_ms": 0.66,
+          "total_energy_ev": -650.554085,
+          "heat_of_formation_kcal": -60.953,
+          "dipole_debye": 1.909,
+          "max_grad_ev_a": 2.787,
+          "homo_lumo_gap_ev": 15.918
+        }
+      },
+      "features": {
+        "COSMO": {
+          "converged": true,
+          "time_ms": 1.24,
+          "solv_energy_ev": -634.501544,
+          "diel_stabilization_kcal": -1.831,
+          "gas_dipole": 1.621,
+          "solv_dipole": 1.875
+        },
+        "Dispersion_PM6_DH+": {
+          "converged": true,
+          "heat_of_formation_kcal": -53.374,
+          "disp_delta_kcal": -0.003
+        }
+      }
+    },
+    "formaldehyde": {
+      "name": "formaldehyde",
+      "category": "Carbonyl",
+      "natoms": 4,
+      "elements": [
+        1,
+        6,
+        8
+      ],
+      "methods": {
+        "PM6": {
+          "status": "CONVERGED",
+          "iterations": 12,
+          "time_ms": 0.51,
+          "total_energy_ev": -439.59005,
+          "heat_of_formation_kcal": -5.89,
+          "dipole_debye": 2.015,
+          "max_grad_ev_a": 0.9683,
+          "homo_lumo_gap_ev": 9.04
+        },
+        "AM1": {
+          "status": "CONVERGED",
+          "iterations": 12,
+          "time_ms": 0.58,
+          "total_energy_ev": -474.924221,
+          "heat_of_formation_kcal": -16.238,
+          "dipole_debye": 1.657,
+          "max_grad_ev_a": 0.9316,
+          "homo_lumo_gap_ev": 10.605
+        },
+        "RM1": {
+          "status": "CONVERGED",
+          "iterations": 12,
+          "time_ms": 0.54,
+          "total_energy_ev": -469.024501,
+          "heat_of_formation_kcal": -15.762,
+          "dipole_debye": 1.566,
+          "max_grad_ev_a": 0.9417,
+          "homo_lumo_gap_ev": 10.437
+        },
+        "PM3": {
+          "status": "CONVERGED",
+          "iterations": 12,
+          "time_ms": 0.5,
+          "total_energy_ev": -441.997058,
+          "heat_of_formation_kcal": -17.673,
+          "dipole_debye": 1.537,
+          "max_grad_ev_a": 1.3937,
+          "homo_lumo_gap_ev": 10.307
+        },
+        "MNDO": {
+          "status": "CONVERGED",
+          "iterations": 12,
+          "time_ms": 0.55,
+          "total_energy_ev": -477.431045,
+          "heat_of_formation_kcal": -17.006,
+          "dipole_debye": 1.637,
+          "max_grad_ev_a": 0.9174,
+          "homo_lumo_gap_ev": 10.988
+        }
+      },
+      "features": {
+        "COSMO": {
+          "converged": true,
+          "time_ms": 1.05,
+          "solv_energy_ev": -439.736698,
+          "diel_stabilization_kcal": -3.382,
+          "gas_dipole": 2.015,
+          "solv_dipole": 2.615
+        },
+        "Dispersion_PM6_DH+": {
+          "converged": true,
+          "heat_of_formation_kcal": -5.892,
+          "disp_delta_kcal": -0.002
+        }
+      }
+    },
+    "formamide": {
+      "name": "formamide",
+      "category": "Amide",
+      "natoms": 6,
+      "elements": [
+        1,
+        6,
+        7,
+        8
+      ],
+      "methods": {
+        "PM6": {
+          "status": "CONVERGED",
+          "iterations": 14,
+          "time_ms": 2.2,
+          "total_energy_ev": -641.036103,
+          "heat_of_formation_kcal": -192.407,
+          "dipole_debye": 3.697,
+          "max_grad_ev_a": 16.9362,
+          "homo_lumo_gap_ev": 8.473
+        },
+        "AM1": {
+          "status": "CONVERGED",
+          "iterations": 14,
+          "time_ms": 2.96,
+          "total_energy_ev": -709.465249,
+          "heat_of_formation_kcal": -336.603,
+          "dipole_debye": 3.181,
+          "max_grad_ev_a": 29.4079,
+          "homo_lumo_gap_ev": 9.045
+        },
+        "RM1": {
+          "status": "CONVERGED",
+          "iterations": 15,
+          "time_ms": 3.16,
+          "total_energy_ev": -704.23612,
+          "heat_of_formation_kcal": -269.516,
+          "dipole_debye": 2.901,
+          "max_grad_ev_a": 25.8914,
+          "homo_lumo_gap_ev": 8.839
+        },
+        "PM3": {
+          "status": "CONVERGED",
+          "iterations": 16,
+          "time_ms": 3.09,
+          "total_energy_ev": -631.120651,
+          "heat_of_formation_kcal": -277.727,
+          "dipole_debye": 3.304,
+          "max_grad_ev_a": 28.8678,
+          "homo_lumo_gap_ev": 8.251
+        },
+        "MNDO": {
+          "status": "CONVERGED",
+          "iterations": 14,
+          "time_ms": 2.55,
+          "total_energy_ev": -711.02629,
+          "heat_of_formation_kcal": -292.886,
+          "dipole_debye": 2.872,
+          "max_grad_ev_a": 29.7128,
+          "homo_lumo_gap_ev": 9.171
+        }
+      },
+      "features": {
+        "COSMO": {
+          "converged": true,
+          "time_ms": 3.68,
+          "solv_energy_ev": -641.420327,
+          "diel_stabilization_kcal": -8.86,
+          "gas_dipole": 3.697,
+          "solv_dipole": 4.991
+        },
+        "Dispersion_PM6_DH+": {
+          "converged": true,
+          "heat_of_formation_kcal": -192.462,
+          "disp_delta_kcal": -0.055
+        }
+      }
+    },
+    "formic_acid": {
+      "name": "formic_acid",
+      "category": "Carboxylic acid",
+      "natoms": 5,
+      "elements": [
+        1,
+        6,
+        8
+      ],
+      "methods": {
+        "PM6": {
+          "status": "CONVERGED",
+          "iterations": 12,
+          "time_ms": 1.43,
+          "total_energy_ev": -739.281428,
+          "heat_of_formation_kcal": -236.067,
+          "dipole_debye": 1.679,
+          "max_grad_ev_a": 15.4898,
+          "homo_lumo_gap_ev": 8.867
+        },
+        "AM1": {
+          "status": "CONVERGED",
+          "iterations": 13,
+          "time_ms": 1.4,
+          "total_energy_ev": -810.306893,
+          "heat_of_formation_kcal": -401.359,
+          "dipole_debye": 2.415,
+          "max_grad_ev_a": 32.245,
+          "homo_lumo_gap_ev": 9.261
+        },
+        "RM1": {
+          "status": "CONVERGED",
+          "iterations": 13,
+          "time_ms": 1.37,
+          "total_energy_ev": -796.840226,
+          "heat_of_formation_kcal": -319.992,
+          "dipole_debye": 1.944,
+          "max_grad_ev_a": 25.7898,
+          "homo_lumo_gap_ev": 9.193
+        },
+        "PM3": {
+          "status": "CONVERGED",
+          "iterations": 14,
+          "time_ms": 1.41,
+          "total_energy_ev": -749.901547,
+          "heat_of_formation_kcal": -386.17,
+          "dipole_debye": 2.499,
+          "max_grad_ev_a": 32.0308,
+          "homo_lumo_gap_ev": 8.788
+        },
+        "MNDO": {
+          "status": "CONVERGED",
+          "iterations": 12,
+          "time_ms": 1.32,
+          "total_energy_ev": -813.489431,
+          "heat_of_formation_kcal": -376.916,
+          "dipole_debye": 1.981,
+          "max_grad_ev_a": 31.3186,
+          "homo_lumo_gap_ev": 9.402
+        }
+      },
+      "features": {
+        "COSMO": {
+          "converged": true,
+          "time_ms": 2.3,
+          "solv_energy_ev": -739.619042,
+          "diel_stabilization_kcal": -7.786,
+          "gas_dipole": 1.679,
+          "solv_dipole": 2.152
+        },
+        "Dispersion_PM6_DH+": {
+          "converged": true,
+          "heat_of_formation_kcal": -236.081,
+          "disp_delta_kcal": -0.014
+        }
+      }
+    },
+    "glycine": {
+      "name": "glycine",
+      "category": "Amino acid",
+      "natoms": 10,
+      "elements": [
+        1,
+        6,
+        7,
+        8
+      ],
+      "methods": {
+        "PM6": {
+          "status": "CONVERGED",
+          "iterations": 21,
+          "time_ms": 9.98,
+          "total_energy_ev": -1100.2189,
+          "heat_of_formation_kcal": -650.116,
+          "dipole_debye": 4.854,
+          "max_grad_ev_a": 21.1464,
+          "homo_lumo_gap_ev": 6.501
+        },
+        "AM1": {
+          "status": "CONVERGED",
+          "iterations": 22,
+          "time_ms": 10.15,
+          "total_energy_ev": -1215.183217,
+          "heat_of_formation_kcal": -1062.961,
+          "dipole_debye": 3.772,
+          "max_grad_ev_a": 26.8725,
+          "homo_lumo_gap_ev": 6.739
+        },
+        "RM1": {
+          "status": "CONVERGED",
+          "iterations": 24,
+          "time_ms": 10.9,
+          "total_energy_ev": -1202.671538,
+          "heat_of_formation_kcal": -963.51,
+          "dipole_debye": 4.966,
+          "max_grad_ev_a": 21.5815,
+          "homo_lumo_gap_ev": 5.34
+        },
+        "PM3": {
+          "status": "CONVERGED",
+          "iterations": 21,
+          "time_ms": 9.95,
+          "total_energy_ev": -1096.564331,
+          "heat_of_formation_kcal": -836.091,
+          "dipole_debye": 2.448,
+          "max_grad_ev_a": 22.4988,
+          "homo_lumo_gap_ev": 6.426
+        },
+        "MNDO": {
+          "status": "CONVERGED",
+          "iterations": 24,
+          "time_ms": 10.6,
+          "total_energy_ev": -1218.085559,
+          "heat_of_formation_kcal": -993.135,
+          "dipole_debye": 4.431,
+          "max_grad_ev_a": 23.2635,
+          "homo_lumo_gap_ev": 4.997
+        }
+      },
+      "features": {
+        "COSMO": {
+          "converged": true,
+          "time_ms": 13.86,
+          "solv_energy_ev": -1101.296406,
+          "diel_stabilization_kcal": -24.848,
+          "gas_dipole": 4.854,
+          "solv_dipole": 7.13
+        },
+        "Dispersion_PM6_DH+": {
+          "converged": true,
+          "heat_of_formation_kcal": -650.445,
+          "disp_delta_kcal": -0.329
+        }
+      }
+    },
+    "halothane": {
+      "name": "halothane",
+      "category": "Mixed polyhalide",
+      "natoms": 8,
+      "elements": [
+        1,
+        6,
+        9,
+        17,
+        35
+      ],
+      "methods": {
+        "PM6": {
+          "status": "CONVERGED",
+          "iterations": 16,
+          "time_ms": 10.7,
+          "total_energy_ev": -2202.134157,
+          "heat_of_formation_kcal": -1249.571,
+          "dipole_debye": 8.285,
+          "max_grad_ev_a": 94.7769,
+          "homo_lumo_gap_ev": 8.353
+        },
+        "AM1": {
+          "status": "CONVERGED",
+          "iterations": 15,
+          "time_ms": 10.11,
+          "total_energy_ev": -2529.907647,
+          "heat_of_formation_kcal": -1926.496,
+          "dipole_debye": 5.597,
+          "max_grad_ev_a": 198.5136,
+          "homo_lumo_gap_ev": 10.073
+        },
+        "RM1": {
+          "status": "CONVERGED",
+          "iterations": 14,
+          "time_ms": 9.66,
+          "total_energy_ev": -2523.893468,
+          "heat_of_formation_kcal": -1403.696,
+          "dipole_debye": 6.151,
+          "max_grad_ev_a": 174.1588,
+          "homo_lumo_gap_ev": 9.666
+        },
+        "PM3": {
+          "status": "CONVERGED",
+          "iterations": 18,
+          "time_ms": 11.21,
+          "total_energy_ev": -2296.202465,
+          "heat_of_formation_kcal": -1347.393,
+          "dipole_debye": 4.837,
+          "max_grad_ev_a": 113.3374,
+          "homo_lumo_gap_ev": 7.449
+        },
+        "MNDO": {
+          "status": "CONVERGED",
+          "iterations": 14,
+          "time_ms": 9.32,
+          "total_energy_ev": -2492.172459,
+          "heat_of_formation_kcal": -2016.881,
+          "dipole_debye": 4.659,
+          "max_grad_ev_a": 205.4935,
+          "homo_lumo_gap_ev": 9.576
+        }
+      },
+      "features": {
+        "COSMO": {
+          "converged": true,
+          "time_ms": 16.25,
+          "solv_energy_ev": -2202.822835,
+          "diel_stabilization_kcal": -15.881,
+          "gas_dipole": 8.285,
+          "solv_dipole": 8.962
+        },
+        "Dispersion_PM6_DH+": {
+          "converged": true,
+          "heat_of_formation_kcal": -1250.13,
+          "disp_delta_kcal": -0.559
+        }
+      }
+    },
+    "hydrogen_cyanide": {
+      "name": "hydrogen_cyanide",
+      "category": "Nitrile/Inorganic",
+      "natoms": 3,
+      "elements": [
+        1,
+        6,
+        7
+      ],
+      "methods": {
+        "PM6": {
+          "status": "CONVERGED",
+          "iterations": 9,
+          "time_ms": 0.26,
+          "total_energy_ev": -314.393084,
+          "heat_of_formation_kcal": 36.364,
+          "dipole_debye": 2.551,
+          "max_grad_ev_a": 0.7845,
+          "homo_lumo_gap_ev": 13.998
+        },
+        "AM1": {
+          "status": "CONVERGED",
+          "iterations": 11,
+          "time_ms": 0.22,
+          "total_energy_ev": -347.297264,
+          "heat_of_formation_kcal": 36.382,
+          "dipole_debye": 3.017,
+          "max_grad_ev_a": 2.1394,
+          "homo_lumo_gap_ev": 14.791
+        },
+        "RM1": {
+          "status": "CONVERGED",
+          "iterations": 11,
+          "time_ms": 0.22,
+          "total_energy_ev": -348.253283,
+          "heat_of_formation_kcal": 28.419,
+          "dipole_debye": 2.507,
+          "max_grad_ev_a": 0.8001,
+          "homo_lumo_gap_ev": 15.554
+        },
+        "PM3": {
+          "status": "CONVERGED",
+          "iterations": 9,
+          "time_ms": 0.2,
+          "total_energy_ev": -294.728027,
+          "heat_of_formation_kcal": 40.563,
+          "dipole_debye": 2.769,
+          "max_grad_ev_a": 0.3158,
+          "homo_lumo_gap_ev": 13.292
+        },
+        "MNDO": {
+          "status": "CONVERGED",
+          "iterations": 11,
+          "time_ms": 0.23,
+          "total_energy_ev": -347.701514,
+          "heat_of_formation_kcal": 42.467,
+          "dipole_debye": 2.478,
+          "max_grad_ev_a": 0.9042,
+          "homo_lumo_gap_ev": 15.258
+        }
+      },
+      "features": {
+        "COSMO": {
+          "converged": true,
+          "time_ms": 0.66,
+          "solv_energy_ev": -314.591719,
+          "diel_stabilization_kcal": -4.581,
+          "gas_dipole": 2.551,
+          "solv_dipole": 3.367
+        },
+        "Dispersion_PM6_DH+": {
+          "converged": true,
+          "heat_of_formation_kcal": 36.362,
+          "disp_delta_kcal": -0.002
+        }
+      }
+    },
+    "hydrogen_sulfide": {
+      "name": "hydrogen_sulfide",
+      "category": "Inorganic/S",
+      "natoms": 3,
+      "elements": [
+        1,
+        16
+      ],
+      "methods": {
+        "PM6": {
+          "status": "CONVERGED",
+          "iterations": 13,
+          "time_ms": 0.28,
+          "total_energy_ev": -195.408679,
+          "heat_of_formation_kcal": 143.583,
+          "dipole_debye": 3.071,
+          "max_grad_ev_a": 2.3281,
+          "homo_lumo_gap_ev": 8.845
+        },
+        "AM1": {
+          "status": "CONVERGED",
+          "iterations": 11,
+          "time_ms": 0.24,
+          "total_energy_ev": -217.566933,
+          "heat_of_formation_kcal": 100.456,
+          "dipole_debye": 2.172,
+          "max_grad_ev_a": 1.8163,
+          "homo_lumo_gap_ev": 8.364
+        },
+        "RM1": {
+          "status": "CONVERGED",
+          "iterations": 14,
+          "time_ms": 0.3,
+          "total_energy_ev": -211.86187,
+          "heat_of_formation_kcal": 111.699,
+          "dipole_debye": 2.114,
+          "max_grad_ev_a": 1.6685,
+          "homo_lumo_gap_ev": 8.058
+        },
+        "PM3": {
+          "status": "CONVERGED",
+          "iterations": 11,
+          "time_ms": 0.25,
+          "total_energy_ev": -212.689861,
+          "heat_of_formation_kcal": 99.359,
+          "dipole_debye": 1.889,
+          "max_grad_ev_a": 2.757,
+          "homo_lumo_gap_ev": 7.973
+        },
+        "MNDO": {
+          "status": "CONVERGED",
+          "iterations": 15,
+          "time_ms": 0.28,
+          "total_energy_ev": -250.715466,
+          "heat_of_formation_kcal": 150.068,
+          "dipole_debye": 1.612,
+          "max_grad_ev_a": 2.0194,
+          "homo_lumo_gap_ev": 8.237
+        }
+      },
+      "features": {
+        "COSMO": {
+          "converged": true,
+          "time_ms": 0.69,
+          "solv_energy_ev": -195.780953,
+          "diel_stabilization_kcal": -8.585,
+          "gas_dipole": 3.071,
+          "solv_dipole": 3.888
+        },
+        "Dispersion_PM6_DH+": {
+          "converged": true,
+          "heat_of_formation_kcal": 143.582,
+          "disp_delta_kcal": -0.001
+        }
+      }
+    },
+    "ibuprofen": {
+      "name": "ibuprofen",
+      "category": "Pharmaceutical",
+      "natoms": 33,
+      "elements": [
+        1,
+        6,
+        8
+      ],
+      "methods": {
+        "PM6": {
+          "status": "CONVERGED",
+          "iterations": 59,
+          "time_ms": 599.37,
+          "total_energy_ev": -2632.829544,
+          "heat_of_formation_kcal": -4988.897,
+          "dipole_debye": 10.37,
+          "max_grad_ev_a": 25.8362,
+          "homo_lumo_gap_ev": 4.325
+        },
+        "AM1": {
+          "status": "NOT_CONVERGED",
+          "iterations": 60,
+          "time_ms": 599.31
+        },
+        "RM1": {
+          "status": "CONVERGED",
+          "iterations": 41,
+          "time_ms": 456.99,
+          "total_energy_ev": -2777.445805,
+          "heat_of_formation_kcal": -6079.387,
+          "dipole_debye": 12.021,
+          "max_grad_ev_a": 37.4229,
+          "homo_lumo_gap_ev": 4.885
+        },
+        "PM3": {
+          "status": "CONVERGED",
+          "iterations": 33,
+          "time_ms": 392.76,
+          "total_energy_ev": -2672.040615,
+          "heat_of_formation_kcal": -6223.517,
+          "dipole_debye": 8.486,
+          "max_grad_ev_a": 36.7822,
+          "homo_lumo_gap_ev": 5.74
+        },
+        "MNDO": {
+          "status": "CONVERGED",
+          "iterations": 38,
+          "time_ms": 437.84,
+          "total_energy_ev": -2820.241005,
+          "heat_of_formation_kcal": -6030.631,
+          "dipole_debye": 10.316,
+          "max_grad_ev_a": 39.4095,
+          "homo_lumo_gap_ev": 4.75
+        }
+      },
+      "features": {
+        "COSMO": {
+          "converged": true,
+          "time_ms": 564.05,
+          "solv_energy_ev": -2636.05698,
+          "diel_stabilization_kcal": -74.426,
+          "gas_dipole": 10.37,
+          "solv_dipole": 18.27
+        },
+        "Dispersion_PM6_DH+": {
+          "converged": true,
+          "heat_of_formation_kcal": -4993.665,
+          "disp_delta_kcal": -4.768
+        }
+      }
+    },
+    "imidazole": {
+      "name": "imidazole",
+      "category": "Heterocycle (N)",
+      "natoms": 9,
+      "elements": [
+        1,
+        6,
+        7
+      ],
+      "methods": {
+        "PM6": {
+          "status": "CONVERGED",
+          "iterations": 17,
+          "time_ms": 7.5,
+          "total_energy_ev": -835.742977,
+          "heat_of_formation_kcal": -1249.382,
+          "dipole_debye": 4.354,
+          "max_grad_ev_a": 20.5978,
+          "homo_lumo_gap_ev": 6.941
+        },
+        "AM1": {
+          "status": "CONVERGED",
+          "iterations": 22,
+          "time_ms": 8.73,
+          "total_energy_ev": -920.769513,
+          "heat_of_formation_kcal": -1556.166,
+          "dipole_debye": 3.259,
+          "max_grad_ev_a": 31.9924,
+          "homo_lumo_gap_ev": 6.441
+        },
+        "RM1": {
+          "status": "CONVERGED",
+          "iterations": 20,
+          "time_ms": 8.34,
+          "total_energy_ev": -916.119252,
+          "heat_of_formation_kcal": -1462.731,
+          "dipole_debye": 3.718,
+          "max_grad_ev_a": 27.5477,
+          "homo_lumo_gap_ev": 6.99
+        },
+        "PM3": {
+          "status": "CONVERGED",
+          "iterations": 24,
+          "time_ms": 9.64,
+          "total_energy_ev": -801.746295,
+          "heat_of_formation_kcal": -1371.331,
+          "dipole_debye": 1.738,
+          "max_grad_ev_a": 28.9081,
+          "homo_lumo_gap_ev": 6.321
+        },
+        "MNDO": {
+          "status": "CONVERGED",
+          "iterations": 27,
+          "time_ms": 10.23,
+          "total_energy_ev": -917.250085,
+          "heat_of_formation_kcal": -1427.945,
+          "dipole_debye": 2.382,
+          "max_grad_ev_a": 30.1798,
+          "homo_lumo_gap_ev": 6.605
+        }
+      },
+      "features": {
+        "COSMO": {
+          "converged": true,
+          "time_ms": 12.45,
+          "solv_energy_ev": -836.536868,
+          "diel_stabilization_kcal": -18.308,
+          "gas_dipole": 4.354,
+          "solv_dipole": 6.218
+        },
+        "Dispersion_PM6_DH+": {
+          "converged": true,
+          "heat_of_formation_kcal": -1249.662,
+          "disp_delta_kcal": -0.28
+        }
+      }
+    },
+    "iodobenzene": {
+      "name": "iodobenzene",
+      "category": "Aromatic halide (I)",
+      "natoms": 12,
+      "elements": [
+        1,
+        6,
+        53
+      ],
+      "methods": {
+        "PM6": {
+          "status": "CONVERGED",
+          "iterations": 20,
+          "time_ms": 21.95,
+          "total_energy_ev": -1118.427659,
+          "heat_of_formation_kcal": -1521.729,
+          "dipole_debye": 7.388,
+          "max_grad_ev_a": 30.9109,
+          "homo_lumo_gap_ev": 3.445
+        },
+        "AM1": {
+          "status": "CONVERGED",
+          "iterations": 26,
+          "time_ms": 25.02,
+          "total_energy_ev": -1266.356686,
+          "heat_of_formation_kcal": -1862.122,
+          "dipole_debye": 8.079,
+          "max_grad_ev_a": 34.7708,
+          "homo_lumo_gap_ev": 3.631
+        },
+        "RM1": {
+          "status": "CONVERGED",
+          "iterations": 27,
+          "time_ms": 25.07,
+          "total_energy_ev": -1147.659501,
+          "heat_of_formation_kcal": -1736.286,
+          "dipole_debye": 11.908,
+          "max_grad_ev_a": 33.1516,
+          "homo_lumo_gap_ev": 3.547
+        },
+        "PM3": {
+          "status": "NOT_CONVERGED",
+          "iterations": 60,
+          "time_ms": 50.41
+        },
+        "MNDO": {
+          "status": "CONVERGED",
+          "iterations": 24,
+          "time_ms": 23.35,
+          "total_energy_ev": -1251.712996,
+          "heat_of_formation_kcal": -1653.748,
+          "dipole_debye": 6.42,
+          "max_grad_ev_a": 30.7677,
+          "homo_lumo_gap_ev": 3.537
+        }
+      },
+      "features": {
+        "COSMO": {
+          "converged": true,
+          "time_ms": 33.72,
+          "solv_energy_ev": -1120.835907,
+          "diel_stabilization_kcal": -55.536,
+          "gas_dipole": 7.388,
+          "solv_dipole": 20.437
+        },
+        "Dispersion_PM6_DH+": {
+          "converged": true,
+          "heat_of_formation_kcal": -1522.932,
+          "disp_delta_kcal": -1.203
+        }
+      }
+    },
+    "iodomethane": {
+      "name": "iodomethane",
+      "category": "Halide (I)",
+      "natoms": 5,
+      "elements": [
+        1,
+        6,
+        53
+      ],
+      "methods": {
+        "PM6": {
+          "status": "CONVERGED",
+          "iterations": 14,
+          "time_ms": 0.78,
+          "total_energy_ev": -407.536559,
+          "heat_of_formation_kcal": 111.376,
+          "dipole_debye": 2.93,
+          "max_grad_ev_a": 5.3928,
+          "homo_lumo_gap_ev": 7.021
+        },
+        "AM1": {
+          "status": "CONVERGED",
+          "iterations": 11,
+          "time_ms": 0.7,
+          "total_energy_ev": -512.450783,
+          "heat_of_formation_kcal": 108.7,
+          "dipole_debye": 1.972,
+          "max_grad_ev_a": 4.0021,
+          "homo_lumo_gap_ev": 8.686
+        },
+        "RM1": {
+          "status": "CONVERGED",
+          "iterations": 30,
+          "time_ms": 1.13,
+          "total_energy_ev": -413.534899,
+          "heat_of_formation_kcal": 92.309,
+          "dipole_debye": 3.014,
+          "max_grad_ev_a": 5.412,
+          "homo_lumo_gap_ev": 7.61
+        },
+        "PM3": {
+          "status": "CONVERGED",
+          "iterations": 19,
+          "time_ms": 0.86,
+          "total_energy_ev": -444.316247,
+          "heat_of_formation_kcal": 224.72,
+          "dipole_debye": 6.807,
+          "max_grad_ev_a": 2.751,
+          "homo_lumo_gap_ev": 1.206
+        },
+        "MNDO": {
+          "status": "CONVERGED",
+          "iterations": 11,
+          "time_ms": 0.69,
+          "total_energy_ev": -507.265204,
+          "heat_of_formation_kcal": 111.791,
+          "dipole_debye": 2.375,
+          "max_grad_ev_a": 4.5808,
+          "homo_lumo_gap_ev": 8.587
+        }
+      },
+      "features": {
+        "COSMO": {
+          "converged": true,
+          "time_ms": 1.4,
+          "solv_energy_ev": -407.783211,
+          "diel_stabilization_kcal": -5.688,
+          "gas_dipole": 2.93,
+          "solv_dipole": 4.1
+        },
+        "Dispersion_PM6_DH+": {
+          "converged": true,
+          "heat_of_formation_kcal": 111.363,
+          "disp_delta_kcal": -0.013
+        }
+      }
+    },
+    "methane": {
+      "name": "methane",
+      "category": "Hydrocarbon",
+      "natoms": 5,
+      "elements": [
+        1,
+        6
+      ],
+      "methods": {
+        "PM6": {
+          "status": "CONVERGED",
+          "iterations": 8,
+          "time_ms": 0.34,
+          "total_energy_ev": -177.266746,
+          "heat_of_formation_kcal": -14.515,
+          "dipole_debye": 0.133,
+          "max_grad_ev_a": 0.6483,
+          "homo_lumo_gap_ev": 18.636
+        },
+        "AM1": {
+          "status": "CONVERGED",
+          "iterations": 8,
+          "time_ms": 0.36,
+          "total_energy_ev": -183.297632,
+          "heat_of_formation_kcal": -10.336,
+          "dipole_debye": 0.146,
+          "max_grad_ev_a": 1.0328,
+          "homo_lumo_gap_ev": 17.271
+        },
+        "RM1": {
+          "status": "CONVERGED",
+          "iterations": 8,
+          "time_ms": 0.36,
+          "total_energy_ev": -182.862671,
+          "heat_of_formation_kcal": -16.251,
+          "dipole_debye": 0.144,
+          "max_grad_ev_a": 0.6176,
+          "homo_lumo_gap_ev": 17.143
+        },
+        "PM3": {
+          "status": "CONVERGED",
+          "iterations": 8,
+          "time_ms": 0.35,
+          "total_energy_ev": -180.674335,
+          "heat_of_formation_kcal": -16.217,
+          "dipole_debye": 0.182,
+          "max_grad_ev_a": 0.8242,
+          "homo_lumo_gap_ev": 16.974
+        },
+        "MNDO": {
+          "status": "CONVERGED",
+          "iterations": 9,
+          "time_ms": 0.37,
+          "total_energy_ev": -185.165739,
+          "heat_of_formation_kcal": -13.654,
+          "dipole_debye": 0.138,
+          "max_grad_ev_a": 0.7535,
+          "homo_lumo_gap_ev": 17.574
+        }
+      },
+      "features": {
+        "COSMO": {
+          "converged": true,
+          "time_ms": 0.65,
+          "solv_energy_ev": -177.282781,
+          "diel_stabilization_kcal": -0.37,
+          "gas_dipole": 0.133,
+          "solv_dipole": 0.146
+        },
+        "Dispersion_PM6_DH+": {
+          "converged": true,
+          "heat_of_formation_kcal": -14.516,
+          "disp_delta_kcal": -0.001
+        }
+      }
+    },
+    "methanethiol": {
+      "name": "methanethiol",
+      "category": "Thiol",
+      "natoms": 6,
+      "elements": [
+        1,
+        6,
+        16
+      ],
+      "methods": {
+        "PM6": {
+          "status": "CONVERGED",
+          "iterations": 12,
+          "time_ms": 1.02,
+          "total_energy_ev": -348.404593,
+          "heat_of_formation_kcal": 65.841,
+          "dipole_debye": 1.799,
+          "max_grad_ev_a": 5.748,
+          "homo_lumo_gap_ev": 8.679
+        },
+        "AM1": {
+          "status": "CONVERGED",
+          "iterations": 12,
+          "time_ms": 1.03,
+          "total_energy_ev": -375.964674,
+          "heat_of_formation_kcal": 34.506,
+          "dipole_debye": 2.022,
+          "max_grad_ev_a": 4.8795,
+          "homo_lumo_gap_ev": 8.864
+        },
+        "RM1": {
+          "status": "CONVERGED",
+          "iterations": 13,
+          "time_ms": 1.06,
+          "total_energy_ev": -369.85225,
+          "heat_of_formation_kcal": 13.173,
+          "dipole_debye": 1.381,
+          "max_grad_ev_a": 6.6185,
+          "homo_lumo_gap_ev": 9.222
+        },
+        "PM3": {
+          "status": "CONVERGED",
+          "iterations": 12,
+          "time_ms": 1.05,
+          "total_energy_ev": -366.661759,
+          "heat_of_formation_kcal": -8.245,
+          "dipole_debye": 1.779,
+          "max_grad_ev_a": 8.2345,
+          "homo_lumo_gap_ev": 8.69
+        },
+        "MNDO": {
+          "status": "CONVERGED",
+          "iterations": 12,
+          "time_ms": 1.01,
+          "total_energy_ev": -410.117925,
+          "heat_of_formation_kcal": 77.194,
+          "dipole_debye": 1.83,
+          "max_grad_ev_a": 4.3889,
+          "homo_lumo_gap_ev": 9.89
+        }
+      },
+      "features": {
+        "COSMO": {
+          "converged": true,
+          "time_ms": 1.83,
+          "solv_energy_ev": -348.517568,
+          "diel_stabilization_kcal": -2.605,
+          "gas_dipole": 1.799,
+          "solv_dipole": 2.224
+        },
+        "Dispersion_PM6_DH+": {
+          "converged": true,
+          "heat_of_formation_kcal": 65.813,
+          "disp_delta_kcal": -0.028
+        }
+      }
+    },
+    "methanol": {
+      "name": "methanol",
+      "category": "Alcohol",
+      "natoms": 6,
+      "elements": [
+        1,
+        6,
+        8
+      ],
+      "methods": {
+        "PM6": {
+          "status": "CONVERGED",
+          "iterations": 11,
+          "time_ms": 1.02,
+          "total_energy_ev": -469.667256,
+          "heat_of_formation_kcal": -76.561,
+          "dipole_debye": 2.199,
+          "max_grad_ev_a": 2.7195,
+          "homo_lumo_gap_ev": 13.384
+        },
+        "AM1": {
+          "status": "CONVERGED",
+          "iterations": 11,
+          "time_ms": 1.77,
+          "total_energy_ev": -505.128341,
+          "heat_of_formation_kcal": -82.941,
+          "dipole_debye": 1.844,
+          "max_grad_ev_a": 6.2383,
+          "homo_lumo_gap_ev": 14.358
+        },
+        "RM1": {
+          "status": "CONVERGED",
+          "iterations": 11,
+          "time_ms": 1.79,
+          "total_energy_ev": -500.318916,
+          "heat_of_formation_kcal": -81.585,
+          "dipole_debye": 1.868,
+          "max_grad_ev_a": 4.993,
+          "homo_lumo_gap_ev": 14.259
+        },
+        "PM3": {
+          "status": "CONVERGED",
+          "iterations": 11,
+          "time_ms": 1.67,
+          "total_energy_ev": -474.986799,
+          "heat_of_formation_kcal": -71.274,
+          "dipole_debye": 1.804,
+          "max_grad_ev_a": 4.1448,
+          "homo_lumo_gap_ev": 13.843
+        },
+        "MNDO": {
+          "status": "CONVERGED",
+          "iterations": 11,
+          "time_ms": 1.62,
+          "total_energy_ev": -508.509335,
+          "heat_of_formation_kcal": -80.354,
+          "dipole_debye": 1.744,
+          "max_grad_ev_a": 5.9795,
+          "homo_lumo_gap_ev": 14.546
+        }
+      },
+      "features": {
+        "COSMO": {
+          "converged": true,
+          "time_ms": 2.8,
+          "solv_energy_ev": -469.861691,
+          "diel_stabilization_kcal": -4.484,
+          "gas_dipole": 2.199,
+          "solv_dipole": 2.478
+        },
+        "Dispersion_PM6_DH+": {
+          "converged": true,
+          "heat_of_formation_kcal": -76.57,
+          "disp_delta_kcal": -0.009
+        }
+      }
+    },
+    "methyl_acetate": {
+      "name": "methyl_acetate",
+      "category": "Ester",
+      "natoms": 11,
+      "elements": [
+        1,
+        6,
+        8
+      ],
+      "methods": {
+        "PM6": {
+          "status": "CONVERGED",
+          "iterations": 24,
+          "time_ms": 15.88,
+          "total_energy_ev": -1051.439524,
+          "heat_of_formation_kcal": -533.749,
+          "dipole_debye": 3.957,
+          "max_grad_ev_a": 20.8149,
+          "homo_lumo_gap_ev": 5.97
+        },
+        "AM1": {
+          "status": "CONVERGED",
+          "iterations": 29,
+          "time_ms": 13.64,
+          "total_energy_ev": -1141.913653,
+          "heat_of_formation_kcal": -874.816,
+          "dipole_debye": 4.729,
+          "max_grad_ev_a": 18.7069,
+          "homo_lumo_gap_ev": 5.406
+        },
+        "RM1": {
+          "status": "CONVERGED",
+          "iterations": 22,
+          "time_ms": 12.3,
+          "total_energy_ev": -1127.802196,
+          "heat_of_formation_kcal": -862.518,
+          "dipole_debye": 1.661,
+          "max_grad_ev_a": 17.5411,
+          "homo_lumo_gap_ev": 7.19
+        },
+        "PM3": {
+          "status": "NOT_CONVERGED",
+          "iterations": 60,
+          "time_ms": 24.7
+        },
+        "MNDO": {
+          "status": "CONVERGED",
+          "iterations": 21,
+          "time_ms": 11.67,
+          "total_energy_ev": -1148.861728,
+          "heat_of_formation_kcal": -904.716,
+          "dipole_debye": 1.469,
+          "max_grad_ev_a": 18.8382,
+          "homo_lumo_gap_ev": 7.398
+        }
+      },
+      "features": {
+        "COSMO": {
+          "converged": true,
+          "time_ms": 23.87,
+          "solv_energy_ev": -1052.161807,
+          "diel_stabilization_kcal": -16.656,
+          "gas_dipole": 3.957,
+          "solv_dipole": 5.45
+        },
+        "Dispersion_PM6_DH+": {
+          "converged": true,
+          "heat_of_formation_kcal": -534.146,
+          "disp_delta_kcal": -0.397
+        }
+      }
+    },
+    "methylamine": {
+      "name": "methylamine",
+      "category": "Amine (1st)",
+      "natoms": 7,
+      "elements": [
+        1,
+        6,
+        7
+      ],
+      "methods": {
+        "PM6": {
+          "status": "CONVERGED",
+          "iterations": 11,
+          "time_ms": 1.39,
+          "total_energy_ev": -372.13344,
+          "heat_of_formation_kcal": -49.308,
+          "dipole_debye": 2.05,
+          "max_grad_ev_a": 6.2493,
+          "homo_lumo_gap_ev": 14.822
+        },
+        "AM1": {
+          "status": "CONVERGED",
+          "iterations": 11,
+          "time_ms": 1.37,
+          "total_energy_ev": -405.65626,
+          "heat_of_formation_kcal": -49.769,
+          "dipole_debye": 1.865,
+          "max_grad_ev_a": 2.637,
+          "homo_lumo_gap_ev": 15.002
+        },
+        "RM1": {
+          "status": "CONVERGED",
+          "iterations": 11,
+          "time_ms": 1.36,
+          "total_energy_ev": -409.005294,
+          "heat_of_formation_kcal": -60.868,
+          "dipole_debye": 1.683,
+          "max_grad_ev_a": 5.8952,
+          "homo_lumo_gap_ev": 14.907
+        },
+        "PM3": {
+          "status": "CONVERGED",
+          "iterations": 11,
+          "time_ms": 1.48,
+          "total_energy_ev": -359.905571,
+          "heat_of_formation_kcal": -48.147,
+          "dipole_debye": 1.335,
+          "max_grad_ev_a": 4.3796,
+          "homo_lumo_gap_ev": 13.38
+        },
+        "MNDO": {
+          "status": "CONVERGED",
+          "iterations": 11,
+          "time_ms": 1.4,
+          "total_energy_ev": -407.865694,
+          "heat_of_formation_kcal": -38.283,
+          "dipole_debye": 1.462,
+          "max_grad_ev_a": 5.4175,
+          "homo_lumo_gap_ev": 14.956
+        }
+      },
+      "features": {
+        "COSMO": {
+          "converged": true,
+          "time_ms": 2.18,
+          "solv_energy_ev": -372.323817,
+          "diel_stabilization_kcal": -4.39,
+          "gas_dipole": 2.05,
+          "solv_dipole": 2.222
+        },
+        "Dispersion_PM6_DH+": {
+          "converged": true,
+          "heat_of_formation_kcal": -49.33,
+          "disp_delta_kcal": -0.022
+        }
+      }
+    },
+    "naphthalene": {
+      "name": "naphthalene",
+      "category": "Polyaromatic",
+      "natoms": 18,
+      "elements": [
+        1,
+        6
+      ],
+      "methods": {
+        "PM6": {
+          "status": "NOT_CONVERGED",
+          "iterations": 60,
+          "time_ms": 139.41
+        },
+        "AM1": {
+          "status": "NOT_CONVERGED",
+          "iterations": 60,
+          "time_ms": 142.71
+        },
+        "RM1": {
+          "status": "NOT_CONVERGED",
+          "iterations": 60,
+          "time_ms": 138.14
+        },
+        "PM3": {
+          "status": "CONVERGED",
+          "iterations": 56,
+          "time_ms": 136.49,
+          "total_energy_ev": -1454.939725,
+          "heat_of_formation_kcal": -3363.939,
+          "dipole_debye": 0.001,
+          "max_grad_ev_a": 30.5457,
+          "homo_lumo_gap_ev": 3.884
+        },
+        "MNDO": {
+          "status": "CONVERGED",
+          "iterations": 26,
+          "time_ms": 75.41,
+          "total_energy_ev": -1539.087017,
+          "heat_of_formation_kcal": -3381.852,
+          "dipole_debye": 0.002,
+          "max_grad_ev_a": 27.7571,
+          "homo_lumo_gap_ev": 4.2
+        }
+      },
+      "features": {}
+    },
+    "nitric_oxide": {
+      "name": "nitric_oxide",
+      "category": "Open-shell radical",
+      "natoms": 2,
+      "elements": [
+        7,
+        8
+      ],
+      "methods": {
+        "PM6": {
+          "status": "OPEN_SHELL_RADICAL",
+          "error": "Open-shell radical detected (11 valence electrons). Closed-shell RHF requires an even number of valence electrons (requires UHF/ROHF).",
+          "time_ms": 0.02
+        },
+        "AM1": {
+          "status": "OPEN_SHELL_RADICAL",
+          "error": "Open-shell radical detected (11 valence electrons). Closed-shell RHF requires an even number of valence electrons (requires UHF/ROHF).",
+          "time_ms": 0.01
+        },
+        "RM1": {
+          "status": "OPEN_SHELL_RADICAL",
+          "error": "Open-shell radical detected (11 valence electrons). Closed-shell RHF requires an even number of valence electrons (requires UHF/ROHF).",
+          "time_ms": 0.0
+        },
+        "PM3": {
+          "status": "OPEN_SHELL_RADICAL",
+          "error": "Open-shell radical detected (11 valence electrons). Closed-shell RHF requires an even number of valence electrons (requires UHF/ROHF).",
+          "time_ms": 0.0
+        },
+        "MNDO": {
+          "status": "OPEN_SHELL_RADICAL",
+          "error": "Open-shell radical detected (11 valence electrons). Closed-shell RHF requires an even number of valence electrons (requires UHF/ROHF).",
+          "time_ms": 0.0
+        }
+      },
+      "features": {}
+    },
+    "nitrogen_dioxide": {
+      "name": "nitrogen_dioxide",
+      "category": "Open-shell radical",
+      "natoms": 3,
+      "elements": [
+        7,
+        8
+      ],
+      "methods": {
+        "PM6": {
+          "status": "OPEN_SHELL_RADICAL",
+          "error": "Open-shell radical detected (17 valence electrons). Closed-shell RHF requires an even number of valence electrons (requires UHF/ROHF).",
+          "time_ms": 0.0
+        },
+        "AM1": {
+          "status": "OPEN_SHELL_RADICAL",
+          "error": "Open-shell radical detected (17 valence electrons). Closed-shell RHF requires an even number of valence electrons (requires UHF/ROHF).",
+          "time_ms": 0.0
+        },
+        "RM1": {
+          "status": "OPEN_SHELL_RADICAL",
+          "error": "Open-shell radical detected (17 valence electrons). Closed-shell RHF requires an even number of valence electrons (requires UHF/ROHF).",
+          "time_ms": 0.0
+        },
+        "PM3": {
+          "status": "OPEN_SHELL_RADICAL",
+          "error": "Open-shell radical detected (17 valence electrons). Closed-shell RHF requires an even number of valence electrons (requires UHF/ROHF).",
+          "time_ms": 0.0
+        },
+        "MNDO": {
+          "status": "OPEN_SHELL_RADICAL",
+          "error": "Open-shell radical detected (17 valence electrons). Closed-shell RHF requires an even number of valence electrons (requires UHF/ROHF).",
+          "time_ms": 0.01
+        }
+      },
+      "features": {}
+    },
+    "paracetamol": {
+      "name": "paracetamol",
+      "category": "Pharmaceutical",
+      "natoms": 20,
+      "elements": [
+        1,
+        6,
+        7,
+        8
+      ],
+      "methods": {
+        "PM6": {
+          "status": "CONVERGED",
+          "iterations": 31,
+          "time_ms": 111.79,
+          "total_energy_ev": -1986.875484,
+          "heat_of_formation_kcal": -2886.042,
+          "dipole_debye": 5.673,
+          "max_grad_ev_a": 24.9393,
+          "homo_lumo_gap_ev": 4.45
+        },
+        "AM1": {
+          "status": "CONVERGED",
+          "iterations": 25,
+          "time_ms": 107.52,
+          "total_energy_ev": -2146.668341,
+          "heat_of_formation_kcal": -3542.069,
+          "dipole_debye": 5.35,
+          "max_grad_ev_a": 31.7604,
+          "homo_lumo_gap_ev": 4.335
+        },
+        "RM1": {
+          "status": "CONVERGED",
+          "iterations": 30,
+          "time_ms": 124.75,
+          "total_energy_ev": -2115.412903,
+          "heat_of_formation_kcal": -3366.286,
+          "dipole_debye": 3.213,
+          "max_grad_ev_a": 29.4072,
+          "homo_lumo_gap_ev": 4.829
+        },
+        "PM3": {
+          "status": "NOT_CONVERGED",
+          "iterations": 60,
+          "time_ms": 195.62
+        },
+        "MNDO": {
+          "status": "CONVERGED",
+          "iterations": 24,
+          "time_ms": 118.53,
+          "total_energy_ev": -2142.660996,
+          "heat_of_formation_kcal": -3309.482,
+          "dipole_debye": 2.528,
+          "max_grad_ev_a": 30.0155,
+          "homo_lumo_gap_ev": 4.891
+        }
+      },
+      "features": {
+        "COSMO": {
+          "converged": true,
+          "time_ms": 230.64,
+          "solv_energy_ev": -1988.602561,
+          "diel_stabilization_kcal": -39.827,
+          "gas_dipole": 5.673,
+          "solv_dipole": 24.918
+        },
+        "Dispersion_PM6_DH+": {
+          "converged": true,
+          "heat_of_formation_kcal": -2888.171,
+          "disp_delta_kcal": -2.129
+        }
+      }
+    },
+    "phosphine": {
+      "name": "phosphine",
+      "category": "Inorganic/P",
+      "natoms": 4,
+      "elements": [
+        1,
+        15
+      ],
+      "methods": {
+        "PM6": {
+          "status": "CONVERGED",
+          "iterations": 8,
+          "time_ms": 0.24,
+          "total_energy_ev": -173.454861,
+          "heat_of_formation_kcal": 230.814,
+          "dipole_debye": 2.512,
+          "max_grad_ev_a": 4.1655,
+          "homo_lumo_gap_ev": 13.394
+        },
+        "AM1": {
+          "status": "CONVERGED",
+          "iterations": 12,
+          "time_ms": 0.24,
+          "total_energy_ev": -163.656541,
+          "heat_of_formation_kcal": 115.872,
+          "dipole_debye": 1.3,
+          "max_grad_ev_a": 2.259,
+          "homo_lumo_gap_ev": 11.567
+        },
+        "RM1": {
+          "status": "CONVERGED",
+          "iterations": 12,
+          "time_ms": 0.26,
+          "total_energy_ev": -165.411516,
+          "heat_of_formation_kcal": 85.448,
+          "dipole_debye": 0.535,
+          "max_grad_ev_a": 2.7759,
+          "homo_lumo_gap_ev": 11.835
+        },
+        "PM3": {
+          "status": "CONVERGED",
+          "iterations": 11,
+          "time_ms": 0.23,
+          "total_energy_ev": -165.136387,
+          "heat_of_formation_kcal": 48.377,
+          "dipole_debye": 0.778,
+          "max_grad_ev_a": 4.293,
+          "homo_lumo_gap_ev": 11.51
+        },
+        "MNDO": {
+          "status": "CONVERGED",
+          "iterations": 11,
+          "time_ms": 0.24,
+          "total_energy_ev": -194.253044,
+          "heat_of_formation_kcal": 103.331,
+          "dipole_debye": 0.652,
+          "max_grad_ev_a": 3.9228,
+          "homo_lumo_gap_ev": 12.467
+        }
+      },
+      "features": {
+        "COSMO": {
+          "converged": true,
+          "time_ms": 0.55,
+          "solv_energy_ev": -173.670341,
+          "diel_stabilization_kcal": -4.969,
+          "gas_dipole": 2.512,
+          "solv_dipole": 2.966
+        },
+        "Dispersion_PM6_DH+": {
+          "converged": true,
+          "heat_of_formation_kcal": 230.813,
+          "disp_delta_kcal": -0.001
+        }
+      }
+    },
+    "propane": {
+      "name": "propane",
+      "category": "Hydrocarbon",
+      "natoms": 11,
+      "elements": [
+        1,
+        6
+      ],
+      "methods": {
+        "PM6": {
+          "status": "CONVERGED",
+          "iterations": 12,
+          "time_ms": 4.97,
+          "total_energy_ev": -483.856336,
+          "heat_of_formation_kcal": -183.783,
+          "dipole_debye": 0.336,
+          "max_grad_ev_a": 9.1012,
+          "homo_lumo_gap_ev": 12.364
+        },
+        "AM1": {
+          "status": "CONVERGED",
+          "iterations": 12,
+          "time_ms": 4.89,
+          "total_energy_ev": -503.303271,
+          "heat_of_formation_kcal": -216.265,
+          "dipole_debye": 0.617,
+          "max_grad_ev_a": 13.7123,
+          "homo_lumo_gap_ev": 10.788
+        },
+        "RM1": {
+          "status": "CONVERGED",
+          "iterations": 13,
+          "time_ms": 5.07,
+          "total_energy_ev": -498.009977,
+          "heat_of_formation_kcal": -194.082,
+          "dipole_debye": 0.543,
+          "max_grad_ev_a": 11.9098,
+          "homo_lumo_gap_ev": 10.757
+        },
+        "PM3": {
+          "status": "CONVERGED",
+          "iterations": 13,
+          "time_ms": 6.12,
+          "total_energy_ev": -486.853864,
+          "heat_of_formation_kcal": -190.739,
+          "dipole_debye": 0.662,
+          "max_grad_ev_a": 12.3267,
+          "homo_lumo_gap_ev": 10.658
+        },
+        "MNDO": {
+          "status": "CONVERGED",
+          "iterations": 12,
+          "time_ms": 8.13,
+          "total_energy_ev": -504.814921,
+          "heat_of_formation_kcal": -178.871,
+          "dipole_debye": 0.568,
+          "max_grad_ev_a": 11.3839,
+          "homo_lumo_gap_ev": 11.215
+        }
+      },
+      "features": {
+        "COSMO": {
+          "converged": true,
+          "time_ms": 11.26,
+          "solv_energy_ev": -483.976421,
+          "diel_stabilization_kcal": -2.769,
+          "gas_dipole": 0.336,
+          "solv_dipole": 0.389
+        },
+        "Dispersion_PM6_DH+": {
+          "converged": true,
+          "heat_of_formation_kcal": -183.998,
+          "disp_delta_kcal": -0.215
+        }
+      }
+    },
+    "pyridine": {
+      "name": "pyridine",
+      "category": "Heterocycle (N)",
+      "natoms": 11,
+      "elements": [
+        1,
+        6,
+        7
+      ],
+      "methods": {
+        "PM6": {
+          "status": "CONVERGED",
+          "iterations": 18,
+          "time_ms": 22.53,
+          "total_energy_ev": -928.241544,
+          "heat_of_formation_kcal": -1563.46,
+          "dipole_debye": 3.664,
+          "max_grad_ev_a": 26.988,
+          "homo_lumo_gap_ev": 6.087
+        },
+        "AM1": {
+          "status": "CONVERGED",
+          "iterations": 24,
+          "time_ms": 20.05,
+          "total_energy_ev": -999.424463,
+          "heat_of_formation_kcal": -1914.515,
+          "dipole_debye": 4.022,
+          "max_grad_ev_a": 32.7879,
+          "homo_lumo_gap_ev": 3.315
+        },
+        "RM1": {
+          "status": "CONVERGED",
+          "iterations": 31,
+          "time_ms": 21.59,
+          "total_energy_ev": -982.607217,
+          "heat_of_formation_kcal": -1732.541,
+          "dipole_debye": 4.35,
+          "max_grad_ev_a": 23.7043,
+          "homo_lumo_gap_ev": 2.931
+        },
+        "PM3": {
+          "status": "CONVERGED",
+          "iterations": 21,
+          "time_ms": 20.08,
+          "total_energy_ev": -908.579753,
+          "heat_of_formation_kcal": -1757.223,
+          "dipole_debye": 3.142,
+          "max_grad_ev_a": 32.039,
+          "homo_lumo_gap_ev": 6.342
+        },
+        "MNDO": {
+          "status": "CONVERGED",
+          "iterations": 21,
+          "time_ms": 17.94,
+          "total_energy_ev": -994.937406,
+          "heat_of_formation_kcal": -1777.678,
+          "dipole_debye": 3.974,
+          "max_grad_ev_a": 37.0821,
+          "homo_lumo_gap_ev": 6.046
+        }
+      },
+      "features": {
+        "COSMO": {
+          "converged": true,
+          "time_ms": 26.54,
+          "solv_energy_ev": -929.28462,
+          "diel_stabilization_kcal": -24.054,
+          "gas_dipole": 3.664,
+          "solv_dipole": 5.645
+        },
+        "Dispersion_PM6_DH+": {
+          "converged": true,
+          "heat_of_formation_kcal": -1564.058,
+          "disp_delta_kcal": -0.598
+        }
+      }
+    },
+    "pyrimidine": {
+      "name": "pyrimidine",
+      "category": "Heterocycle (N)",
+      "natoms": 10,
+      "elements": [
+        1,
+        6,
+        7
+      ],
+      "methods": {
+        "PM6": {
+          "status": "CONVERGED",
+          "iterations": 23,
+          "time_ms": 15.22,
+          "total_energy_ev": -972.583799,
+          "heat_of_formation_kcal": -1577.505,
+          "dipole_debye": 1.768,
+          "max_grad_ev_a": 20.3877,
+          "homo_lumo_gap_ev": 5.959
+        },
+        "AM1": {
+          "status": "CONVERGED",
+          "iterations": 31,
+          "time_ms": 19.92,
+          "total_energy_ev": -1065.650657,
+          "heat_of_formation_kcal": -1940.236,
+          "dipole_debye": 1.216,
+          "max_grad_ev_a": 33.453,
+          "homo_lumo_gap_ev": 6.078
+        },
+        "RM1": {
+          "status": "CONVERGED",
+          "iterations": 31,
+          "time_ms": 20.65,
+          "total_energy_ev": -1056.305829,
+          "heat_of_formation_kcal": -1806.535,
+          "dipole_debye": 2.047,
+          "max_grad_ev_a": 26.9814,
+          "homo_lumo_gap_ev": 6.111
+        },
+        "PM3": {
+          "status": "CONVERGED",
+          "iterations": 27,
+          "time_ms": 15.84,
+          "total_energy_ev": -936.922602,
+          "heat_of_formation_kcal": -1752.657,
+          "dipole_debye": 0.292,
+          "max_grad_ev_a": 25.3548,
+          "homo_lumo_gap_ev": 5.98
+        },
+        "MNDO": {
+          "status": "CONVERGED",
+          "iterations": 32,
+          "time_ms": 18.14,
+          "total_energy_ev": -1060.221544,
+          "heat_of_formation_kcal": -1775.246,
+          "dipole_debye": 1.746,
+          "max_grad_ev_a": 30.2244,
+          "homo_lumo_gap_ev": 6.255
+        }
+      },
+      "features": {
+        "COSMO": {
+          "converged": true,
+          "time_ms": 21.14,
+          "solv_energy_ev": -973.222951,
+          "diel_stabilization_kcal": -14.739,
+          "gas_dipole": 1.768,
+          "solv_dipole": 3.233
+        },
+        "Dispersion_PM6_DH+": {
+          "converged": true,
+          "heat_of_formation_kcal": -1577.976,
+          "disp_delta_kcal": -0.471
+        }
+      }
+    },
+    "pyrrole": {
+      "name": "pyrrole",
+      "category": "Heterocycle (N)",
+      "natoms": 10,
+      "elements": [
+        1,
+        6,
+        7
+      ],
+      "methods": {
+        "PM6": {
+          "status": "CONVERGED",
+          "iterations": 12,
+          "time_ms": 12.01,
+          "total_energy_ev": -794.801192,
+          "heat_of_formation_kcal": -1313.753,
+          "dipole_debye": 3.619,
+          "max_grad_ev_a": 25.9104,
+          "homo_lumo_gap_ev": 10.571
+        },
+        "AM1": {
+          "status": "CONVERGED",
+          "iterations": 15,
+          "time_ms": 8.89,
+          "total_energy_ev": -848.534105,
+          "heat_of_formation_kcal": -1391.869,
+          "dipole_debye": 3.941,
+          "max_grad_ev_a": 24.6695,
+          "homo_lumo_gap_ev": 8.908
+        },
+        "RM1": {
+          "status": "CONVERGED",
+          "iterations": 14,
+          "time_ms": 8.41,
+          "total_energy_ev": -842.725017,
+          "heat_of_formation_kcal": -1395.756,
+          "dipole_debye": 4.123,
+          "max_grad_ev_a": 28.5113,
+          "homo_lumo_gap_ev": 9.458
+        },
+        "PM3": {
+          "status": "CONVERGED",
+          "iterations": 18,
+          "time_ms": 9.5,
+          "total_energy_ev": -766.263726,
+          "heat_of_formation_kcal": -1211.25,
+          "dipole_debye": 3.172,
+          "max_grad_ev_a": 24.5861,
+          "homo_lumo_gap_ev": 7.645
+        },
+        "MNDO": {
+          "status": "CONVERGED",
+          "iterations": 15,
+          "time_ms": 8.64,
+          "total_energy_ev": -845.255982,
+          "heat_of_formation_kcal": -1275.642,
+          "dipole_debye": 4.022,
+          "max_grad_ev_a": 26.3991,
+          "homo_lumo_gap_ev": 8.756
+        }
+      },
+      "features": {
+        "COSMO": {
+          "converged": true,
+          "time_ms": 11.61,
+          "solv_energy_ev": -795.480068,
+          "diel_stabilization_kcal": -15.655,
+          "gas_dipole": 3.619,
+          "solv_dipole": 4.292
+        },
+        "Dispersion_PM6_DH+": {
+          "converged": true,
+          "heat_of_formation_kcal": -1314.119,
+          "disp_delta_kcal": -0.366
+        }
+      }
+    },
+    "silane": {
+      "name": "silane",
+      "category": "Unsupported element (Si)",
+      "natoms": 5,
+      "elements": [
+        1,
+        14
+      ],
+      "methods": {
+        "PM6": {
+          "status": "UNSUPPORTED_ELEMENT",
+          "error": "Unsupported element Z=14 for semi-empirical method 'PM6'",
+          "time_ms": 0.03
+        },
+        "AM1": {
+          "status": "UNSUPPORTED_ELEMENT",
+          "error": "Unsupported element Z=14 for semi-empirical method 'AM1'",
+          "time_ms": 0.01
+        },
+        "RM1": {
+          "status": "UNSUPPORTED_ELEMENT",
+          "error": "Unsupported element Z=14 for semi-empirical method 'RM1'",
+          "time_ms": 0.0
+        },
+        "PM3": {
+          "status": "UNSUPPORTED_ELEMENT",
+          "error": "Unsupported element Z=14 for semi-empirical method 'PM3'",
+          "time_ms": 0.0
+        },
+        "MNDO": {
+          "status": "UNSUPPORTED_ELEMENT",
+          "error": "Unsupported element Z=14 for semi-empirical method 'MNDO'",
+          "time_ms": 0.0
+        }
+      },
+      "features": {}
+    },
+    "steric_collision_water": {
+      "name": "steric_collision_water",
+      "category": "Stress / Steric clash",
+      "natoms": 3,
+      "elements": [
+        1,
+        8
+      ],
+      "methods": {
+        "PM6": {
+          "status": "CONVERGED",
+          "iterations": 8,
+          "time_ms": 0.13,
+          "total_energy_ev": -321.930574,
+          "heat_of_formation_kcal": -120.099,
+          "dipole_debye": 1.497,
+          "max_grad_ev_a": 3346.0185,
+          "homo_lumo_gap_ev": 19.113
+        },
+        "AM1": {
+          "status": "CONVERGED",
+          "iterations": 10,
+          "time_ms": 0.15,
+          "total_energy_ev": -310.45116,
+          "heat_of_formation_kcal": 819.633,
+          "dipole_debye": 1.442,
+          "max_grad_ev_a": 5882.5643,
+          "homo_lumo_gap_ev": 19.04
+        },
+        "RM1": {
+          "status": "CONVERGED",
+          "iterations": 9,
+          "time_ms": 0.16,
+          "total_energy_ev": -305.639431,
+          "heat_of_formation_kcal": 863.011,
+          "dipole_debye": 1.441,
+          "max_grad_ev_a": 7129.4961,
+          "homo_lumo_gap_ev": 18.428
+        },
+        "PM3": {
+          "status": "CONVERGED",
+          "iterations": 10,
+          "time_ms": 0.17,
+          "total_energy_ev": -275.535196,
+          "heat_of_formation_kcal": 1085.116,
+          "dipole_debye": 1.069,
+          "max_grad_ev_a": 2319.1906,
+          "homo_lumo_gap_ev": 16.051
+        },
+        "MNDO": {
+          "status": "CONVERGED",
+          "iterations": 9,
+          "time_ms": 0.16,
+          "total_energy_ev": -308.936824,
+          "heat_of_formation_kcal": 918.863,
+          "dipole_debye": 1.381,
+          "max_grad_ev_a": 5829.9053,
+          "homo_lumo_gap_ev": 19.26
+        }
+      },
+      "features": {
+        "COSMO": {
+          "converged": true,
+          "time_ms": 0.35,
+          "solv_energy_ev": -322.073747,
+          "diel_stabilization_kcal": -3.302,
+          "gas_dipole": 1.497,
+          "solv_dipole": 1.609
+        },
+        "Dispersion_PM6_DH+": {
+          "converged": true,
+          "heat_of_formation_kcal": -120.132,
+          "disp_delta_kcal": -0.033
+        }
+      }
+    },
+    "sulfur_dioxide": {
+      "name": "sulfur_dioxide",
+      "category": "Inorganic/S",
+      "natoms": 3,
+      "elements": [
+        8,
+        16
+      ],
+      "methods": {
+        "PM6": {
+          "status": "CONVERGED",
+          "iterations": 12,
+          "time_ms": 0.64,
+          "total_energy_ev": -768.849492,
+          "heat_of_formation_kcal": -341.462,
+          "dipole_debye": 7.397,
+          "max_grad_ev_a": 27.506,
+          "homo_lumo_gap_ev": 7.932
+        },
+        "AM1": {
+          "status": "CONVERGED",
+          "iterations": 11,
+          "time_ms": 0.69,
+          "total_energy_ev": -852.619162,
+          "heat_of_formation_kcal": -476.041,
+          "dipole_debye": 5.397,
+          "max_grad_ev_a": 34.1916,
+          "homo_lumo_gap_ev": 7.494
+        },
+        "RM1": {
+          "status": "CONVERGED",
+          "iterations": 13,
+          "time_ms": 0.75,
+          "total_energy_ev": -840.415473,
+          "heat_of_formation_kcal": -528.174,
+          "dipole_debye": 6.54,
+          "max_grad_ev_a": 37.7687,
+          "homo_lumo_gap_ev": 7.788
+        },
+        "PM3": {
+          "status": "CONVERGED",
+          "iterations": 11,
+          "time_ms": 0.66,
+          "total_energy_ev": -798.416728,
+          "heat_of_formation_kcal": -651.086,
+          "dipole_debye": 5.813,
+          "max_grad_ev_a": 41.168,
+          "homo_lumo_gap_ev": 7.475
+        },
+        "MNDO": {
+          "status": "CONVERGED",
+          "iterations": 13,
+          "time_ms": 0.69,
+          "total_energy_ev": -880.988367,
+          "heat_of_formation_kcal": -258.143,
+          "dipole_debye": 3.93,
+          "max_grad_ev_a": 30.7291,
+          "homo_lumo_gap_ev": 6.881
+        }
+      },
+      "features": {
+        "COSMO": {
+          "converged": true,
+          "time_ms": 1.54,
+          "solv_energy_ev": -771.295222,
+          "diel_stabilization_kcal": -56.4,
+          "gas_dipole": 7.397,
+          "solv_dipole": 9.186
+        },
+        "Dispersion_PM6_DH+": {
+          "converged": true,
+          "heat_of_formation_kcal": -341.478,
+          "disp_delta_kcal": -0.016
+        }
+      }
+    },
+    "tetrahydrofuran": {
+      "name": "tetrahydrofuran",
+      "category": "Ether (cyclic)",
+      "natoms": 13,
+      "elements": [
+        1,
+        6,
+        8
+      ],
+      "methods": {
+        "PM6": {
+          "status": "CONVERGED",
+          "iterations": 14,
+          "time_ms": 13.92,
+          "total_energy_ev": -943.612775,
+          "heat_of_formation_kcal": -1277.647,
+          "dipole_debye": 1.835,
+          "max_grad_ev_a": 21.1696,
+          "homo_lumo_gap_ev": 9.054
+        },
+        "AM1": {
+          "status": "CONVERGED",
+          "iterations": 15,
+          "time_ms": 16.22,
+          "total_energy_ev": -1020.262211,
+          "heat_of_formation_kcal": -1831.666,
+          "dipole_debye": 0.737,
+          "max_grad_ev_a": 44.0887,
+          "homo_lumo_gap_ev": 8.697
+        },
+        "RM1": {
+          "status": "CONVERGED",
+          "iterations": 16,
+          "time_ms": 15.97,
+          "total_energy_ev": -998.605832,
+          "heat_of_formation_kcal": -1593.741,
+          "dipole_debye": 0.642,
+          "max_grad_ev_a": 35.5321,
+          "homo_lumo_gap_ev": 8.621
+        },
+        "PM3": {
+          "status": "CONVERGED",
+          "iterations": 15,
+          "time_ms": 14.93,
+          "total_energy_ev": -968.147344,
+          "heat_of_formation_kcal": -1821.769,
+          "dipole_debye": 0.396,
+          "max_grad_ev_a": 46.2506,
+          "homo_lumo_gap_ev": 9.459
+        },
+        "MNDO": {
+          "status": "CONVERGED",
+          "iterations": 16,
+          "time_ms": 14.23,
+          "total_energy_ev": -1015.459508,
+          "heat_of_formation_kcal": -1615.134,
+          "dipole_debye": 0.731,
+          "max_grad_ev_a": 42.9608,
+          "homo_lumo_gap_ev": 8.045
+        }
+      },
+      "features": {
+        "COSMO": {
+          "converged": true,
+          "time_ms": 19.06,
+          "solv_energy_ev": -944.371992,
+          "diel_stabilization_kcal": -17.508,
+          "gas_dipole": 1.835,
+          "solv_dipole": 2.278
+        },
+        "Dispersion_PM6_DH+": {
+          "converged": true,
+          "heat_of_formation_kcal": -1278.076,
+          "disp_delta_kcal": -0.429
+        }
+      }
+    },
+    "thiophene": {
+      "name": "thiophene",
+      "category": "Heterocycle (S)",
+      "natoms": 9,
+      "elements": [
+        1,
+        6,
+        16
+      ],
+      "methods": {
+        "PM6": {
+          "status": "CONVERGED",
+          "iterations": 14,
+          "time_ms": 9.07,
+          "total_energy_ev": -762.657502,
+          "heat_of_formation_kcal": -1004.553,
+          "dipole_debye": 1.609,
+          "max_grad_ev_a": 15.0316,
+          "homo_lumo_gap_ev": 9.109
+        },
+        "AM1": {
+          "status": "CONVERGED",
+          "iterations": 14,
+          "time_ms": 11.18,
+          "total_energy_ev": -821.801221,
+          "heat_of_formation_kcal": -1375.824,
+          "dipole_debye": 1.36,
+          "max_grad_ev_a": 30.4624,
+          "homo_lumo_gap_ev": 8.49
+        },
+        "RM1": {
+          "status": "CONVERGED",
+          "iterations": 14,
+          "time_ms": 7.38,
+          "total_energy_ev": -799.973277,
+          "heat_of_formation_kcal": -1238.727,
+          "dipole_debye": 1.433,
+          "max_grad_ev_a": 23.5793,
+          "homo_lumo_gap_ev": 8.711
+        },
+        "PM3": {
+          "status": "CONVERGED",
+          "iterations": 15,
+          "time_ms": 7.42,
+          "total_energy_ev": -772.028045,
+          "heat_of_formation_kcal": -1148.475,
+          "dipole_debye": 1.218,
+          "max_grad_ev_a": 22.5603,
+          "homo_lumo_gap_ev": 7.763
+        },
+        "MNDO": {
+          "status": "CONVERGED",
+          "iterations": 14,
+          "time_ms": 9.09,
+          "total_energy_ev": -849.695781,
+          "heat_of_formation_kcal": -1210.612,
+          "dipole_debye": 1.775,
+          "max_grad_ev_a": 25.594,
+          "homo_lumo_gap_ev": 8.47
+        }
+      },
+      "features": {
+        "COSMO": {
+          "converged": true,
+          "time_ms": 10.47,
+          "solv_energy_ev": -763.131553,
+          "diel_stabilization_kcal": -10.932,
+          "gas_dipole": 1.609,
+          "solv_dipole": 1.882
+        },
+        "Dispersion_PM6_DH+": {
+          "converged": true,
+          "heat_of_formation_kcal": -1004.929,
+          "disp_delta_kcal": -0.376
+        }
+      }
+    },
+    "toluene": {
+      "name": "toluene",
+      "category": "Aromatic",
+      "natoms": 15,
+      "elements": [
+        1,
+        6
+      ],
+      "methods": {
+        "PM6": {
+          "status": "CONVERGED",
+          "iterations": 41,
+          "time_ms": 52.49,
+          "total_energy_ev": -1039.551114,
+          "heat_of_formation_kcal": -1688.403,
+          "dipole_debye": 1.81,
+          "max_grad_ev_a": 24.3408,
+          "homo_lumo_gap_ev": 5.141
+        },
+        "AM1": {
+          "status": "CONVERGED",
+          "iterations": 46,
+          "time_ms": 52.8,
+          "total_energy_ev": -1094.055312,
+          "heat_of_formation_kcal": -2011.457,
+          "dipole_debye": 2.408,
+          "max_grad_ev_a": 32.1553,
+          "homo_lumo_gap_ev": 4.169
+        },
+        "RM1": {
+          "status": "CONVERGED",
+          "iterations": 36,
+          "time_ms": 50.55,
+          "total_energy_ev": -1071.970093,
+          "heat_of_formation_kcal": -1874.015,
+          "dipole_debye": 6.279,
+          "max_grad_ev_a": 27.9316,
+          "homo_lumo_gap_ev": 3.48
+        },
+        "PM3": {
+          "status": "CONVERGED",
+          "iterations": 27,
+          "time_ms": 35.25,
+          "total_energy_ev": -1032.567271,
+          "heat_of_formation_kcal": -1831.538,
+          "dipole_debye": 0.436,
+          "max_grad_ev_a": 29.2406,
+          "homo_lumo_gap_ev": 4.089
+        },
+        "MNDO": {
+          "status": "NOT_CONVERGED",
+          "iterations": 60,
+          "time_ms": 69.68
+        }
+      },
+      "features": {
+        "COSMO": {
+          "converged": true,
+          "time_ms": 67.12,
+          "solv_energy_ev": -1041.511321,
+          "diel_stabilization_kcal": -45.203,
+          "gas_dipole": 1.81,
+          "solv_dipole": 3.752
+        },
+        "Dispersion_PM6_DH+": {
+          "converged": true,
+          "heat_of_formation_kcal": -1689.528,
+          "disp_delta_kcal": -1.125
+        }
+      }
+    },
+    "trimethyl_phosphate": {
+      "name": "trimethyl_phosphate",
+      "category": "Phosphate",
+      "natoms": 17,
+      "elements": [
+        1,
+        6,
+        8,
+        15
+      ],
+      "methods": {
+        "PM6": {
+          "status": "CONVERGED",
+          "iterations": 17,
+          "time_ms": 47.26,
+          "total_energy_ev": -1843.76418,
+          "heat_of_formation_kcal": -1212.671,
+          "dipole_debye": 4.845,
+          "max_grad_ev_a": 16.7293,
+          "homo_lumo_gap_ev": 8.418
+        },
+        "AM1": {
+          "status": "CONVERGED",
+          "iterations": 21,
+          "time_ms": 48.0,
+          "total_energy_ev": -2032.936468,
+          "heat_of_formation_kcal": -2834.435,
+          "dipole_debye": 5.233,
+          "max_grad_ev_a": 35.406,
+          "homo_lumo_gap_ev": 6.251
+        },
+        "RM1": {
+          "status": "CONVERGED",
+          "iterations": 21,
+          "time_ms": 54.26,
+          "total_energy_ev": -1998.882843,
+          "heat_of_formation_kcal": -2539.426,
+          "dipole_debye": 5.189,
+          "max_grad_ev_a": 27.5385,
+          "homo_lumo_gap_ev": 6.477
+        },
+        "PM3": {
+          "status": "CONVERGED",
+          "iterations": 21,
+          "time_ms": 48.29,
+          "total_energy_ev": -1887.857507,
+          "heat_of_formation_kcal": -2421.502,
+          "dipole_debye": 3.02,
+          "max_grad_ev_a": 33.0553,
+          "homo_lumo_gap_ev": 6.676
+        },
+        "MNDO": {
+          "status": "CONVERGED",
+          "iterations": 22,
+          "time_ms": 53.85,
+          "total_energy_ev": -2071.562626,
+          "heat_of_formation_kcal": -2820.23,
+          "dipole_debye": 4.557,
+          "max_grad_ev_a": 33.4007,
+          "homo_lumo_gap_ev": 6.154
+        }
+      },
+      "features": {
+        "COSMO": {
+          "converged": true,
+          "time_ms": 63.46,
+          "solv_energy_ev": -1844.740222,
+          "diel_stabilization_kcal": -22.508,
+          "gas_dipole": 4.845,
+          "solv_dipole": 5.603
+        },
+        "Dispersion_PM6_DH+": {
+          "converged": true,
+          "heat_of_formation_kcal": -1214.098,
+          "disp_delta_kcal": -1.427
+        }
+      }
+    },
+    "trimethylamine": {
+      "name": "trimethylamine",
+      "category": "Amine (3rd)",
+      "natoms": 13,
+      "elements": [
+        1,
+        6,
+        7
+      ],
+      "methods": {
+        "PM6": {
+          "status": "CONVERGED",
+          "iterations": 13,
+          "time_ms": 12.48,
+          "total_energy_ev": -699.294633,
+          "heat_of_formation_kcal": -692.969,
+          "dipole_debye": 4.258,
+          "max_grad_ev_a": 28.5547,
+          "homo_lumo_gap_ev": 8.936
+        },
+        "AM1": {
+          "status": "CONVERGED",
+          "iterations": 14,
+          "time_ms": 9.89,
+          "total_energy_ev": -753.600251,
+          "heat_of_formation_kcal": -899.971,
+          "dipole_debye": 4.564,
+          "max_grad_ev_a": 47.2302,
+          "homo_lumo_gap_ev": 8.937
+        },
+        "RM1": {
+          "status": "CONVERGED",
+          "iterations": 15,
+          "time_ms": 10.3,
+          "total_energy_ev": -749.948231,
+          "heat_of_formation_kcal": -833.561,
+          "dipole_debye": 3.728,
+          "max_grad_ev_a": 41.3235,
+          "homo_lumo_gap_ev": 8.608
+        },
+        "PM3": {
+          "status": "CONVERGED",
+          "iterations": 14,
+          "time_ms": 10.33,
+          "total_energy_ev": -692.471826,
+          "heat_of_formation_kcal": -831.162,
+          "dipole_debye": 3.779,
+          "max_grad_ev_a": 48.746,
+          "homo_lumo_gap_ev": 8.999
+        },
+        "MNDO": {
+          "status": "CONVERGED",
+          "iterations": 14,
+          "time_ms": 11.88,
+          "total_energy_ev": -753.43495,
+          "heat_of_formation_kcal": -801.23,
+          "dipole_debye": 4.058,
+          "max_grad_ev_a": 43.4365,
+          "homo_lumo_gap_ev": 8.886
+        }
+      },
+      "features": {
+        "COSMO": {
+          "converged": true,
+          "time_ms": 20.27,
+          "solv_energy_ev": -699.906936,
+          "diel_stabilization_kcal": -14.12,
+          "gas_dipole": 4.258,
+          "solv_dipole": 5.033
+        },
+        "Dispersion_PM6_DH+": {
+          "converged": true,
+          "heat_of_formation_kcal": -693.414,
+          "disp_delta_kcal": -0.445
+        }
+      }
+    },
+    "trimethylphosphine": {
+      "name": "trimethylphosphine",
+      "category": "Phosphine",
+      "natoms": 13,
+      "elements": [
+        1,
+        6,
+        15
+      ],
+      "methods": {
+        "PM6": {
+          "status": "CONVERGED",
+          "iterations": 12,
+          "time_ms": 14.61,
+          "total_energy_ev": -644.554317,
+          "heat_of_formation_kcal": -281.715,
+          "dipole_debye": 3.954,
+          "max_grad_ev_a": 18.6338,
+          "homo_lumo_gap_ev": 8.403
+        },
+        "AM1": {
+          "status": "CONVERGED",
+          "iterations": 15,
+          "time_ms": 13.48,
+          "total_energy_ev": -664.74962,
+          "heat_of_formation_kcal": -679.245,
+          "dipole_debye": 4.296,
+          "max_grad_ev_a": 27.6573,
+          "homo_lumo_gap_ev": 6.778
+        },
+        "RM1": {
+          "status": "CONVERGED",
+          "iterations": 15,
+          "time_ms": 10.72,
+          "total_energy_ev": -659.028399,
+          "heat_of_formation_kcal": -663.17,
+          "dipole_debye": 2.259,
+          "max_grad_ev_a": 25.5001,
+          "homo_lumo_gap_ev": 7.31
+        },
+        "PM3": {
+          "status": "CONVERGED",
+          "iterations": 14,
+          "time_ms": 10.29,
+          "total_energy_ev": -645.087127,
+          "heat_of_formation_kcal": -690.331,
+          "dipole_debye": 2.2,
+          "max_grad_ev_a": 27.344,
+          "homo_lumo_gap_ev": 6.683
+        },
+        "MNDO": {
+          "status": "CONVERGED",
+          "iterations": 14,
+          "time_ms": 10.36,
+          "total_energy_ev": -697.034534,
+          "heat_of_formation_kcal": -681.983,
+          "dipole_debye": 5.224,
+          "max_grad_ev_a": 504.1404,
+          "homo_lumo_gap_ev": 7.028
+        }
+      },
+      "features": {
+        "COSMO": {
+          "converged": true,
+          "time_ms": 13.3,
+          "solv_energy_ev": -645.028901,
+          "diel_stabilization_kcal": -10.944,
+          "gas_dipole": 3.954,
+          "solv_dipole": 4.986
+        },
+        "Dispersion_PM6_DH+": {
+          "converged": true,
+          "heat_of_formation_kcal": -282.245,
+          "disp_delta_kcal": -0.53
+        }
+      }
+    },
+    "urea": {
+      "name": "urea",
+      "category": "Amide/Urea",
+      "natoms": 8,
+      "elements": [
+        1,
+        6,
+        7,
+        8
+      ],
+      "methods": {
+        "PM6": {
+          "status": "CONVERGED",
+          "iterations": 13,
+          "time_ms": 5.37,
+          "total_energy_ev": -859.199562,
+          "heat_of_formation_kcal": -764.437,
+          "dipole_debye": 4.997,
+          "max_grad_ev_a": 26.4407,
+          "homo_lumo_gap_ev": 8.944
+        },
+        "AM1": {
+          "status": "CONVERGED",
+          "iterations": 14,
+          "time_ms": 4.41,
+          "total_energy_ev": -947.483267,
+          "heat_of_formation_kcal": -737.15,
+          "dipole_debye": 4.198,
+          "max_grad_ev_a": 27.1332,
+          "homo_lumo_gap_ev": 9.346
+        },
+        "RM1": {
+          "status": "CONVERGED",
+          "iterations": 14,
+          "time_ms": 4.46,
+          "total_energy_ev": -951.44875,
+          "heat_of_formation_kcal": -800.02,
+          "dipole_debye": 3.878,
+          "max_grad_ev_a": 28.6529,
+          "homo_lumo_gap_ev": 9.838
+        },
+        "PM3": {
+          "status": "CONVERGED",
+          "iterations": 14,
+          "time_ms": 4.23,
+          "total_energy_ev": -825.638361,
+          "heat_of_formation_kcal": -662.172,
+          "dipole_debye": 2.901,
+          "max_grad_ev_a": 23.3463,
+          "homo_lumo_gap_ev": 9.375
+        },
+        "MNDO": {
+          "status": "CONVERGED",
+          "iterations": 15,
+          "time_ms": 4.42,
+          "total_energy_ev": -948.906805,
+          "heat_of_formation_kcal": -667.586,
+          "dipole_debye": 3.525,
+          "max_grad_ev_a": 26.1639,
+          "homo_lumo_gap_ev": 9.302
+        }
+      },
+      "features": {
+        "COSMO": {
+          "converged": true,
+          "time_ms": 5.56,
+          "solv_energy_ev": -860.057981,
+          "diel_stabilization_kcal": -19.796,
+          "gas_dipole": 4.997,
+          "solv_dipole": 6.618
+        },
+        "Dispersion_PM6_DH+": {
+          "converged": true,
+          "heat_of_formation_kcal": -764.653,
+          "disp_delta_kcal": -0.216
+        }
+      }
+    },
+    "water": {
+      "name": "water",
+      "category": "Inorganic/O",
+      "natoms": 3,
+      "elements": [
+        1,
+        8
+      ],
+      "methods": {
+        "PM6": {
+          "status": "CONVERGED",
+          "iterations": 9,
+          "time_ms": 0.17,
+          "total_energy_ev": -319.010922,
+          "heat_of_formation_kcal": -52.771,
+          "dipole_debye": 2.227,
+          "max_grad_ev_a": 1.7137,
+          "homo_lumo_gap_ev": 15.047
+        },
+        "AM1": {
+          "status": "CONVERGED",
+          "iterations": 10,
+          "time_ms": 0.15,
+          "total_energy_ev": -348.017885,
+          "heat_of_formation_kcal": -46.676,
+          "dipole_debye": 2.169,
+          "max_grad_ev_a": 5.0385,
+          "homo_lumo_gap_ev": 14.295
+        },
+        "RM1": {
+          "status": "CONVERGED",
+          "iterations": 10,
+          "time_ms": 0.14,
+          "total_energy_ev": -344.968898,
+          "heat_of_formation_kcal": -43.948,
+          "dipole_debye": 2.179,
+          "max_grad_ev_a": 4.1869,
+          "homo_lumo_gap_ev": 13.835
+        },
+        "PM3": {
+          "status": "CONVERGED",
+          "iterations": 11,
+          "time_ms": 0.14,
+          "total_energy_ev": -323.838853,
+          "heat_of_formation_kcal": -28.793,
+          "dipole_debye": 2.166,
+          "max_grad_ev_a": 1.7705,
+          "homo_lumo_gap_ev": 13.718
+        },
+        "MNDO": {
+          "status": "CONVERGED",
+          "iterations": 10,
+          "time_ms": 0.14,
+          "total_energy_ev": -350.715769,
+          "heat_of_formation_kcal": -44.582,
+          "dipole_debye": 2.098,
+          "max_grad_ev_a": 5.7725,
+          "homo_lumo_gap_ev": 14.854
+        }
+      },
+      "features": {
+        "COSMO": {
+          "converged": true,
+          "time_ms": 0.44,
+          "solv_energy_ev": -319.311448,
+          "diel_stabilization_kcal": -6.93,
+          "gas_dipole": 2.227,
+          "solv_dipole": 2.415
+        },
+        "Dispersion_PM6_DH+": {
+          "converged": true,
+          "heat_of_formation_kcal": -52.771,
+          "disp_delta_kcal": 0.0
+        }
+      }
+    },
+    "water_dimer": {
+      "name": "water_dimer",
+      "category": "Non-covalent complex",
+      "natoms": 6,
+      "elements": [
+        1,
+        8
+      ],
+      "methods": {
+        "PM6": {
+          "status": "CONVERGED",
+          "iterations": 10,
+          "time_ms": 1.06,
+          "total_energy_ev": -639.08149,
+          "heat_of_formation_kcal": -129.977,
+          "dipole_debye": 3.499,
+          "max_grad_ev_a": 3.5335,
+          "homo_lumo_gap_ev": 13.69
+        },
+        "AM1": {
+          "status": "CONVERGED",
+          "iterations": 11,
+          "time_ms": 1.01,
+          "total_energy_ev": -696.805228,
+          "heat_of_formation_kcal": -111.097,
+          "dipole_debye": 3.381,
+          "max_grad_ev_a": 6.6215,
+          "homo_lumo_gap_ev": 12.936
+        },
+        "RM1": {
+          "status": "CONVERGED",
+          "iterations": 11,
+          "time_ms": 0.96,
+          "total_energy_ev": -690.973818,
+          "heat_of_formation_kcal": -111.787,
+          "dipole_debye": 3.445,
+          "max_grad_ev_a": 6.3462,
+          "homo_lumo_gap_ev": 12.552
+        },
+        "PM3": {
+          "status": "CONVERGED",
+          "iterations": 11,
+          "time_ms": 0.93,
+          "total_energy_ev": -648.837814,
+          "heat_of_formation_kcal": -84.338,
+          "dipole_debye": 3.383,
+          "max_grad_ev_a": 3.5822,
+          "homo_lumo_gap_ev": 12.42
+        },
+        "MNDO": {
+          "status": "CONVERGED",
+          "iterations": 11,
+          "time_ms": 1.03,
+          "total_energy_ev": -701.992805,
+          "heat_of_formation_kcal": -102.108,
+          "dipole_debye": 3.235,
+          "max_grad_ev_a": 7.5025,
+          "homo_lumo_gap_ev": 13.481
+        }
+      },
+      "features": {
+        "COSMO": {
+          "converged": true,
+          "time_ms": 1.85,
+          "solv_energy_ev": -639.500291,
+          "diel_stabilization_kcal": -9.658,
+          "gas_dipole": 3.499,
+          "solv_dipole": 3.643
+        },
+        "Dispersion_PM6_DH+": {
+          "converged": true,
+          "heat_of_formation_kcal": -130.147,
+          "disp_delta_kcal": -0.17
+        }
+      }
+    }
+  }
+}

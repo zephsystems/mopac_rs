@@ -164,9 +164,7 @@ pub fn compute_mulliken_population<M: ?Sized + ParameterModel>(
 
     for a in 0..natoms {
         let z = batch.atomic_numbers[a];
-        let p = model
-            .get_element(z)
-            .unwrap_or_else(|| panic!("Parameters missing for element Z={}", z));
+        let core_charge = model.get_element(z).map(|p| p.core_charge).unwrap_or(0.0);
         let orb_start = batch.orbital_offsets[a];
         let norb_a = batch.basis_types[a].num_orbitals();
 
@@ -175,7 +173,7 @@ pub fn compute_mulliken_population<M: ?Sized + ParameterModel>(
             pop_a += orbital_populations[orb_start + o];
         }
         atomic_populations[a] = pop_a;
-        net_charges[a] = p.core_charge - pop_a;
+        net_charges[a] = core_charge - pop_a;
         total_electrons += pop_a;
     }
 
