@@ -267,8 +267,16 @@ impl ParameterModel for Pm3Model {
                         b: 6.0071830,
                         c: 2.0199870,
                     },
-                    GaussianCoreCorrection { a: 0.0, b: 0.0, c: 0.0 },
-                    GaussianCoreCorrection { a: 0.0, b: 0.0, c: 0.0 },
+                    GaussianCoreCorrection {
+                        a: 0.0,
+                        b: 0.0,
+                        c: 0.0,
+                    },
+                    GaussianCoreCorrection {
+                        a: 0.0,
+                        b: 0.0,
+                        c: 0.0,
+                    },
                 ],
                 num_gaussians: 2,
             }),

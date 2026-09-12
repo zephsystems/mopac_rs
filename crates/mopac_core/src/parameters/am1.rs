@@ -271,7 +271,11 @@ impl ParameterModel for Am1Model {
                         b: 5.0000000,
                         c: 2.9906100,
                     },
-                    GaussianCoreCorrection { a: 0.0, b: 0.0, c: 0.0 },
+                    GaussianCoreCorrection {
+                        a: 0.0,
+                        b: 0.0,
+                        c: 0.0,
+                    },
                 ],
                 num_gaussians: 3,
             }),

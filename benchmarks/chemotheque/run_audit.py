@@ -118,7 +118,7 @@ def run_full_audit():
             "features": {},
         }
 
-        print(f"🔬 Testing [{cat}] {key} (N={natoms} atoms)...")
+        print(f"[*] Testing [{cat}] {key} (N={natoms} atoms)...")
 
         for m in methods:
             results["by_method"][m]["attempted"] += 1
@@ -147,7 +147,7 @@ def run_full_audit():
                         "max_grad_ev_a": round(max_grad, 4),
                         "homo_lumo_gap_ev": round(calc.homo_lumo_gap_ev, 3),
                     }
-                    print(f"   [{m:4}] ✅ Conv in {calc.scf_iterations:2} iter ({elapsed_ms:5.1f} ms) | E={calc.total_energy_ev:10.4f} eV | dHf={calc.heat_of_formation_kcal:8.2f} kcal/mol | gap={calc.homo_lumo_gap_ev:5.2f} eV")
+                    print(f"   [{m:4}] [OK] Conv in {calc.scf_iterations:2} iter ({elapsed_ms:5.1f} ms) | E={calc.total_energy_ev:10.4f} eV | dHf={calc.heat_of_formation_kcal:8.2f} kcal/mol | gap={calc.homo_lumo_gap_ev:5.2f} eV")
                 else:
                     results["by_method"][m]["failed"] += 1
                     mol_record["methods"][m] = {
@@ -155,7 +155,7 @@ def run_full_audit():
                         "iterations": calc.scf_iterations,
                         "time_ms": round(elapsed_ms, 2),
                     }
-                    print(f"   [{m:4}] ⚠️ SCF Not Converged ({calc.scf_iterations} iters)")
+                    print(f"   [{m:4}] [WARN] SCF Not Converged ({calc.scf_iterations} iters)")
                     results["failures"].append({
                         "compound": key,
                         "method": m,
@@ -170,15 +170,15 @@ def run_full_audit():
                 if "Unsupported" in err_msg or "unsupported" in err_msg:
                     results["by_method"][m]["unsupported"] += 1
                     status = "UNSUPPORTED_ELEMENT"
-                    print(f"   [{m:4}] ⛔ Domain Boundary: {err_msg}")
+                    print(f"   [{m:4}] [BOUNDARY] Domain Boundary: {err_msg}")
                 elif "Open-shell" in err_msg or "radical" in err_msg:
                     results["by_method"][m]["unsupported"] += 1
                     status = "OPEN_SHELL_RADICAL"
-                    print(f"   [{m:4}] ⛔ Domain Boundary: {err_msg}")
+                    print(f"   [{m:4}] [BOUNDARY] Domain Boundary: {err_msg}")
                 else:
                     results["by_method"][m]["failed"] += 1
                     status = "EXCEPTION"
-                    print(f"   [{m:4}] ❌ Failure Exception: {err_msg}")
+                    print(f"   [{m:4}] [ERROR] Failure Exception: {err_msg}")
 
                 mol_record["methods"][m] = {
                     "status": status,

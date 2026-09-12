@@ -1,4 +1,4 @@
-# 🔬 Architectural Audit of Legacy Fortran MOPAC & Feasibility of Data-Oriented Programming (DOP) in Rust
+# Architectural Audit of Legacy Fortran MOPAC & Feasibility of Data-Oriented Programming (DOP) in Rust
 
 ```text
   _   _ _____ ____  ____   ___       _   _   _ ____ ___ _____ 

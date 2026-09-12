@@ -23,10 +23,10 @@ jobs:
         with:
           components: clippy, rustfmt
 
-      - name: Install System Dependencies (Vulkan)
+      - name: Install System Dependencies (Vulkan & Python)
         run: |
           sudo apt-get update
-          sudo apt-get install -y libvulkan-dev vulkan-tools libvulkan1
+          sudo apt-get install -y libvulkan-dev vulkan-tools libvulkan1 python3-numpy
 
       - name: Rustfmt Formatting Check
         run: cargo fmt --all -- --check

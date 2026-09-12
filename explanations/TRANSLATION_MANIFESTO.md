@@ -1,4 +1,4 @@
-# 📜 MOPAC_RS: Translation & Modernization Manifesto
+# MOPAC_RS: Translation & Modernization Manifesto
 ## Fortran to Rust Semi-Empirical Quantum Chemistry Engine
 
 ```text

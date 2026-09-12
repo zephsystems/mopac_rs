@@ -141,7 +141,7 @@ def main():
         print(f"  Fetching [{category}] {key} ('{pubchem_name}')...", end="", flush=True)
         res = fetch_pubchem_3d(pubchem_name)
         if "error" in res:
-            print(f" ❌ Error: {res['error']}")
+            print(f" [ERROR] Error: {res['error']}")
             fail_count += 1
             library[key] = {
                 "name": key,
@@ -150,7 +150,7 @@ def main():
                 "error": res["error"],
             }
         else:
-            print(f" ✅ OK ({res['natoms']} atoms, elements={sorted(set(res['atomic_numbers']))})")
+            print(f" [OK] OK ({res['natoms']} atoms, elements={sorted(set(res['atomic_numbers']))})")
             success_count += 1
             library[key] = {
                 "name": key,

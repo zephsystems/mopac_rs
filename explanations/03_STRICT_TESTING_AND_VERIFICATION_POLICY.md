@@ -1,4 +1,4 @@
-# 🧪 MOPAC_RS: Strict Testing, Verification & Mathematical Parity Policy
+# MOPAC_RS: Strict Testing, Verification & Mathematical Parity Policy
 
 ```text
   ____ _____ ____  ___ ____ _____   ____   ___  _     ___ ______   __

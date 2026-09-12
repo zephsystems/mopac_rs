@@ -102,7 +102,7 @@ fn test_scrutiny_vulkan_gpu_coulomb_matrix_parity() {
     }
 
     println!(
-        "✅ Benzene GPU vs CPU 144 interaction pairs bit-exact parity: max diff = {:e} eV",
+        "[OK] Benzene GPU vs CPU 144 interaction pairs bit-exact parity: max diff = {:e} eV",
         max_diff
     );
 }
@@ -158,7 +158,7 @@ fn test_scrutiny_vulkan_gpu_zero_allocation_workspace_parity() {
     }
 
     println!(
-        "✅ Pre-allocated GpuWorkspace executed 5 iterative dispatches with zero heap allocation!"
+        "[OK] Pre-allocated GpuWorkspace executed 5 iterative dispatches with zero heap allocation!"
     );
 }
 
@@ -240,7 +240,7 @@ fn test_scrutiny_vulkan_gpu_coulomb_matrix_fp32_parity() {
         }
     }
 
-    println!("✅ Benzene FP32 GPU vs CPU 144 interaction pairs verified: max diff = {:e} eV (< 1e-4 eV single precision bound)", max_diff);
+    println!("[OK] Benzene FP32 GPU vs CPU 144 interaction pairs verified: max diff = {:e} eV (< 1e-4 eV single precision bound)", max_diff);
 }
 
 /// Scrutiny Test: GDDR6 Dedicated Device-Local VRAM Manager DMA Transfer.
@@ -282,7 +282,7 @@ fn test_scrutiny_vulkan_gpu_gddr6_batch_manager() {
         .expect("Failed to upload batch to GDDR6 VRAM");
 
     println!(
-        "✅ Uploaded {} atoms to GDDR6 Device-Local VRAM via DMA copy!",
+        "[OK] Uploaded {} atoms to GDDR6 Device-Local VRAM via DMA copy!",
         atoms.len()
     );
 }
@@ -441,5 +441,5 @@ fn test_scrutiny_vulkan_gpu_gddr6_batch_pipelining_parity() {
         }
     }
 
-    println!("✅ GDDR6 VRAM batch pipelining verified for 2 concurrent geometries with zero per-molecule CPU sync!");
+    println!("[OK] GDDR6 VRAM batch pipelining verified for 2 concurrent geometries with zero per-molecule CPU sync!");
 }

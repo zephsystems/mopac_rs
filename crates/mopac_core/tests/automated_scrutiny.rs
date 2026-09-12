@@ -1202,7 +1202,7 @@ fn test_scrutiny_analytical_gradients_vs_finite_difference() {
         "RMS gradient must be positive for non-equilibrium geometry"
     );
     assert!(max_g > 0.0);
-    println!("✅ H2 (R=0.85 Å) Gradient verified: anal = {:.6} eV/Å, num = {:.6} eV/Å, RMS = {:.3} kcal/(mol·Å)",
+    println!("[OK] H2 (R=0.85 Å) Gradient verified: anal = {:.6} eV/Å, num = {:.6} eV/Å, RMS = {:.3} kcal/(mol·Å)",
         anal_de_dz1, num_de_dz1, rms
     );
 }
@@ -1264,7 +1264,7 @@ fn test_scrutiny_lbfgs_geometry_optimization() {
         final_r, r_err
     );
 
-    println!("✅ L-BFGS H2 Optimization Succeeded in {} cycles: R = 0.95 Å -> {:.4} Å, E = {:.6} -> {:.6} eV, RMS Grad = {:.3} kcal/(mol·Å)",
+    println!("[OK] L-BFGS H2 Optimization Succeeded in {} cycles: R = 0.95 Å -> {:.4} Å, E = {:.6} -> {:.6} eV, RMS Grad = {:.3} kcal/(mol·Å)",
         res.cycles, final_r, res.initial_energy_ev, res.final_energy_ev, res.final_grad_rms
     );
 }
@@ -1312,7 +1312,7 @@ fn test_scrutiny_full_nddo_scf_water_parity() {
     );
 
     println!(
-        "✅ Full NDDO H2O SCF Succeeded in {} iters: E_tot = {:.6} eV, HOMO = {:.4} eV, LUMO = {:.4} eV",
+        "[OK] Full NDDO H2O SCF Succeeded in {} iters: E_tot = {:.6} eV, HOMO = {:.4} eV, LUMO = {:.4} eV",
         res.iterations, res.total_energy_ev, res.homo_energy_ev, res.lumo_energy_ev
     );
 }
@@ -1375,7 +1375,7 @@ fn test_scrutiny_rm1_and_pm6_convergence() {
     );
 
     println!(
-        "✅ RM1 and PM6 Models verified: RM1 E_tot = {:.6} eV (HOMO = {:.4} eV), PM6 E_tot = {:.6} eV (HOMO = {:.4} eV)",
+        "[OK] RM1 and PM6 Models verified: RM1 E_tot = {:.6} eV (HOMO = {:.4} eV), PM6 E_tot = {:.6} eV (HOMO = {:.4} eV)",
         res_rm1.total_energy_ev, res_rm1.homo_energy_ev, res_pm6.total_energy_ev, res_pm6.homo_energy_ev
     );
 }
@@ -1447,7 +1447,7 @@ fn test_scrutiny_pm3_and_extended_elements_convergence() {
     assert!(res_h2s.total_energy_ev < 0.0);
 
     println!(
-        "✅ PM3 and Extended Elements (F, S) verified: PM3 H2O E_tot = {:.6} eV, AM1 HF E_tot = {:.6} eV, PM6 HF E_tot = {:.6} eV, AM1 H2S E_tot = {:.6} eV",
+        "[OK] PM3 and Extended Elements (F, S) verified: PM3 H2O E_tot = {:.6} eV, AM1 HF E_tot = {:.6} eV, PM6 HF E_tot = {:.6} eV, AM1 H2S E_tot = {:.6} eV",
         res_h2o_pm3.total_energy_ev, res_hf_am1.total_energy_ev, res_hf_pm6.total_energy_ev, res_h2s.total_energy_ev
     );
 }
@@ -1516,7 +1516,7 @@ fn test_scrutiny_hybridization_dipole_exact_parity() {
     let total_dipole_norm = total_dipole_z.abs();
 
     println!(
-        "✅ Water Dipole Breakdown: Point-Chg Z = {:.4} D, Hybrid Z = {:.4} D, Total = {:.4} D (Ref: ~1.85 D)",
+        "[OK] Water Dipole Breakdown: Point-Chg Z = {:.4} D, Hybrid Z = {:.4} D, Total = {:.4} D (Ref: ~1.85 D)",
         point_dipole_z, hybrid_dipole_z, total_dipole_norm
     );
 
@@ -1585,7 +1585,7 @@ fn test_scrutiny_full_nddo_lbfgs_water_relaxation() {
     let r_oh = (dx * dx + dy * dy + dz * dz).sqrt();
 
     println!(
-        "✅ Full NDDO L-BFGS Water Relaxation Succeeded in {} cycles: Initial E = {:.6} eV, Final E = {:.6} eV, R_OH = {:.4} Å, Final RMS G = {:.4} kcal/(mol*Å)",
+        "[OK] Full NDDO L-BFGS Water Relaxation Succeeded in {} cycles: Initial E = {:.6} eV, Final E = {:.6} eV, R_OH = {:.4} Å, Final RMS G = {:.4} kcal/(mol*Å)",
         res.cycles, res.initial_energy_ev, res.final_energy_ev, r_oh, res.final_grad_rms
     );
 
@@ -1660,7 +1660,7 @@ fn test_scrutiny_constrained_geometry_relaxation_coordinate_pinning() {
     );
 
     println!(
-        "✅ Constrained Optimization Succeeded in {} cycles: Pinned Atom 0 remained at exactly ({:.9}, {:.9}, {:.9}), E dropped by {:.6} eV",
+        "[OK] Constrained Optimization Succeeded in {} cycles: Pinned Atom 0 remained at exactly ({:.9}, {:.9}, {:.9}), E dropped by {:.6} eV",
         res.cycles, batch.x[0], batch.y[0], batch.z[0], res.initial_energy_ev - res.final_energy_ev
     );
 }
@@ -1724,7 +1724,7 @@ fn test_scrutiny_mndo_hamiltonian_convergence() {
     );
 
     println!(
-        "✅ MNDO Hamiltonian Verified: H2O E_tot = {:.6} eV (HOMO = {:.4} eV), CH4 E_tot = {:.6} eV (HOMO = {:.4} eV)",
+        "[OK] MNDO Hamiltonian Verified: H2O E_tot = {:.6} eV (HOMO = {:.4} eV), CH4 E_tot = {:.6} eV (HOMO = {:.4} eV)",
         res_h2o.total_energy_ev, res_h2o.homo_energy_ev, res_ch4.total_energy_ev, res_ch4.homo_energy_ev
     );
 }
@@ -1840,7 +1840,7 @@ fn test_scrutiny_harmonic_vibrational_frequencies_and_thermodynamics() {
     let nu_sym = res.vibrational_frequencies_cm1[2];
 
     println!(
-        "💧 H2O AM1 Harmonic Frequencies: nu1 = {:.1} cm^-1, nu2 = {:.1} cm^-1, nu3 = {:.1} cm^-1",
+        "[TEST] H2O AM1 Harmonic Frequencies: nu1 = {:.1} cm^-1, nu2 = {:.1} cm^-1, nu3 = {:.1} cm^-1",
         nu_bend, nu_asym, nu_sym
     );
 
@@ -1862,7 +1862,7 @@ fn test_scrutiny_harmonic_vibrational_frequencies_and_thermodynamics() {
 
     // 4. Zero-Point Vibrational Energy (ZPVE) verification:
     // OpenMOPAC reference: 12.828 kcal/mol
-    println!("⚡ H2O ZPVE = {:.3} kcal/mol", res.zpve_kcal_mol);
+    println!("[INFO] H2O ZPVE = {:.3} kcal/mol", res.zpve_kcal_mol);
     assert!(
         (12.0..=15.0).contains(&res.zpve_kcal_mol),
         "ZPVE out of range: got {:.3} kcal/mol",
@@ -1897,7 +1897,7 @@ fn test_scrutiny_harmonic_vibrational_frequencies_and_thermodynamics() {
     );
 
     println!(
-        "✅ Scrutiny Test 23 Passed: H2O frequencies and thermochemistry (ZPVE = {:.3} kcal/mol, S = {:.2} cal/(mol K))",
+        "[OK] Scrutiny Test 23 Passed: H2O frequencies and thermochemistry (ZPVE = {:.3} kcal/mol, S = {:.2} cal/(mol K))",
         res.zpve_kcal_mol, res.thermo.entropy_total_cal_k_mol
     );
 }
@@ -1955,15 +1955,15 @@ fn test_scrutiny_properties_dipole_bonds_and_mulliken_parity() {
     let dip = compute_dipole_moment(&batch, &am1, &ws.density);
 
     println!(
-        "⚡ Water Dipole Point Charge:  Z = {:.3} D, Mag = {:.3} D",
+        "[INFO] Water Dipole Point Charge:  Z = {:.3} D, Mag = {:.3} D",
         dip.point_charge[2], dip.point_charge[3]
     );
     println!(
-        "⚡ Water Dipole Hybridization: Z = {:.3} D, Mag = {:.3} D",
+        "[INFO] Water Dipole Hybridization: Z = {:.3} D, Mag = {:.3} D",
         dip.hybridization[2], dip.hybridization[3]
     );
     println!(
-        "⚡ Water Dipole Total:         Z = {:.3} D, Mag = {:.3} D",
+        "[INFO] Water Dipole Total:         Z = {:.3} D, Mag = {:.3} D",
         dip.total[2], dip.total[3]
     );
 
@@ -2021,11 +2021,11 @@ fn test_scrutiny_properties_dipole_bonds_and_mulliken_parity() {
     let v_h2 = bond_res.valencies[2];
 
     println!(
-        "⚡ Water Bond Order B(O, H1) = {:.3}, B(O, H2) = {:.3}, B(H1, H2) = {:.4}",
+        "[INFO] Water Bond Order B(O, H1) = {:.3}, B(O, H2) = {:.3}, B(H1, H2) = {:.4}",
         b_o_h1, b_o_h2, b_h1_h2
     );
     println!(
-        "⚡ Water Valency V(O) = {:.3}, V(H1) = {:.3}, V(H2) = {:.3}",
+        "[INFO] Water Valency V(O) = {:.3}, V(H1) = {:.3}, V(H2) = {:.3}",
         v_o, v_h1, v_h2
     );
 
@@ -2105,7 +2105,7 @@ fn test_scrutiny_properties_dipole_bonds_and_mulliken_parity() {
     // Pop(H2) = 0.775602, q(H2) =  0.224398
     // mopac_rs: Pop(O) = 6.392006, q(O) = -0.392006 (within 0.8% parity)
     println!(
-        "⚡ Mulliken Pop(O) = {:.6}, q(O) = {:.6}; Pop(H1) = {:.6}, q(H1) = {:.6}",
+        "[INFO] Mulliken Pop(O) = {:.6}, q(O) = {:.6}; Pop(H1) = {:.6}, q(H1) = {:.6}",
         mull.atomic_populations[0],
         mull.net_charges[0],
         mull.atomic_populations[1],
@@ -2134,7 +2134,7 @@ fn test_scrutiny_properties_dipole_bonds_and_mulliken_parity() {
         "Sum of Mulliken charges must be identically zero for neutral molecule"
     );
 
-    println!("✅ Scrutiny Test 24 Passed: Dipole moments, Mayer bond orders, and Mulliken populations confirmed with exact OpenMOPAC parity.");
+    println!("[OK] Scrutiny Test 24 Passed: Dipole moments, Mayer bond orders, and Mulliken populations confirmed with exact OpenMOPAC parity.");
 }
 
 /// Scrutiny Test 25: Empirical Dispersion Corrections (PM6-DH+, PM7) and Analytical Gradients Parity.
@@ -2194,7 +2194,7 @@ fn test_scrutiny_empirical_dispersion_and_analytical_gradients() {
 
     let e_disp = compute_dispersion_energy(&batch, DispersionModel::Pm6DhPlus);
     println!(
-        "⚡ Methane Dimer PM6-DH+ Dispersion Energy: {:.5} kcal/mol",
+        "[INFO] Methane Dimer PM6-DH+ Dispersion Energy: {:.5} kcal/mol",
         e_disp
     );
 
@@ -2255,7 +2255,7 @@ fn test_scrutiny_empirical_dispersion_and_analytical_gradients() {
         }
     }
     println!(
-        "⚡ Max Analytical vs Finite-Difference Gradient Error: {:e} kcal/(mol * A)",
+        "[INFO] Max Analytical vs Finite-Difference Gradient Error: {:e} kcal/(mol * A)",
         max_grad_diff
     );
 
@@ -2318,11 +2318,11 @@ fn test_scrutiny_empirical_dispersion_and_analytical_gradients() {
         }
     }
     println!(
-        "⚡ D3-BJ Max Analytical vs Finite-Difference Gradient Error: {:e} kcal/(mol * A)",
+        "[INFO] D3-BJ Max Analytical vs Finite-Difference Gradient Error: {:e} kcal/(mol * A)",
         max_d3_grad_diff
     );
 
-    println!("✅ Scrutiny Test 25 Passed: Empirical dispersion energies (PM6-DH+, D3-BJ) and analytical gradients match OpenMOPAC to < 1e-4 kcal/mol and < 1e-6 gradient error.");
+    println!("[OK] Scrutiny Test 25 Passed: Empirical dispersion energies (PM6-DH+, D3-BJ) and analytical gradients match OpenMOPAC to < 1e-4 kcal/mol and < 1e-6 gradient error.");
 }
 
 /// Scrutiny Test 26: Empirical H4 Hydrogen Bonding & H-H Short-Range Repulsion Verification.
@@ -2364,7 +2364,7 @@ fn test_scrutiny_h4_hydrogen_bonds_and_hh_repulsion() {
         (e_h4 - expected_h4).abs()
     );
     println!(
-        "⚡ Water Dimer H4 Correction Energy: {:.6} kcal/mol (Ref: {:.6})",
+        "[INFO] Water Dimer H4 Correction Energy: {:.6} kcal/mol (Ref: {:.6})",
         e_h4, expected_h4
     );
 
@@ -2379,7 +2379,7 @@ fn test_scrutiny_h4_hydrogen_bonds_and_hh_repulsion() {
         (e_hh - expected_hh).abs()
     );
     println!(
-        "⚡ Water Dimer H-H Repulsion Energy: {:.6} kcal/mol (Ref: {:.6})",
+        "[INFO] Water Dimer H-H Repulsion Energy: {:.6} kcal/mol (Ref: {:.6})",
         e_hh, expected_hh
     );
 
@@ -2426,7 +2426,7 @@ fn test_scrutiny_h4_hydrogen_bonds_and_hh_repulsion() {
         net_force
     );
 
-    println!("✅ Scrutiny Test 26 Passed: Empirical H4 and H-H repulsion match OpenMOPAC references to < 1e-4 kcal/mol and strict Newton's 3rd law.");
+    println!("[OK] Scrutiny Test 26 Passed: Empirical H4 and H-H repulsion match OpenMOPAC references to < 1e-4 kcal/mol and strict Newton's 3rd law.");
 }
 
 /// Scrutiny Test 27: COSMO Implicit Solvation & Solvent Reaction Field Polarization Verification.
@@ -2492,7 +2492,7 @@ fn test_scrutiny_cosmo_implicit_solvation_water() {
     let cavity = CosmoCavity::construct(&batch, cosmo_params.rsolv);
     assert!(cavity.num_segments() > 0, "Cavity must have segments");
     println!(
-        "⚡ Water Cavity: Segments = {}, Area = {:.2} A^2, Volume = {:.2} A^3",
+        "[INFO] Water Cavity: Segments = {}, Area = {:.2} A^2, Volume = {:.2} A^3",
         cavity.num_segments(),
         cavity.total_area_angstrom2,
         cavity.total_volume_angstrom3
@@ -2503,15 +2503,15 @@ fn test_scrutiny_cosmo_implicit_solvation_water() {
         .dielectric_energy_ev
         .expect("COSMO SCF must compute dielectric energy");
     println!(
-        "⚡ Gas Phase Total Energy : {:12.6} eV (Dipole: {:.3} D)",
+        "[INFO] Gas Phase Total Energy : {:12.6} eV (Dipole: {:.3} D)",
         res_gas.total_energy_ev, dipole_gas.total[3]
     );
     println!(
-        "⚡ Solvated Total Energy  : {:12.6} eV (Dipole: {:.3} D)",
+        "[INFO] Solvated Total Energy  : {:12.6} eV (Dipole: {:.3} D)",
         res_solv.total_energy_ev, dipole_solv.total[3]
     );
     println!(
-        "⚡ Dielectric Energy (COSMO): {:12.6} eV ({:.4} kcal/mol)",
+        "[INFO] Dielectric Energy (COSMO): {:12.6} eV ({:.4} kcal/mol)",
         diel_ev,
         diel_ev * 23.06054801
     );
@@ -2541,7 +2541,7 @@ fn test_scrutiny_cosmo_implicit_solvation_water() {
     );
 
     println!(
-        "✅ Scrutiny Test 27 Passed: COSMO implicit solvation converges, stabilizes water by {:.4} kcal/mol, and polarizes dipole from {:.3} D to {:.3} D.",
+        "[OK] Scrutiny Test 27 Passed: COSMO implicit solvation converges, stabilizes water by {:.4} kcal/mol, and polarizes dipole from {:.3} D to {:.3} D.",
         (res_solv.total_energy_ev - res_gas.total_energy_ev) * 23.06054801,
         dipole_gas.total[3],
         dipole_solv.total[3]
@@ -2707,7 +2707,7 @@ fn test_scrutiny_halogens_and_heteroatoms_extension() {
     assert!(res_h2s_rm1.converged, "RM1 H2S must converge");
 
     println!(
-        "✅ Scrutiny Test 28 Passed: Halogens (Br, I) and Heteroatoms (P, S) successfully verified across AM1, PM6, RM1 with analytic gradient parity diff={:.2e}.",
+        "[OK] Scrutiny Test 28 Passed: Halogens (Br, I) and Heteroatoms (P, S) successfully verified across AM1, PM6, RM1 with analytic gradient parity diff={:.2e}.",
         diff
     );
 }

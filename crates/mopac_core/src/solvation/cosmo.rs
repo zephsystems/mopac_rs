@@ -400,7 +400,7 @@ mod tests {
             "Nuclear screening energy must be negative/stabilizing"
         );
         println!(
-            "⚡ Water COSMO Segments: {}, Area: {:.2} A^2, Vol: {:.2} A^3, E_nuc_diel: {:.4} eV",
+            "[COSMO] Water COSMO Segments: {}, Area: {:.2} A^2, Vol: {:.2} A^3, E_nuc_diel: {:.4} eV",
             state.cavity.num_segments(),
             state.cavity.total_area_angstrom2,
             state.cavity.total_volume_angstrom3,

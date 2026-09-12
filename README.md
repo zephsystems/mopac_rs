@@ -1,4 +1,4 @@
-# ⚛️ MOPAC_RS
+# MOPAC_RS
 
 > **Modern High-Performance Data-Oriented Semi-Empirical Quantum Chemistry Engine in Rust**
 
@@ -12,7 +12,7 @@
 
 ---
 
-## 🏛️ Executive Summary
+## Executive Summary
 
 `mopac_rs` is a ground-up architectural reimagining and rigorous modernization of the classic **MOPAC** (Molecular Orbital PACkage) quantum chemistry engine. Translated from legacy Fortran into idiomatic, zero-overhead **Rust**, it replaces decades of non-contiguous global arrays, static buffers, and triangular packing with a strictly **Data-Oriented Programming (DOP)** architecture.
 
@@ -20,7 +20,7 @@ Every single module, parameter table, and integral calculation is empirically ve
 
 ---
 
-## 🚀 Architectural Pillars
+## Architectural Pillars
 
 * **Data-Oriented Memory Layout (SoA):** Contiguous, 64-byte cache-line aligned Struct of Arrays (`MolecularBatch`) eliminating pointer-chasing and non-contiguous matrix indexing.
 * **Zero-Allocation Inner Loop Policy (`0 malloc`):** Pre-allocated reusable workspaces (`ScfWorkspace`, `GradientWorkspace`, `CosmoState`) ensure zero heap allocations during iterative Roothaan-Hall SCF cycles and Pulay DIIS extrapolations.
@@ -31,7 +31,7 @@ Every single module, parameter table, and integral calculation is empirically ve
 
 ---
 
-## 🔬 Scientific Capabilities
+## Scientific Capabilities
 
 ### 1. Semi-Empirical Hamiltonians
 - **MNDO** (Modified Neglect of Diatomic Overlap; Dewar & Thiel 1977)
@@ -119,7 +119,7 @@ print(f"Optimized Energy: {opt.final_energy_ev:.6f} eV (Converged: {opt.converge
 
 ---
 
-## ⚡ Hardware Execution & GPU Dispatch Policy
+## Hardware Execution & GPU Dispatch Policy
 
 A key architectural insight in quantum chemistry is the trade-off between **SIMD latency** and **discrete GPU dispatch overhead**:
 
@@ -132,7 +132,7 @@ A key architectural insight in quantum chemistry is the trade-off between **SIMD
 
 ---
 
-## 💻 CLI Usage
+## CLI Usage
 
 ### Build and Install
 ```bash
@@ -196,7 +196,7 @@ Outputs generated:
 
 ---
 
-## 📊 Benchmark Parity Highlights
+## Benchmark Parity Highlights
 
 | Verification Target | Upstream OpenMOPAC v23.2.5 | `mopac_rs` (Rust) | Agreement |
 | :--- | :---: | :---: | :---: |
@@ -215,18 +215,18 @@ Outputs generated:
 
 ---
 
-## 📚 Technical Documentation
+## Technical Documentation
 
 Detailed mathematical derivations, Fortran audits, and GPU specifications:
-- 📄 [**Translation Manifesto**](explanations/TRANSLATION_MANIFESTO.md)
-- 📄 [**Fortran Codebase Audit & DOP Feasibility**](explanations/01_FORTRAN_CODEBASE_AUDIT_AND_DOP_FEASIBILITY.md)
-- 📄 [**Universal GPU Acceleration (Vulkan Compute / WGPU)**](explanations/02_UNIVERSAL_GPU_ACCELERATION_VULKAN_WGPU.md)
-- 📄 [**Strict Testing & Verification Policy**](explanations/03_STRICT_TESTING_AND_VERIFICATION_POLICY.md)
-- 📄 [**Translation Devlog & Physical Constants Audit**](explanations/04_TRANSLATION_DEVLOG_AND_PHYSICAL_CONSTANTS_AUDIT.md)
-- 📄 [**Vulkan GPU Acceleration & Level Shifting**](explanations/05_VULKAN_GPU_ACCELERATION_AND_LEVEL_SHIFTING.md)
+- [**Translation Manifesto**](explanations/TRANSLATION_MANIFESTO.md)
+- [**Fortran Codebase Audit & DOP Feasibility**](explanations/01_FORTRAN_CODEBASE_AUDIT_AND_DOP_FEASIBILITY.md)
+- [**Universal GPU Acceleration (Vulkan Compute / WGPU)**](explanations/02_UNIVERSAL_GPU_ACCELERATION_VULKAN_WGPU.md)
+- [**Strict Testing & Verification Policy**](explanations/03_STRICT_TESTING_AND_VERIFICATION_POLICY.md)
+- [**Translation Devlog & Physical Constants Audit**](explanations/04_TRANSLATION_DEVLOG_AND_PHYSICAL_CONSTANTS_AUDIT.md)
+- [**Vulkan GPU Acceleration & Level Shifting**](explanations/05_VULKAN_GPU_ACCELERATION_AND_LEVEL_SHIFTING.md)
 
 ---
 
-## 📜 License
+## License
 
 Distributed under the **Apache License Version 2.0 (Apache-2.0)**. See [`LICENSE`](LICENSE) for complete details.

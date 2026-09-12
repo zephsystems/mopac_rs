@@ -1,4 +1,4 @@
-# ⚡ Universal Cross-Platform GPU Acceleration for Semi-Empirical Quantum Mechanics: Vulkan Compute & WGPU Architecture
+# Universal Cross-Platform GPU Acceleration for Semi-Empirical Quantum Mechanics: Vulkan Compute & WGPU Architecture
 
 ```text
  __     __ _   _ _     _  __    _    _   _    ____ ____  _   _ 

@@ -1351,6 +1351,8 @@ mod tests {
                 );
             }
         }
-        println!("✅ NDDO Precomputation & Fock Assembly verified with strict Hermiticity on H2O!");
+        println!(
+            "[OK] NDDO Precomputation & Fock Assembly verified with strict Hermiticity on H2O!"
+        );
     }
 }

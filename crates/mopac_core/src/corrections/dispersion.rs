@@ -364,7 +364,8 @@ pub fn compute_dispersion_energy_and_gradients(
 
                         // Derivative d(E_pair)/d(rij_nm):
                         // Note E_pair is attractive (-ep), so dE/dr = + d(ep)/dr
-                        let deriv = (s6 * 6.0 * c6_ab * rij.powi(5) / (rij.powi(6) + r_cut6).powi(2)
+                        let deriv = (s6 * 6.0 * c6_ab * rij.powi(5)
+                            / (rij.powi(6) + r_cut6).powi(2)
                             + s8 * 8.0 * c8_ab * rij.powi(7) / (rij.powi(8) + r_cut8).powi(2))
                             / (1000.0 * 4.184);
 
