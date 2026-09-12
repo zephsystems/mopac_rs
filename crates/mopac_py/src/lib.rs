@@ -34,6 +34,7 @@ use mopac_core::opt::lbfgs::{optimize_geometry_lbfgs, OptimizationOptions};
 use mopac_core::parameters::{
     Am1Model, MndoModel, ParameterModel, Pm3Model, Pm6Model, Pm7Model, Rm1Model,
 };
+use mopac_core::pbc::{run_pbc_scf, PbcOptions, PbcWorkspace, UnitCell};
 use mopac_core::properties::{
     compute_dipole_moment, compute_heat_of_formation, compute_mulliken_population,
 };
@@ -1910,6 +1911,133 @@ impl MopacCalculator {
             Some(self.use_nddo),
         )
     }
+
+    /// Calculate periodic boundary conditions Bloch SCF and band structure.
+    #[pyo3(signature = (atomic_numbers, coordinates, translation_vectors, mers = None, k_grid = None, band_points = 40))]
+    fn pbc(
+        &self,
+        atomic_numbers: Vec<u8>,
+        coordinates: Vec<[f64; 3]>,
+        translation_vectors: Vec<[f64; 3]>,
+        mers: Option<[usize; 3]>,
+        k_grid: Option<[usize; 3]>,
+        band_points: Option<usize>,
+    ) -> PyResult<PbcResultPy> {
+        pbc(
+            atomic_numbers,
+            coordinates,
+            translation_vectors,
+            Some(&self.method),
+            mers,
+            k_grid,
+            Some(self.use_nddo),
+            Some(self.max_iter),
+            band_points,
+        )
+    }
+}
+
+/// Periodic Boundary Condition calculation and band structure results.
+#[pyclass(get_all)]
+#[derive(Debug, Clone)]
+pub struct PbcResultPy {
+    pub converged: bool,
+    pub iterations: usize,
+    pub total_energy_per_cell_ev: f64,
+    pub electronic_energy_per_cell_ev: f64,
+    pub nuclear_repulsion_per_cell_ev: f64,
+    pub heat_of_formation_kcal_mol: f64,
+    pub vbm_energy_ev: f64,
+    pub cbm_energy_ev: f64,
+    pub direct_bandgap_ev: f64,
+    pub indirect_bandgap_ev: f64,
+    pub band_energies_ev: Vec<Vec<f64>>,
+    pub dos_energies_ev: Vec<f64>,
+    pub dos_values: Vec<f64>,
+}
+
+#[pyfunction]
+#[pyo3(signature = (
+    atomic_numbers,
+    coordinates,
+    translation_vectors,
+    method = "PM6",
+    mers = None,
+    k_grid = None,
+    use_nddo = true,
+    max_iter = 100,
+    band_points = 40
+))]
+pub fn pbc(
+    atomic_numbers: Vec<u8>,
+    coordinates: Vec<[f64; 3]>,
+    translation_vectors: Vec<[f64; 3]>,
+    method: Option<&str>,
+    mers: Option<[usize; 3]>,
+    k_grid: Option<[usize; 3]>,
+    use_nddo: Option<bool>,
+    max_iter: Option<usize>,
+    band_points: Option<usize>,
+) -> PyResult<PbcResultPy> {
+    if atomic_numbers.is_empty() {
+        return Err(PyValueError::new_err("atomic_numbers must not be empty"));
+    }
+    if atomic_numbers.len() != coordinates.len() {
+        return Err(PyValueError::new_err(
+            "atomic_numbers and coordinates must have same length",
+        ));
+    }
+    if translation_vectors.is_empty() || translation_vectors.len() > 3 {
+        return Err(PyValueError::new_err(
+            "translation_vectors must have 1, 2, or 3 vectors",
+        ));
+    }
+
+    let model_str = method.unwrap_or("PM6");
+    let model = get_model(model_str)?;
+    let unit_cell =
+        UnitCell::from_translation_vectors(&translation_vectors).map_err(PyValueError::new_err)?;
+
+    let mut pbc_opts = PbcOptions::new(unit_cell);
+    if let Some(m) = mers {
+        pbc_opts.mers = m;
+    }
+    if let Some(k) = k_grid {
+        pbc_opts.k_grid = k;
+    }
+    if let Some(nddo) = use_nddo {
+        pbc_opts.use_nddo = nddo;
+    }
+    if let Some(mi) = max_iter {
+        pbc_opts.max_iter = mi;
+    }
+    if let Some(bp) = band_points {
+        pbc_opts.band_path_points = bp;
+    }
+
+    let batch = MolecularBatch::new_for_model(atomic_numbers, &coordinates, model.as_ref());
+    let n_trans = pbc_opts.mers[0] * pbc_opts.mers[1] * pbc_opts.mers[2];
+    let n_k = pbc_opts.k_grid[0] * pbc_opts.k_grid[1] * pbc_opts.k_grid[2];
+    let mut ws = PbcWorkspace::allocate(batch.norbs, n_trans, n_k);
+
+    let res =
+        run_pbc_scf(&batch, model.as_ref(), &pbc_opts, &mut ws).map_err(PyValueError::new_err)?;
+
+    Ok(PbcResultPy {
+        converged: res.converged,
+        iterations: res.iterations,
+        total_energy_per_cell_ev: res.total_energy_per_cell_ev,
+        electronic_energy_per_cell_ev: res.electronic_energy_per_cell_ev,
+        nuclear_repulsion_per_cell_ev: res.nuclear_repulsion_per_cell_ev,
+        heat_of_formation_kcal_mol: res.heat_of_formation_kcal_mol,
+        vbm_energy_ev: res.vbm_energy_ev,
+        cbm_energy_ev: res.cbm_energy_ev,
+        direct_bandgap_ev: res.direct_bandgap_ev,
+        indirect_bandgap_ev: res.indirect_bandgap_ev,
+        band_energies_ev: res.band_energies_ev,
+        dos_energies_ev: res.dos_energies_ev,
+        dos_values: res.dos_values,
+    })
 }
 
 /// MOPAC_RS Python Module
@@ -1928,6 +2056,7 @@ fn mopac_py(m: &Bound<'_, PyModule>) -> PyResult<()> {
     m.add_class::<CiStatePy>()?;
     m.add_class::<MeciPyResult>()?;
     m.add_class::<UvVisSpectrumPy>()?;
+    m.add_class::<PbcResultPy>()?;
     m.add_class::<MopacCalculator>()?;
     m.add_function(wrap_pyfunction!(calculate, m)?)?;
     m.add_function(wrap_pyfunction!(optimize, m)?)?;
@@ -1937,6 +2066,7 @@ fn mopac_py(m: &Bound<'_, PyModule>) -> PyResult<()> {
     m.add_function(wrap_pyfunction!(drc, m)?)?;
     m.add_function(wrap_pyfunction!(meci, m)?)?;
     m.add_function(wrap_pyfunction!(uv_vis_spectrum, m)?)?;
+    m.add_function(wrap_pyfunction!(pbc, m)?)?;
 
     let py = m.py();
     let py_code = r#"

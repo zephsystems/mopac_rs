@@ -25,6 +25,7 @@ use mopac_core::parameters::pm6::Pm6Model;
 use mopac_core::parameters::pm7::Pm7Model;
 use mopac_core::parameters::rm1::Rm1Model;
 use mopac_core::parameters::ParameterModel;
+use mopac_core::pbc::{run_pbc_scf, PbcOptions, PbcWorkspace, UnitCell};
 use mopac_core::properties::{
     compute_bond_orders, compute_dipole_moment, compute_mulliken_population, DipoleResult,
 };
@@ -136,6 +137,18 @@ struct Cli {
     #[arg(short, long)]
     output: Option<PathBuf>,
 
+    /// Enable Periodic Boundary Conditions (PBC) Bloch SCF & band structure calculation
+    #[arg(long)]
+    pbc: bool,
+
+    /// Number of k-points in Monkhorst-Pack grid [nk1, nk2, nk3] or scalar nk (e.g. --k-grid 16 or --k-grid 16,1,1)
+    #[arg(long = "k-grid")]
+    k_grid: Option<String>,
+
+    /// Number of fundamental unit cells in Born-von Kármán cluster [n1, n2, n3] or scalar n (e.g. --mers 5)
+    #[arg(long = "mers")]
+    mers: Option<String>,
+
     /// Custom archive file path (.arc)
     #[arg(long)]
     arc: Option<PathBuf>,
@@ -187,6 +200,24 @@ struct ParsedInput {
     dispersion: Option<DispersionModel>,
     use_h4: bool,
     use_hh: bool,
+    translation_vectors: Vec<[f64; 3]>,
+    mers: Option<[usize; 3]>,
+    k_grid: Option<[usize; 3]>,
+}
+
+fn parse_grid_dim(s: &str) -> Option<[usize; 3]> {
+    let clean = s.trim_matches(|c| c == '(' || c == ')');
+    let parts: Vec<&str> = clean.split(',').collect();
+    if parts.len() == 1 {
+        parts[0].trim().parse::<usize>().ok().map(|n| [n, 1, 1])
+    } else if parts.len() >= 3 {
+        let n1 = parts[0].trim().parse::<usize>().ok()?;
+        let n2 = parts[1].trim().parse::<usize>().ok()?;
+        let n3 = parts[2].trim().parse::<usize>().ok()?;
+        Some([n1, n2, n3])
+    } else {
+        None
+    }
 }
 
 fn symbol_to_atomic_number(sym: &str) -> Option<u8> {
@@ -292,6 +323,8 @@ fn parse_mopac_input(content: &str) -> io::Result<ParsedInput> {
     let mut dispersion = None;
     let mut use_h4 = false;
     let mut use_hh = false;
+    let mut mers = None;
+    let mut k_grid = None;
 
     for kw in &keywords {
         let u = kw.to_uppercase();
@@ -366,10 +399,15 @@ fn parse_mopac_input(content: &str) -> io::Result<ParsedInput> {
             if let Ok(v) = stripped.parse::<f64>() {
                 eps = Some(v);
             }
+        } else if let Some(stripped) = u.strip_prefix("MERS=") {
+            mers = parse_grid_dim(stripped);
+        } else if let Some(stripped) = u.strip_prefix("K-GRID=") {
+            k_grid = parse_grid_dim(stripped);
         }
     }
 
     let mut atoms = Vec::new();
+    let mut translation_vectors = Vec::new();
     for line in lines.iter().skip(3) {
         let line = line.trim();
         if line.is_empty() {
@@ -382,10 +420,6 @@ fn parse_mopac_input(content: &str) -> io::Result<ParsedInput> {
         }
 
         let sym = tokens[0];
-        let z = match symbol_to_atomic_number(sym) {
-            Some(num) => num,
-            None => continue,
-        };
 
         let mut x = 0.0;
         let mut y = 0.0;
@@ -406,6 +440,16 @@ fn parse_mopac_input(content: &str) -> io::Result<ParsedInput> {
             y = tokens[2].parse().unwrap_or(0.0);
             z_c = tokens[3].parse().unwrap_or(0.0);
         }
+
+        if sym.eq_ignore_ascii_case("Tv") {
+            translation_vectors.push([x, y, z_c]);
+            continue;
+        }
+
+        let z = match symbol_to_atomic_number(sym) {
+            Some(num) => num,
+            None => continue,
+        };
 
         atoms.push(ParsedAtom {
             symbol: sym.to_string(),
@@ -454,6 +498,9 @@ fn parse_mopac_input(content: &str) -> io::Result<ParsedInput> {
         dispersion,
         use_h4,
         use_hh,
+        translation_vectors,
+        mers,
+        k_grid,
     })
 }
 
@@ -628,6 +675,181 @@ fn main() -> Result<(), Box<dyn std::error::Error>> {
     println!("-------------------------------------------------------------------------------");
 
     let mut batch = build_batch(&parsed.atoms);
+
+    let is_pbc = cli.pbc || !parsed.translation_vectors.is_empty();
+    if is_pbc {
+        if parsed.translation_vectors.is_empty() {
+            eprintln!(
+                "Error: PBC calculation requested but no Tv translation vectors found in input."
+            );
+            std::process::exit(1);
+        }
+
+        let unit_cell = match UnitCell::from_translation_vectors(&parsed.translation_vectors) {
+            Ok(c) => c,
+            Err(e) => {
+                eprintln!("Error constructing unit cell: {}", e);
+                std::process::exit(1);
+            }
+        };
+
+        let mut pbc_opts = PbcOptions::new(unit_cell);
+        if let Some(m) = cli.mers.as_deref().and_then(parse_grid_dim).or(parsed.mers) {
+            pbc_opts.mers = m;
+        }
+        if let Some(k) = cli
+            .k_grid
+            .as_deref()
+            .and_then(parse_grid_dim)
+            .or(parsed.k_grid)
+        {
+            pbc_opts.k_grid = k;
+        }
+        pbc_opts.use_nddo = use_nddo;
+
+        println!(" [PBC] Starting Crystal Orbital Roothaan-Hall Bloch SCF...");
+        println!(
+            " [PBC] Periodic System : {:?}",
+            pbc_opts.unit_cell.dimension
+        );
+        println!(" [PBC] Supercell MERS  : {:?}", pbc_opts.mers);
+        println!(" [PBC] k-point grid    : {:?}", pbc_opts.k_grid);
+
+        let n_trans = pbc_opts.mers[0] * pbc_opts.mers[1] * pbc_opts.mers[2];
+        let n_k = pbc_opts.k_grid[0] * pbc_opts.k_grid[1] * pbc_opts.k_grid[2];
+        let mut pbc_ws = PbcWorkspace::allocate(batch.norbs, n_trans, n_k);
+
+        let pbc_res = match run_pbc_scf(&batch, model.as_ref(), &pbc_opts, &mut pbc_ws) {
+            Ok(r) => r,
+            Err(e) => {
+                eprintln!("Error in PBC Bloch SCF: {}", e);
+                std::process::exit(1);
+            }
+        };
+
+        let elapsed = start_time.elapsed();
+
+        println!("-------------------------------------------------------------------------------");
+        println!("                 PERIODIC BOUNDARY CONDITIONS & BAND STRUCTURE                 ");
+        println!("-------------------------------------------------------------------------------");
+        println!(
+            " SCF Status                   : {}",
+            if pbc_res.converged {
+                "CONVERGED"
+            } else {
+                "NOT CONVERGED"
+            }
+        );
+        println!(" SCF Iterations               : {}", pbc_res.iterations);
+        println!(
+            " Wall Clock Time              : {:.3} s",
+            elapsed.as_secs_f64()
+        );
+        println!(
+            " Total Energy / Unit Cell     : {:15.5} eV",
+            pbc_res.total_energy_per_cell_ev
+        );
+        println!(
+            " Electronic Energy / Cell     : {:15.5} eV",
+            pbc_res.electronic_energy_per_cell_ev
+        );
+        println!(
+            " Nuclear Repulsion / Cell     : {:15.5} eV",
+            pbc_res.nuclear_repulsion_per_cell_ev
+        );
+        println!(
+            " Heat of Formation / Cell     : {:15.5} kcal/mol ({:12.5} kJ/mol)",
+            pbc_res.heat_of_formation_kcal_mol,
+            pbc_res.heat_of_formation_kcal_mol * 4.184
+        );
+        println!(
+            " Valence Band Maximum (VBM)   : {:15.5} eV",
+            pbc_res.vbm_energy_ev
+        );
+        println!(
+            " Conduction Band Minimum (CBM): {:15.5} eV",
+            pbc_res.cbm_energy_ev
+        );
+        println!(
+            " Fundamental Direct Bandgap   : {:15.5} eV",
+            pbc_res.direct_bandgap_ev
+        );
+        println!(
+            " Fundamental Indirect Bandgap : {:15.5} eV",
+            pbc_res.indirect_bandgap_ev
+        );
+        println!("-------------------------------------------------------------------------------");
+        println!(
+            " High-Symmetry Band Path ({} k-points):",
+            pbc_res.band_k_points.len()
+        );
+        for (idx, kp) in pbc_res.band_k_points.iter().enumerate() {
+            if let Some(ref l) = kp.label {
+                println!(
+                    "   k = {:>6} (frac={:?}): Bands = {:?}",
+                    l, kp.fractional, pbc_res.band_energies_ev[idx]
+                );
+            }
+        }
+        println!("-------------------------------------------------------------------------------");
+
+        let mut f = File::create(&out_file)?;
+        writeln!(
+            f,
+            "*******************************************************************************"
+        )?;
+        writeln!(
+            f,
+            "**                 MOPAC_RS PERIODIC CALCULATION RESULTS                     **"
+        )?;
+        writeln!(
+            f,
+            "*******************************************************************************"
+        )?;
+        writeln!(
+            f,
+            " PERIODIC DIMENSION         = {:?}",
+            pbc_opts.unit_cell.dimension
+        )?;
+        writeln!(f, " BORN-VON KARMAN MERS       = {:?}", pbc_opts.mers)?;
+        writeln!(f, " MONKHORST-PACK K-GRID      = {:?}", pbc_opts.k_grid)?;
+        writeln!(
+            f,
+            " FINAL TOTAL ENERGY (EV)    = {:15.6}",
+            pbc_res.total_energy_per_cell_ev
+        )?;
+        writeln!(
+            f,
+            " FINAL HEAT OF FORMATION    = {:15.6} KCAL/MOL",
+            pbc_res.heat_of_formation_kcal_mol
+        )?;
+        writeln!(
+            f,
+            " VALENCE BAND MAXIMUM (EV)  = {:15.6}",
+            pbc_res.vbm_energy_ev
+        )?;
+        writeln!(
+            f,
+            " CONDUCTION BAND MIN (EV)   = {:15.6}",
+            pbc_res.cbm_energy_ev
+        )?;
+        writeln!(
+            f,
+            " DIRECT BANDGAP (EV)        = {:15.6}",
+            pbc_res.direct_bandgap_ev
+        )?;
+        writeln!(
+            f,
+            " INDIRECT BANDGAP (EV)      = {:15.6}",
+            pbc_res.indirect_bandgap_ev
+        )?;
+        writeln!(f, " SCF ITERATIONS             = {}", pbc_res.iterations)?;
+        writeln!(f, " JOB TERMINATED NORMALLY")?;
+
+        println!(" [Output] Results written to {}", out_file.display());
+        return Ok(());
+    }
+
     let mut ws = ScfWorkspace::allocate(batch.norbs);
 
     // If GPU is requested, warm up and verify device acceleration
