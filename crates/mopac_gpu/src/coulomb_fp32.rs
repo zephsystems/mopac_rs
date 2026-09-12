@@ -268,6 +268,25 @@ impl GpuCoulombCalculatorFP32 {
         self.compute_pairwise(&atoms)
     }
 
+    /// Evaluates the pairwise Coulomb matrix in FP32 on the GPU and converts to f64 with zero heap allocation.
+    pub fn compute_batch_f64(
+        &self,
+        batch: &MolecularBatch,
+        model: &dyn ParameterModel,
+        out: &mut AlignedMatrix<f64>,
+    ) -> Result<(), VulkanError> {
+        let n = batch.natoms;
+        assert_eq!(out.rows, n);
+        assert_eq!(out.cols, n);
+        let res_f32 = self.compute_batch(batch, model)?;
+        for i in 0..n {
+            for j in 0..n {
+                out.set(i, j, res_f32.get(i, j) as f64);
+            }
+        }
+        Ok(())
+    }
+
     /// Allocates a pre-allocated FP32 scratch workspace for zero-allocation SCF loops.
     pub fn allocate_workspace(&self, max_atoms: usize) -> Result<GpuWorkspaceFP32, VulkanError> {
         let atom_buf_size = (max_atoms * std::mem::size_of::<AtomGpuFP32>()) as u64;

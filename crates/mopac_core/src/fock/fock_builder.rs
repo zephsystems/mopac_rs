@@ -31,14 +31,14 @@ pub fn build_fock(
 
     // Precompute total electronic population on each atom: q_A = sum_{mu in A} P_{mu mu}
     let mut atom_populations = vec![0.0; batch.natoms];
-    for i in 0..batch.natoms {
+    for (i, pop) in atom_populations.iter_mut().enumerate().take(batch.natoms) {
         let orb_start = batch.orbital_offsets[i];
         let num_orbs = batch.basis_types[i].num_orbitals();
         let mut q = 0.0;
         for o in 0..num_orbs {
             q += density.get(orb_start + o, orb_start + o);
         }
-        atom_populations[i] = q;
+        *pop = q;
     }
 
     // 2. One-center two-electron interactions
@@ -100,7 +100,7 @@ pub fn build_fock(
         let orb_a_start = batch.orbital_offsets[i];
         let num_a = batch.basis_types[i].num_orbitals();
 
-        for j in 0..batch.natoms {
+        for (j, &q_b) in atom_populations.iter().enumerate().take(batch.natoms) {
             if i == j {
                 continue;
             }
@@ -116,7 +116,6 @@ pub fn build_fock(
             let gamma_ab = dewar_klopman_monopole(r_ab, p_a.gss, p_b.gss);
 
             // Two-center Coulomb: repulsion from total electronic cloud on atom B
-            let q_b = atom_populations[j];
             for oa in 0..num_a {
                 let idx_a = orb_a_start + oa;
                 let cur = fock.get(idx_a, idx_a);

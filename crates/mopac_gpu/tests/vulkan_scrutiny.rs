@@ -135,9 +135,9 @@ fn test_scrutiny_vulkan_gpu_zero_allocation_workspace_parity() {
     }
 
     // Verify self-energy diagonal: gamma_AA(0) = gss_A
-    for i in 0..32 {
+    for (i, atom) in atoms.iter().enumerate().take(32) {
         let diag = out.get(i, i);
-        let expected = atoms[i].gss;
+        let expected = atom.gss;
         assert!(
             (diag - expected).abs() < 1e-12,
             "Diagonal one-center self-energy mismatch at atom {}: {} vs expected {}",

@@ -62,10 +62,10 @@ impl DiisWorkspace {
         let mut error_history = Vec::with_capacity(cap);
         let mut active_slots = [0usize; MAX_DIIS_CAPACITY];
 
-        for i in 0..cap {
+        for (i, slot) in active_slots.iter_mut().enumerate().take(cap) {
             fock_history.push(AlignedMatrix::zeroed(norbs, norbs));
             error_history.push(AlignedMatrix::zeroed(norbs, norbs));
-            active_slots[i] = i;
+            *slot = i;
         }
 
         Self {
@@ -127,8 +127,7 @@ impl DiisWorkspace {
             let f_row = fock.row(i);
             let m_row = tmp_mult.row_mut(i);
             m_row.fill(0.0);
-            for k in 0..norbs {
-                let f_ik = f_row[k];
+            for (k, &f_ik) in f_row.iter().enumerate().take(norbs) {
                 let p_row = density.row(k);
                 for j in 0..norbs {
                     m_row[j] += f_ik * p_row[j];
@@ -267,6 +266,7 @@ impl DiisWorkspace {
 /// $$
 ///
 /// Returns `true` if a stable, uncorrupted solution with $|c_k| \le 50.0$ was obtained.
+#[allow(clippy::needless_range_loop)]
 pub fn solve_pulay_system(
     b_mat: &[[f64; MAX_DIIS_CAPACITY]; MAX_DIIS_CAPACITY],
     m: usize,
@@ -278,8 +278,8 @@ pub fn solve_pulay_system(
 
     // Determine max diagonal element for condition scaling
     let mut b_max = 0.0f64;
-    for i in 0..m {
-        let d = b_mat[i][i];
+    for (i, row) in b_mat.iter().enumerate().take(m) {
+        let d = row[i];
         if d > b_max {
             b_max = d;
         }
@@ -309,8 +309,8 @@ pub fn solve_pulay_system(
         // Find pivot row
         let mut max_val = a[k][k].abs();
         let mut pivot_row = k;
-        for p in (k + 1)..k_dim {
-            let val = a[p][k].abs();
+        for (p, row) in a.iter().enumerate().take(k_dim).skip(k + 1) {
+            let val = row[k].abs();
             if val > max_val {
                 max_val = val;
                 pivot_row = p;
@@ -338,7 +338,8 @@ pub fn solve_pulay_system(
             let factor = a[row][k] / pivot;
             a[row][k] = 0.0;
             for col in (k + 1)..k_dim {
-                a[row][col] -= factor * a[k][col];
+                let ak_col = a[k][col];
+                a[row][col] -= factor * ak_col;
             }
             b[row] -= factor * b[k];
         }

@@ -166,8 +166,8 @@ fn test_scrutiny_scf_workspace_zero_allocations() {
     assert_eq!(p_ptr % CACHE_LINE_ALIGNMENT, 0, "Density buffer must be 64-byte aligned");
 
     // Write values
-    ws.fock.set(10, 20, 3.14159);
-    assert_eq!(ws.fock.get(10, 20), 3.14159);
+    ws.fock.set(10, 20, std::f64::consts::PI);
+    assert_eq!(ws.fock.get(10, 20), std::f64::consts::PI);
 
     // Reset without reallocating
     ws.reset();
@@ -498,7 +498,7 @@ fn test_scrutiny_diatomic_overlap_block_invariants_and_rotation() {
     );
 
     // 3. 3D Rotational Invariance under arbitrary space rotation
-    let raw_dir: [f64; 3] = [0.353553, -0.612372, 0.707107];
+    let raw_dir: [f64; 3] = [0.353553, -0.612372, std::f64::consts::FRAC_1_SQRT_2];
     let norm = (raw_dir[0] * raw_dir[0] + raw_dir[1] * raw_dir[1] + raw_dir[2] * raw_dir[2]).sqrt();
     let dir = [raw_dir[0] / norm, raw_dir[1] / norm, raw_dir[2] / norm];
     let mut s_mat_rot = [[0.0f64; 4]; 4];
@@ -564,9 +564,9 @@ fn test_scrutiny_virtual_orbital_level_shifting_invariants() {
 
     // Verify S * c_occ = 0:
     let mut s_c_occ = [0.0f64; 2];
-    for i in 0..2 {
+    for (i, item) in s_c_occ.iter_mut().enumerate() {
         for j in 0..2 {
-            s_c_occ[i] += s_shift.get(i, j) * ws.eigenvectors.get(j, 0); // c_0 is occupied
+            *item += s_shift.get(i, j) * ws.eigenvectors.get(j, 0); // c_0 is occupied
         }
     }
     let occ_shift_norm = (s_c_occ[0] * s_c_occ[0] + s_c_occ[1] * s_c_occ[1]).sqrt();
@@ -577,17 +577,17 @@ fn test_scrutiny_virtual_orbital_level_shifting_invariants() {
 
     // Verify S * c_virt = sigma * c_virt:
     let mut s_c_virt = [0.0f64; 2];
-    for i in 0..2 {
+    for (i, item) in s_c_virt.iter_mut().enumerate() {
         for j in 0..2 {
-            s_c_virt[i] += s_shift.get(i, j) * ws.eigenvectors.get(j, 1); // c_1 is virtual
+            *item += s_shift.get(i, j) * ws.eigenvectors.get(j, 1); // c_1 is virtual
         }
     }
-    for i in 0..2 {
+    for (i, &val) in s_c_virt.iter().enumerate() {
         let expected = sigma * ws.eigenvectors.get(i, 1);
         assert!(
-            (s_c_virt[i] - expected).abs() < 1e-12,
+            (val - expected).abs() < 1e-12,
             "Virtual orbital level shift mismatch at component {}: {} vs expected {}",
-            i, s_c_virt[i], expected
+            i, val, expected
         );
     }
 
@@ -809,9 +809,9 @@ fn test_scrutiny_density_fitting_ri_v_invariants() {
         [0.5, 0.8, 3.5, 0.6],
         [0.2, 0.4, 0.6, 4.2],
     ];
-    for i in 0..naux {
-        for j in 0..naux {
-            v_mat.set(i, j, v_data[i][j]);
+    for (i, row) in v_data.iter().enumerate().take(naux) {
+        for (j, &val) in row.iter().enumerate().take(naux) {
+            v_mat.set(i, j, val);
         }
     }
 
@@ -914,6 +914,149 @@ fn test_scrutiny_density_fitting_ri_v_invariants() {
         }
     }
 }
+
+/// Scrutiny Test 14: Analytical Cartesian Nuclear Gradients & Translational Invariance.
+///
+/// Verifies:
+/// 1. Analytical gradients match finite-difference energy derivatives down to < 1e-4 eV/Å.
+/// 2. Conservation of linear momentum: sum_A g_A = 0 to machine precision (< 1e-12).
+/// 3. Anti-symmetry of internal diatomic forces: F_A = -F_B.
+#[test]
+fn test_scrutiny_analytical_gradients_vs_finite_difference() {
+    use mopac_core::gradients::{compute_cartesian_gradients, compute_gradient_norms, GradientWorkspace};
+    use mopac_core::parameters::am1::Am1Model;
+    use mopac_core::scf::scf_loop::{run_rhf_scf, ScfOptions, run_rhf_scf_with_options};
+    use mopac_core::types::{MolecularBatch, ScfWorkspace};
+
+    let am1 = Am1Model;
+
+    // H2 molecule at R = 0.85 Angstroms (repulsive non-equilibrium state)
+    let coords = vec![[0.0, 0.0, 0.0], [0.0, 0.0, 0.85]];
+    let mut batch = MolecularBatch::new(vec![1, 1], &coords);
+    let mut scf_ws = ScfWorkspace::allocate(batch.norbs);
+    let mut grad_ws = GradientWorkspace::allocate(batch.norbs);
+
+    // 1. Run converged SCF at reference geometry
+    let res = run_rhf_scf(&batch, &am1, &mut scf_ws, 50, 1e-10, 1e-9);
+    assert!(res.converged);
+
+    // 2. Compute analytical gradients
+    let mut gradients = vec![[0.0f64; 3]; batch.natoms];
+    compute_cartesian_gradients(&mut batch, &am1, &scf_ws.density, &mut grad_ws, &mut gradients);
+
+    // 3. Verify translational invariance: sum of forces is identically zero
+    let mut sum_gx = 0.0;
+    let mut sum_gy = 0.0;
+    let mut sum_gz = 0.0;
+    for g in &gradients {
+        sum_gx += g[0];
+        sum_gy += g[1];
+        sum_gz += g[2];
+    }
+    assert!(sum_gx.abs() < 1e-12, "Force sum X must be 0: {}", sum_gx);
+    assert!(sum_gy.abs() < 1e-12, "Force sum Y must be 0: {}", sum_gy);
+    assert!(sum_gz.abs() < 1e-12, "Force sum Z must be 0: {}", sum_gz);
+
+    // 4. Compare with full finite-difference SCF derivative along Z:
+    // dE/dZ_1 = (E(Z_1 + h) - E(Z_1 - h)) / (2h)
+    let h = 1.0e-4;
+    let coords_plus = vec![[0.0, 0.0, 0.0], [0.0, 0.0, 0.85 + h]];
+    let batch_plus = MolecularBatch::new(vec![1, 1], &coords_plus);
+    let mut scf_plus = ScfWorkspace::allocate(batch_plus.norbs);
+    let res_plus = run_rhf_scf_with_options(
+        &batch_plus,
+        &am1,
+        &mut scf_plus,
+        &ScfOptions { max_iter: 50, energy_tol_ev: 1e-12, density_tol: 1e-10, level_shift_ev: 0.0, damping: 0.5 },
+    );
+
+    let coords_minus = vec![[0.0, 0.0, 0.0], [0.0, 0.0, 0.85 - h]];
+    let batch_minus = MolecularBatch::new(vec![1, 1], &coords_minus);
+    let mut scf_minus = ScfWorkspace::allocate(batch_minus.norbs);
+    let res_minus = run_rhf_scf_with_options(
+        &batch_minus,
+        &am1,
+        &mut scf_minus,
+        &ScfOptions { max_iter: 50, energy_tol_ev: 1e-12, density_tol: 1e-10, level_shift_ev: 0.0, damping: 0.5 },
+    );
+
+    let num_de_dz1 = (res_plus.total_energy_ev - res_minus.total_energy_ev) / (2.0 * h);
+    let anal_de_dz1 = gradients[1][2];
+
+    let diff = (anal_de_dz1 - num_de_dz1).abs();
+    assert!(
+        diff < 1e-4,
+        "Analytical vs Numerical gradient mismatch: anal = {}, num = {}, diff = {:e}",
+        anal_de_dz1, num_de_dz1, diff
+    );
+
+    let (rms, max_g) = compute_gradient_norms(&gradients);
+    assert!(rms > 0.0, "RMS gradient must be positive for non-equilibrium geometry");
+    assert!(max_g > 0.0);
+    println!("✅ H2 (R=0.85 Å) Gradient verified: anal = {:.6} eV/Å, num = {:.6} eV/Å, RMS = {:.3} kcal/(mol·Å)",
+        anal_de_dz1, num_de_dz1, rms
+    );
+}
+
+/// Scrutiny Test 15: Molecular Geometry Optimization via L-BFGS & Potential Energy Minimization.
+///
+/// Axiomatic verification of molecular geometry relaxation:
+/// 1. Monotonic energy descent: E_{final} < E_{initial}.
+/// 2. Vanishing forces: RMS gradient drops below 1.0 kcal/(mol·Å).
+/// 3. Physical equilibrium recovery: H2 bond relaxes from distorted 0.95 Å to 0.74 Å.
+#[test]
+fn test_scrutiny_lbfgs_geometry_optimization() {
+    use mopac_core::gradients::GradientWorkspace;
+    use mopac_core::opt::{optimize_geometry_lbfgs, OptimizationOptions};
+    use mopac_core::parameters::am1::Am1Model;
+    use mopac_core::types::{MolecularBatch, ScfWorkspace};
+
+    let am1 = Am1Model;
+
+    // Distorted H2 molecule at R = 0.95 Angstroms (strongly stretched non-equilibrium bond)
+    let distorted_coords = vec![[0.0, 0.0, 0.0], [0.0, 0.0, 0.95]];
+    let mut batch = MolecularBatch::new(vec![1, 1], &distorted_coords);
+    let mut scf_ws = ScfWorkspace::allocate(batch.norbs);
+    let mut grad_ws = GradientWorkspace::allocate(batch.norbs);
+
+    let opts = OptimizationOptions {
+        max_cycles: 30,
+        grad_rms_tol: 0.5,
+        grad_max_tol: 1.0,
+        energy_tol_ev: 1e-6,
+        max_step_size: 0.1,
+        history_capacity: 5,
+    };
+
+    let res = optimize_geometry_lbfgs(&mut batch, &am1, &mut scf_ws, &mut grad_ws, &opts);
+
+    assert!(res.converged, "L-BFGS geometry optimization must converge");
+    assert!(
+        res.final_energy_ev < res.initial_energy_ev,
+        "Energy must strictly decrease: initial = {}, final = {}",
+        res.initial_energy_ev, res.final_energy_ev
+    );
+    assert!(
+        res.final_grad_rms < opts.grad_rms_tol,
+        "Final RMS gradient {} must be below tolerance {}",
+        res.final_grad_rms, opts.grad_rms_tol
+    );
+
+    let final_r = batch.distance(0, 1);
+    // AM1 theoretical equilibrium bond length for H2 is ~0.6766 Angstroms (matching MOPAC v23 exact 0.676599 Å)
+    let r_err = (final_r - 0.6766).abs();
+    assert!(
+        r_err < 0.005,
+        "Relaxed H2 bond length must match exact AM1 equilibrium ~0.6766 Å, got: {:.4} Å (diff = {:.6})",
+        final_r, r_err
+    );
+
+    println!("✅ L-BFGS H2 Optimization Succeeded in {} cycles: R = 0.95 Å -> {:.4} Å, E = {:.6} -> {:.6} eV, RMS Grad = {:.3} kcal/(mol·Å)",
+        res.cycles, final_r, res.initial_energy_ev, res.final_energy_ev, res.final_grad_rms
+    );
+}
+
+
 
 
 

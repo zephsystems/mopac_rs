@@ -1,0 +1,16 @@
+[package]
+name = "mopac_cli"
+version = "0.1.0"
+edition.workspace = true
+authors.workspace = true
+license.workspace = true
+
+[[bin]]
+name = "mopac"
+path = "src/main.rs"
+
+[dependencies]
+mopac_core = { path = "../mopac_core" }
+mopac_gpu = { path = "../mopac_gpu" }
+clap = { version = "4.5", features = ["derive"] }
+rayon = "1.10"

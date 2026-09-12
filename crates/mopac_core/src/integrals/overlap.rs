@@ -17,8 +17,8 @@ use crate::parameters::SemiEmpiricalElementParams;
 pub fn fill_aux_a(alpha: f64, k_max: usize, a: &mut [f64]) {
     debug_assert!(a.len() > k_max);
     if alpha < 1e-12 {
-        for i in 0..=k_max {
-            a[i] = 1.0 / (i as f64 + 1.0);
+        for (i, val) in a.iter_mut().enumerate().take(k_max + 1) {
+            *val = 1.0 / (i as f64 + 1.0);
         }
         return;
     }
@@ -35,8 +35,8 @@ pub fn fill_aux_b(beta: f64, k_max: usize, b: &mut [f64]) {
     debug_assert!(b.len() > k_max);
     let abs_beta = beta.abs();
     if abs_beta <= 1e-6 {
-        for i in 0..=k_max {
-            b[i] = if (i + 1) % 2 == 0 {
+        for (i, val) in b.iter_mut().enumerate().take(k_max + 1) {
+            *val = if (i + 1) % 2 == 0 {
                 0.0
             } else {
                 2.0 / (i as f64 + 1.0)
