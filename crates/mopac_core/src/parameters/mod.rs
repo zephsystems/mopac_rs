@@ -3,8 +3,14 @@
 //! Licensed under the Apache License, Version 2.0 (the "License").
 
 pub mod am1;
+pub mod pm3;
 pub mod pm6;
 pub mod rm1;
+
+pub use am1::Am1Model;
+pub use pm3::Pm3Model;
+pub use pm6::Pm6Model;
+pub use rm1::Rm1Model;
 
 /// A Gaussian core-core repulsion correction term:
 /// $\Delta E_{AB}^{\text{Gauss}} = \frac{Z_A Z_B}{R_{AB}} \left[ \sum_k a_k e^{-b_k (R_{AB} - c_k)^2} \right]$

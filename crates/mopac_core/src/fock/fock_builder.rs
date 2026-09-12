@@ -30,7 +30,15 @@ pub fn build_fock(
     fock.data.copy_from_slice(&h_core.data);
 
     // Precompute total electronic population on each atom: q_A = sum_{mu in A} P_{mu mu}
-    let mut atom_populations = vec![0.0; batch.natoms];
+    // Using stack buffer for natoms <= 256 to eliminate all heap allocations inside iterative SCF.
+    let mut stack_populations = [0.0f64; 256];
+    let mut heap_populations;
+    let atom_populations: &mut [f64] = if batch.natoms <= 256 {
+        &mut stack_populations[..batch.natoms]
+    } else {
+        heap_populations = vec![0.0; batch.natoms];
+        &mut heap_populations[..]
+    };
     for (i, pop) in atom_populations.iter_mut().enumerate().take(batch.natoms) {
         let orb_start = batch.orbital_offsets[i];
         let num_orbs = batch.basis_types[i].num_orbitals();

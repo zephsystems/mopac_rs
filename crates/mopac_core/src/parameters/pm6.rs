@@ -14,26 +14,58 @@ impl Pm6Model {
     pub fn get_pair_params(z1: u8, z2: u8) -> (f64, f64) {
         let (za, zb) = if z1 >= z2 { (z1, z2) } else { (z2, z1) };
         match (za, zb) {
-            // (1, 1): H - H
+            // H pairs
             (1, 1) => (3.540942, 2.243587),
-            // (6, 1): C - H
             (6, 1) => (1.027806, 0.216506),
-            // (6, 6): C - C
-            (6, 6) => (2.613713, 0.813510),
-            // (7, 1): N - H
             (7, 1) => (0.969406, 0.175506),
-            // (7, 6): N - C
-            (7, 6) => (2.686108, 0.859949),
-            // (7, 7): N - N
-            (7, 7) => (2.574502, 0.675313),
-            // (8, 1): O - H
             (8, 1) => (1.260942, 0.192295),
-            // (8, 6): O - C
+            (9, 1) => (3.136740, 0.815802),
+            (15, 1) => (1.926537, 1.234986),
+            (16, 1) => (2.215975, 0.849712),
+            (17, 1) => (2.402886, 0.754831),
+
+            // C pairs
+            (6, 6) => (2.613713, 0.813510),
+            (7, 6) => (2.686108, 0.859949),
             (8, 6) => (2.889607, 0.990211),
-            // (8, 7): O - N
+            (9, 6) => (3.027600, 0.732968),
+            (15, 6) => (1.994653, 0.979512),
+            (16, 6) => (2.210305, 0.666849),
+            (17, 6) => (2.162197, 0.515787),
+
+            // N pairs
+            (7, 7) => (2.574502, 0.675313),
             (8, 7) => (2.784292, 0.764756),
-            // (8, 8): O - O
+            (9, 7) => (2.856646, 0.635854),
+            (15, 7) => (2.147042, 0.972154),
+            (16, 7) => (2.289990, 0.738710),
+            (17, 7) => (2.172134, 0.520745),
+
+            // O pairs
             (8, 8) => (2.623998, 0.535112),
+            (9, 8) => (3.015444, 0.674251),
+            (15, 8) => (2.220768, 0.878705),
+            (16, 8) => (2.383289, 0.747215),
+            (17, 8) => (2.323236, 0.585510),
+
+            // F pairs
+            (9, 9) => (3.175759, 0.681343),
+            (15, 9) => (2.234356, 0.514575),
+            (16, 9) => (2.187186, 0.375251),
+            (17, 9) => (2.313270, 0.411124),
+
+            // P pairs
+            (15, 15) => (1.505792, 0.902501),
+            (16, 15) => (1.595325, 0.562266),
+            (17, 15) => (1.468306, 0.352361),
+
+            // S pairs
+            (16, 16) => (1.794556, 0.473856),
+            (17, 16) => (1.715435, 0.356971),
+
+            // Cl pairs
+            (17, 17) => (1.823239, 0.332919),
+
             _ => (1.2, 0.0),
         }
     }
@@ -160,6 +192,118 @@ impl ParameterModel for Pm6Model {
                 hsp: 5.010801,
                 gaussians: [
                     GaussianCoreCorrection { a: -0.017771, b: 3.058310, c: 1.896435 },
+                    GaussianCoreCorrection { a: 0.0, b: 0.0, c: 0.0 },
+                    GaussianCoreCorrection { a: 0.0, b: 0.0, c: 0.0 },
+                    GaussianCoreCorrection { a: 0.0, b: 0.0, c: 0.0 },
+                ],
+                num_gaussians: 1,
+            }),
+
+            // Element 9: Fluorine
+            9 => Some(SemiEmpiricalElementParams {
+                z: 9,
+                core_charge: 7.0,
+                uss: -140.225626,
+                upp: -98.778044,
+                udd: 0.0,
+                zs: 6.043849,
+                zp: 2.906722,
+                zd: 0.0,
+                betas: -69.922593,
+                betap: -30.448165,
+                betad: 0.0,
+                alpha: 3.175759,
+                gss: 12.446818,
+                gsp: 18.496082,
+                gpp: 8.417366,
+                gp2: 12.179816,
+                hsp: 2.604382,
+                gaussians: [
+                    GaussianCoreCorrection { a: -0.010792, b: 6.004648, c: 1.847724 },
+                    GaussianCoreCorrection { a: 0.0, b: 0.0, c: 0.0 },
+                    GaussianCoreCorrection { a: 0.0, b: 0.0, c: 0.0 },
+                    GaussianCoreCorrection { a: 0.0, b: 0.0, c: 0.0 },
+                ],
+                num_gaussians: 1,
+            }),
+
+            // Element 15: Phosphorus
+            15 => Some(SemiEmpiricalElementParams {
+                z: 15,
+                core_charge: 5.0,
+                uss: -48.729905,
+                upp: -40.354689,
+                udd: -7.349246,
+                zs: 2.158033,
+                zp: 1.805343,
+                zd: 1.230358,
+                betas: -14.583780,
+                betap: -11.744725,
+                betad: -20.099893,
+                alpha: 1.505792,
+                gss: 8.758856,
+                gsp: 8.483679,
+                gpp: 8.662754,
+                gp2: 7.734264,
+                hsp: 0.871681,
+                gaussians: [
+                    GaussianCoreCorrection { a: -0.034320, b: 6.001394, c: 2.296737 },
+                    GaussianCoreCorrection { a: 0.0, b: 0.0, c: 0.0 },
+                    GaussianCoreCorrection { a: 0.0, b: 0.0, c: 0.0 },
+                    GaussianCoreCorrection { a: 0.0, b: 0.0, c: 0.0 },
+                ],
+                num_gaussians: 1,
+            }),
+
+            // Element 16: Sulfur
+            16 => Some(SemiEmpiricalElementParams {
+                z: 16,
+                core_charge: 6.0,
+                uss: -47.530706,
+                upp: -39.191045,
+                udd: -46.306944,
+                zs: 2.192844,
+                zp: 1.841078,
+                zd: 3.109401,
+                betas: -13.827440,
+                betap: -7.664613,
+                betad: -9.986172,
+                alpha: 1.794556,
+                gss: 9.170350,
+                gsp: 5.944296,
+                gpp: 8.165473,
+                gp2: 7.301878,
+                hsp: 5.005404,
+                gaussians: [
+                    GaussianCoreCorrection { a: -0.036928, b: 1.795067, c: 2.082618 },
+                    GaussianCoreCorrection { a: 0.0, b: 0.0, c: 0.0 },
+                    GaussianCoreCorrection { a: 0.0, b: 0.0, c: 0.0 },
+                    GaussianCoreCorrection { a: 0.0, b: 0.0, c: 0.0 },
+                ],
+                num_gaussians: 1,
+            }),
+
+            // Element 17: Chlorine
+            17 => Some(SemiEmpiricalElementParams {
+                z: 17,
+                core_charge: 7.0,
+                uss: -61.389930,
+                upp: -54.482801,
+                udd: -38.258155,
+                zs: 2.637050,
+                zp: 2.118146,
+                zd: 1.324033,
+                betas: -2.367988,
+                betap: -13.802139,
+                betad: -4.037751,
+                alpha: 1.823239,
+                gss: 11.142654,
+                gsp: 7.487881,
+                gpp: 9.551886,
+                gp2: 8.128436,
+                hsp: 5.004267,
+                gaussians: [
+                    GaussianCoreCorrection { a: -0.013213, b: 3.687022, c: 2.544635 },
                     GaussianCoreCorrection { a: 0.0, b: 0.0, c: 0.0 },
                     GaussianCoreCorrection { a: 0.0, b: 0.0, c: 0.0 },
                     GaussianCoreCorrection { a: 0.0, b: 0.0, c: 0.0 },

@@ -10,6 +10,10 @@ use super::{GaussianCoreCorrection, ParameterModel, SemiEmpiricalElementParams};
 pub struct Am1Model;
 
 impl ParameterModel for Am1Model {
+    fn name(&self) -> &'static str {
+        "AM1"
+    }
+
     fn get_element(&self, z: u8) -> Option<SemiEmpiricalElementParams> {
         match z {
             // Element 1: Hydrogen
@@ -118,6 +122,118 @@ impl ParameterModel for Am1Model {
                 gaussians: [
                     GaussianCoreCorrection { a: 0.2809620, b: 5.0, c: 0.8479180 },
                     GaussianCoreCorrection { a: 0.0814300, b: 7.0, c: 1.4450710 },
+                    GaussianCoreCorrection { a: 0.0, b: 0.0, c: 0.0 },
+                    GaussianCoreCorrection { a: 0.0, b: 0.0, c: 0.0 },
+                ],
+                num_gaussians: 2,
+            }),
+
+            // Element 9: Fluorine
+            9 => Some(SemiEmpiricalElementParams {
+                z: 9,
+                core_charge: 7.0,
+                uss: -136.1055790,
+                upp: -104.8898850,
+                udd: 0.0,
+                zs: 3.7700820,
+                zp: 2.4946700,
+                zd: 0.0,
+                betas: -69.5902770,
+                betap: -27.9223600,
+                betad: 0.0,
+                alpha: 5.5178000,
+                gss: 16.9200000,
+                gsp: 17.2500000,
+                gpp: 16.7100000,
+                gp2: 14.9100000,
+                hsp: 4.8300000,
+                gaussians: [
+                    GaussianCoreCorrection { a: 0.2420790, b: 4.8000000, c: 0.9300000 },
+                    GaussianCoreCorrection { a: 0.0036070, b: 4.6000000, c: 1.6600000 },
+                    GaussianCoreCorrection { a: 0.0, b: 0.0, c: 0.0 },
+                    GaussianCoreCorrection { a: 0.0, b: 0.0, c: 0.0 },
+                ],
+                num_gaussians: 2,
+            }),
+
+            // Element 15: Phosphorus
+            15 => Some(SemiEmpiricalElementParams {
+                z: 15,
+                core_charge: 5.0,
+                uss: -42.0298630,
+                upp: -34.0307090,
+                udd: 0.0,
+                zs: 1.9812800,
+                zp: 1.8751500,
+                zd: 0.0,
+                betas: -6.3537640,
+                betap: -6.5907090,
+                betad: 0.0,
+                alpha: 2.4553220,
+                gss: 11.5600050,
+                gsp: 5.2374490,
+                gpp: 7.8775890,
+                gp2: 7.3076480,
+                hsp: 0.7792380,
+                gaussians: [
+                    GaussianCoreCorrection { a: -0.0318270, b: 6.0000000, c: 1.4743230 },
+                    GaussianCoreCorrection { a: 0.0184700, b: 7.0000000, c: 1.7793540 },
+                    GaussianCoreCorrection { a: 0.0332900, b: 9.0000000, c: 3.0065760 },
+                    GaussianCoreCorrection { a: 0.0, b: 0.0, c: 0.0 },
+                ],
+                num_gaussians: 3,
+            }),
+
+            // Element 16: Sulfur
+            16 => Some(SemiEmpiricalElementParams {
+                z: 16,
+                core_charge: 6.0,
+                uss: -56.6940560,
+                upp: -48.7170490,
+                udd: 0.0,
+                zs: 2.3665150,
+                zp: 1.6672630,
+                zd: 0.0,
+                betas: -3.9205660,
+                betap: -7.9052780,
+                betad: 0.0,
+                alpha: 2.4616480,
+                gss: 11.7863290,
+                gsp: 8.6631270,
+                gpp: 10.0393080,
+                gp2: 7.7816880,
+                hsp: 2.5321370,
+                gaussians: [
+                    GaussianCoreCorrection { a: -0.5091950, b: 4.5936910, c: 0.7706650 },
+                    GaussianCoreCorrection { a: -0.0118630, b: 5.8657310, c: 1.5033130 },
+                    GaussianCoreCorrection { a: 0.0123340, b: 13.5573360, c: 2.0091730 },
+                    GaussianCoreCorrection { a: 0.0, b: 0.0, c: 0.0 },
+                ],
+                num_gaussians: 3,
+            }),
+
+            // Element 17: Chlorine
+            17 => Some(SemiEmpiricalElementParams {
+                z: 17,
+                core_charge: 7.0,
+                uss: -111.6139480,
+                upp: -76.6401070,
+                udd: 0.0,
+                zs: 3.6313760,
+                zp: 2.0767990,
+                zd: 0.0,
+                betas: -24.5946700,
+                betap: -14.6372160,
+                betad: 0.0,
+                alpha: 2.9193680,
+                gss: 15.0300000,
+                gsp: 13.1600000,
+                gpp: 11.3000000,
+                gp2: 9.9700000,
+                hsp: 2.4200000,
+                gaussians: [
+                    GaussianCoreCorrection { a: 0.0942430, b: 4.0000000, c: 1.3000000 },
+                    GaussianCoreCorrection { a: 0.0271680, b: 4.0000000, c: 2.1000000 },
                     GaussianCoreCorrection { a: 0.0, b: 0.0, c: 0.0 },
                     GaussianCoreCorrection { a: 0.0, b: 0.0, c: 0.0 },
                 ],

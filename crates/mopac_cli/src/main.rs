@@ -8,6 +8,7 @@ use mopac_core::constants::codata2018::EV_TO_KCAL_MOL;
 use mopac_core::gradients::GradientWorkspace;
 use mopac_core::opt::{optimize_geometry_lbfgs, OptimizationOptions};
 use mopac_core::parameters::am1::Am1Model;
+use mopac_core::parameters::pm3::Pm3Model;
 use mopac_core::parameters::pm6::Pm6Model;
 use mopac_core::parameters::rm1::Rm1Model;
 use mopac_core::parameters::ParameterModel;
@@ -224,6 +225,8 @@ fn parse_mopac_input(content: &str) -> io::Result<ParsedInput> {
             is_fp32 = true;
         } else if u == "PM6" {
             method = Some("PM6".to_string());
+        } else if u == "PM3" {
+            method = Some("PM3".to_string());
         } else if u == "RM1" {
             method = Some("RM1".to_string());
         } else if u == "AM1" {
@@ -320,12 +323,22 @@ fn build_batch(atoms: &[ParsedAtom]) -> MolecularBatch {
     MolecularBatch::new(atomic_numbers, &coords)
 }
 
+#[derive(Debug, Clone, Copy)]
+struct DipoleAnalysis {
+    point_chg: [f64; 3],
+    point_chg_tot: f64,
+    hybrid: [f64; 3],
+    hybrid_tot: f64,
+    sum: [f64; 3],
+    sum_tot: f64,
+}
+
 fn compute_wavefunction_properties(
     batch: &MolecularBatch,
     model: &dyn ParameterModel,
     ws: &ScfWorkspace,
     scf: &ScfResult,
-) -> (f64, Vec<f64>, Vec<[f64; 3]>, [f64; 3], f64) {
+) -> (f64, Vec<f64>, Vec<[f64; 3]>, DipoleAnalysis) {
     let mut sum_eisol = 0.0;
     let mut sum_eheat = 0.0;
     for &z in &batch.atomic_numbers {
@@ -357,16 +370,60 @@ fn compute_wavefunction_properties(
         populations.push([s_pop, p_pop, total_pop]);
     }
 
-    let mut dipole = [0.0f64; 3];
+    // 1. Point-charge dipole moment (e * Angstrom -> Debye: 4.80320425)
+    let mut point_chg = [0.0f64; 3];
     for (i, &q) in charges.iter().enumerate().take(batch.natoms) {
         let (x, y, z) = (batch.x[i], batch.y[i], batch.z[i]);
-        dipole[0] += q * x * 4.803204;
-        dipole[1] += q * y * 4.803204;
-        dipole[2] += q * z * 4.803204;
+        point_chg[0] += q * x * 4.80320425;
+        point_chg[1] += q * y * 4.80320425;
+        point_chg[2] += q * z * 4.80320425;
     }
-    let total_dipole = (dipole[0] * dipole[0] + dipole[1] * dipole[1] + dipole[2] * dipole[2]).sqrt();
+    let point_chg_tot = (point_chg[0] * point_chg[0] + point_chg[1] * point_chg[1] + point_chg[2] * point_chg[2]).sqrt();
 
-    (heat_of_formation_kcal, charges, populations, dipole, total_dipole)
+    // 2. Intra-atomic quantum hybridization dipole moment (sp mixing)
+    // In atomic units: mu = -2.0 * P_{s, p_alpha} * D_1 * 2.54174623 Debye
+    let mut hybrid = [0.0f64; 3];
+    for i in 0..batch.natoms {
+        let z = batch.atomic_numbers[i];
+        if let Some(elem) = model.get_element(z) {
+            if batch.basis_types[i].num_orbitals() >= 4 {
+                let mp = mopac_core::integrals::multipoles::DerivedMultipoleParams::from_element(&elem);
+                let d1 = mp.dd; // in Bohr
+                let orb_start = batch.orbital_offsets[i];
+                let ps_px = ws.density.get(orb_start, orb_start + 1);
+                let ps_py = ws.density.get(orb_start, orb_start + 2);
+                let ps_pz = ws.density.get(orb_start, orb_start + 3);
+
+                let hyf = -2.0 * d1 * 2.54174623;
+                hybrid[0] += ps_px * hyf;
+                hybrid[1] += ps_py * hyf;
+                hybrid[2] += ps_pz * hyf;
+            }
+        }
+    }
+    let hybrid_tot = (hybrid[0] * hybrid[0] + hybrid[1] * hybrid[1] + hybrid[2] * hybrid[2]).sqrt();
+
+    // 3. Sum total dipole vector and scalar norm
+    let sum = [
+        point_chg[0] + hybrid[0],
+        point_chg[1] + hybrid[1],
+        point_chg[2] + hybrid[2],
+    ];
+    let sum_tot = (sum[0] * sum[0] + sum[1] * sum[1] + sum[2] * sum[2]).sqrt();
+
+    (
+        heat_of_formation_kcal,
+        charges,
+        populations,
+        DipoleAnalysis {
+            point_chg,
+            point_chg_tot,
+            hybrid,
+            hybrid_tot,
+            sum,
+            sum_tot,
+        },
+    )
 }
 
 fn main() -> Result<(), Box<dyn std::error::Error>> {
@@ -398,6 +455,7 @@ fn main() -> Result<(), Box<dyn std::error::Error>> {
 
     let model: Box<dyn ParameterModel> = match method_name.as_str() {
         "PM6" => Box::new(Pm6Model),
+        "PM3" => Box::new(Pm3Model),
         "RM1" => Box::new(Rm1Model),
         _ => Box::new(Am1Model),
     };
@@ -470,7 +528,7 @@ fn main() -> Result<(), Box<dyn std::error::Error>> {
     };
 
     let elapsed = start_time.elapsed();
-    let (hof_kcal, charges, pops, dipole, dipole_tot) =
+    let (hof_kcal, charges, pops, dipole) =
         compute_wavefunction_properties(&batch, model.as_ref(), &ws, &scf_final);
 
     println!("-------------------------------------------------------------------------------");
@@ -483,7 +541,9 @@ fn main() -> Result<(), Box<dyn std::error::Error>> {
     println!(" HOMO Energy (IP)        : {:15.4} eV", scf_final.homo_energy_ev);
     println!(" LUMO Energy             : {:15.4} eV", scf_final.lumo_energy_ev);
     println!(" HOMO-LUMO Gap           : {:15.4} eV", scf_final.lumo_energy_ev - scf_final.homo_energy_ev);
-    println!(" Total Dipole Moment     : {:15.4} Debye", dipole_tot);
+    println!(" Total Dipole Moment     : {:15.4} Debye", dipole.sum_tot);
+    println!("   Point-Charge Dipole   : {:15.4} Debye", dipole.point_chg_tot);
+    println!("   Hybridization Dipole  : {:15.4} Debye", dipole.hybrid_tot);
     println!(" SCF Iterations Total    : {}", total_scf_cycles);
     println!(" Total Wall-Clock Time   : {:.4} seconds", elapsed.as_secs_f64());
     println!("===============================================================================");
@@ -513,8 +573,13 @@ fn main() -> Result<(), Box<dyn std::error::Error>> {
     writeln!(out, " NUCLEAR REPULSION       = {:17.6} EV", scf_final.nuclear_repulsion_ev)?;
     writeln!(out, " IONIZATION POTENTIAL    = {:17.5} EV", -scf_final.homo_energy_ev)?;
     writeln!(out, " HOMO LUMO ENERGIES (EV) = {:12.4} {:12.4}", scf_final.homo_energy_ev, scf_final.lumo_energy_ev)?;
-    writeln!(out, " DIPOLE MOMENT           = {:17.4} DEBYE (X={:.3}, Y={:.3}, Z={:.3})", dipole_tot, dipole[0], dipole[1], dipole[2])?;
+    writeln!(out, " DIPOLE MOMENT           = {:17.4} DEBYE", dipole.sum_tot)?;
     writeln!(out, " WALL-CLOCK TIME         = {:17.4} SECONDS", elapsed.as_secs_f64())?;
+    writeln!(out)?;
+    writeln!(out, " DIPOLE           X         Y         Z       TOTAL")?;
+    writeln!(out, " POINT-CHG.   {:9.3} {:9.3} {:9.3} {:10.3}", dipole.point_chg[0], dipole.point_chg[1], dipole.point_chg[2], dipole.point_chg_tot)?;
+    writeln!(out, " HYBRID       {:9.3} {:9.3} {:9.3} {:10.3}", dipole.hybrid[0], dipole.hybrid[1], dipole.hybrid[2], dipole.hybrid_tot)?;
+    writeln!(out, " SUM          {:9.3} {:9.3} {:9.3} {:10.3}", dipole.sum[0], dipole.sum[1], dipole.sum[2], dipole.sum_tot)?;
     writeln!(out)?;
     writeln!(out, "              NET ATOMIC CHARGES AND DIPOLE CONTRIBUTIONS")?;
     writeln!(out, "  ATOM NO.   TYPE          CHARGE      No. of ELECS.   s-Pop       p-Pop")?;
