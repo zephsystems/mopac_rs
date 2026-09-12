@@ -3,6 +3,7 @@
 //! Modern high-performance Data-Oriented Semi-Empirical Quantum Chemistry Engine in Rust.
 //! Licensed under the Apache License, Version 2.0 (the "License").
 
+pub mod ci;
 pub mod constants;
 pub mod corrections;
 pub mod fock;
@@ -19,6 +20,7 @@ pub mod solvation;
 pub mod types;
 pub mod vibrations;
 
+pub use ci::*;
 pub use constants::*;
 pub use corrections::*;
 pub use fock::*;

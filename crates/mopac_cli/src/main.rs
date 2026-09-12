@@ -4,6 +4,10 @@
 //! Provides drop-in MOPAC CLI compatibility with CPU AVX2 and Vulkan GPU FP32/FP64 backends.
 
 use clap::Parser;
+use mopac_core::ci::meci::{run_meci, CiActiveSpace, MeciOptions, MeciWorkspace};
+use mopac_core::ci::spectrum::{
+    compute_transition_dipoles_and_oscillator_strengths, simulate_uv_vis_spectrum,
+};
 use mopac_core::constants::codata2018::EV_TO_KCAL_MOL;
 use mopac_core::corrections::{
     compute_dispersion_energy, compute_h4_energy, compute_hh_repulsion_energy_and_gradients,
@@ -96,6 +100,14 @@ struct Cli {
     #[arg(long, alias = "mulliken")]
     mullik: bool,
 
+    /// Enable Multi-Electron Configuration Interaction (MECI) with active space size N (e.g. --ci 2)
+    #[arg(long = "ci")]
+    ci: Option<usize>,
+
+    /// Simulate UV-Vis electronic absorption spectrum
+    #[arg(long = "uv-vis")]
+    uv_vis: bool,
+
     /// Enable Vulkan GPU compute acceleration
     #[arg(long)]
     gpu: bool,
@@ -168,6 +180,9 @@ struct ParsedInput {
     is_dipole_requested: bool,
     is_bonds_requested: bool,
     is_mullik_requested: bool,
+    is_meci_requested: bool,
+    ci_active_orbitals: Option<usize>,
+    is_uv_vis_requested: bool,
     eps: Option<f64>,
     dispersion: Option<DispersionModel>,
     use_h4: bool,
@@ -270,6 +285,9 @@ fn parse_mopac_input(content: &str) -> io::Result<ParsedInput> {
     let mut is_dipole_requested = false;
     let mut is_bonds_requested = false;
     let mut is_mullik_requested = false;
+    let mut is_meci_requested = false;
+    let mut ci_active_orbitals = None;
+    let mut is_uv_vis_requested = false;
     let mut eps = None;
     let mut dispersion = None;
     let mut use_h4 = false;
@@ -324,6 +342,26 @@ fn parse_mopac_input(content: &str) -> io::Result<ParsedInput> {
             method = Some("MNDO".to_string());
         } else if u == "NDDO" {
             is_nddo_requested = true;
+        } else if u.starts_with("C.I.=") || u.starts_with("CI=") {
+            let val = if u.starts_with("C.I.=") {
+                u.strip_prefix("C.I.=").unwrap_or("")
+            } else {
+                u.strip_prefix("CI=").unwrap_or("")
+            };
+            if val.starts_with('(') {
+                let inner = val.trim_matches(|c| c == '(' || c == ')');
+                let parts: Vec<&str> = inner.split(',').collect();
+                if let Ok(n) = parts[0].trim().parse::<usize>() {
+                    ci_active_orbitals = Some(n);
+                }
+            } else if let Ok(n) = val.parse::<usize>() {
+                ci_active_orbitals = Some(n);
+            }
+            is_meci_requested = true;
+        } else if u == "MECI" || u == "CI" {
+            is_meci_requested = true;
+        } else if u == "UV-VIS" || u == "UVVIS" || u == "SPECTRUM" {
+            is_uv_vis_requested = true;
         } else if let Some(stripped) = u.strip_prefix("EPS=") {
             if let Ok(v) = stripped.parse::<f64>() {
                 eps = Some(v);
@@ -409,6 +447,9 @@ fn parse_mopac_input(content: &str) -> io::Result<ParsedInput> {
         is_dipole_requested,
         is_bonds_requested,
         is_mullik_requested,
+        is_meci_requested,
+        ci_active_orbitals,
+        is_uv_vis_requested,
         eps,
         dispersion,
         use_h4,
@@ -902,6 +943,74 @@ fn main() -> Result<(), Box<dyn std::error::Error>> {
         None
     };
 
+    // -- MECI / Configuration Interaction --
+    let ci_n_orbs = cli.ci.or(parsed.ci_active_orbitals);
+    let is_meci = ci_n_orbs.is_some() || parsed.is_meci_requested;
+    let is_uv_vis = cli.uv_vis || parsed.is_uv_vis_requested;
+
+    let meci_result = if is_meci {
+        let n_orbs = ci_n_orbs.unwrap_or(2);
+        println!(
+            " [MECI] Running Multi-Electron Configuration Interaction (C.I.={})...",
+            n_orbs
+        );
+
+        // Determine active space: n_orbs MOs, n_elec = n_orbs electrons (canonical CAS)
+        let active_space = CiActiveSpace::new(n_orbs, n_orbs);
+        let options = MeciOptions {
+            active_space,
+            target_root: 1,
+            spin_target: None,
+            use_nddo,
+        };
+
+        // Compute active MO indices (mirrors internal logic of run_meci)
+        let mut total_valence_elecs = 0.0f64;
+        for &z in &batch.atomic_numbers {
+            if let Some(p) = model.get_element(z) {
+                total_valence_elecs += p.core_charge;
+            }
+        }
+        let n_occ = (total_valence_elecs.round() as usize) / 2;
+        let n_occ_active = n_orbs.div_ceil(2);
+        let start_mo = n_occ - n_occ_active;
+        let active_mo_indices: Vec<usize> = (start_mo..start_mo + n_orbs).collect();
+
+        // Allocate MECI workspace
+        let max_microstates = 100; // upper bound for small active spaces
+        let mut meci_ws = MeciWorkspace::allocate(n_orbs, max_microstates);
+
+        let mut meci_res = run_meci(
+            &batch,
+            model.as_ref(),
+            &ws.eigenvectors,
+            &ws.eigenvalues,
+            scf_final.electronic_energy_ev,
+            scf_final.total_energy_ev,
+            &options,
+            &mut meci_ws,
+        );
+
+        // Compute transition dipoles and oscillator strengths
+        compute_transition_dipoles_and_oscillator_strengths(
+            &batch,
+            model.as_ref(),
+            &ws.eigenvectors,
+            &active_mo_indices,
+            &mut meci_res,
+        );
+
+        println!(
+            " [MECI] Done: {} CI states, CI correction = {:.6} eV, HoF = {:.3} kcal/mol",
+            meci_res.states.len(),
+            meci_res.ci_energy_correction_ev,
+            meci_res.heat_of_formation_kcal
+        );
+        Some((meci_res, active_mo_indices))
+    } else {
+        None
+    };
+
     let elapsed = start_time.elapsed();
     let disp_model = match cli.disp.as_deref() {
         Some("pm6-dh+") | Some("pm6-dh2") | Some("dh+") => Some(DispersionModel::Pm6DhPlus),
@@ -1114,6 +1223,81 @@ fn main() -> Result<(), Box<dyn std::error::Error>> {
             );
         }
     }
+
+    if let Some((ref meci_res, _)) = meci_result {
+        println!("-------------------------------------------------------------------------------");
+        println!(
+            "                    MULTI-ELECTRON CONFIGURATION INTERACTION                    "
+        );
+        println!("-------------------------------------------------------------------------------");
+        println!(
+            "  STATE     ENERGY (EV)      DELTA-E (EV)    SPIN      POLARIZATION X   Y   Z     DIPOLE (D)     OSC.STR."
+        );
+        for st in &meci_res.states {
+            let pol_x = st.polarization_angstrom2[0].sqrt();
+            let pol_y = st.polarization_angstrom2[1].sqrt();
+            let pol_z = st.polarization_angstrom2[2].sqrt();
+            println!(
+                "   {:3}   {:12.6}     {:10.6}     {:8}    {:7.4} {:7.4} {:7.4}    {:10.4}     {:8.6}",
+                st.root,
+                st.energy_ev,
+                st.excitation_energy_ev,
+                st.spin.label,
+                pol_x,
+                pol_y,
+                pol_z,
+                st.dipole_strength_debye,
+                st.oscillator_strength
+            );
+        }
+        println!();
+        println!(
+            " CI Energy Correction    : {:15.6} eV",
+            meci_res.ci_energy_correction_ev
+        );
+        println!(
+            " CI Total Energy         : {:15.6} eV",
+            meci_res.total_energy_ev
+        );
+        println!(
+            " CI Heat of Formation    : {:15.5} kcal/mol",
+            meci_res.heat_of_formation_kcal
+        );
+    }
+
+    if is_uv_vis {
+        if let Some((ref meci_res, _)) = meci_result {
+            let spectrum = simulate_uv_vis_spectrum(&meci_res.states, 100.0, 800.0, 1.0, 20.0);
+            println!(
+                "-------------------------------------------------------------------------------"
+            );
+            println!(
+                "                         UV-VIS ABSORPTION SPECTRUM                             "
+            );
+            println!(
+                "-------------------------------------------------------------------------------"
+            );
+            println!(
+                " Lambda_max = {:.1} nm,  Epsilon_max = {:.1} L/(mol*cm)",
+                spectrum.lambda_max_nm, spectrum.epsilon_max
+            );
+            println!();
+            println!("   WAVELENGTH (NM)     EPSILON (L/MOL/CM)");
+            for (i, (&wl, &eps)) in spectrum
+                .wavelengths_nm
+                .iter()
+                .zip(spectrum.extinction_coefficients.iter())
+                .enumerate()
+            {
+                if eps > 1.0 || i % 50 == 0 {
+                    println!("     {:7.1}             {:12.1}", wl, eps);
+                }
+            }
+        } else {
+            println!(" [UV-VIS] Warning: UV-VIS requires C.I. / MECI keyword. Skipped.");
+        }
+    }
+
     println!("===============================================================================");
 
     // Write .out file matching standard MOPAC format
@@ -1417,6 +1601,76 @@ fn main() -> Result<(), Box<dyn std::error::Error>> {
             h_res.thermo.gibbs_correction_kcal_mol
         )?;
         writeln!(out)?;
+    }
+
+    if let Some((ref meci_res, _)) = meci_result {
+        writeln!(out, "           MULTI-ELECTRON CONFIGURATION INTERACTION")?;
+        writeln!(out)?;
+        writeln!(
+            out,
+            "  STATE     ENERGY (EV)      DELTA-E (EV)    SPIN      POL-X   POL-Y   POL-Z     DIPOLE (D)     OSC.STR."
+        )?;
+        for st in &meci_res.states {
+            let pol_x = st.polarization_angstrom2[0].sqrt();
+            let pol_y = st.polarization_angstrom2[1].sqrt();
+            let pol_z = st.polarization_angstrom2[2].sqrt();
+            writeln!(
+                out,
+                "   {:3}   {:12.6}     {:10.6}     {:8}    {:7.4} {:7.4} {:7.4}    {:10.4}     {:8.6}",
+                st.root,
+                st.energy_ev,
+                st.excitation_energy_ev,
+                st.spin.label,
+                pol_x,
+                pol_y,
+                pol_z,
+                st.dipole_strength_debye,
+                st.oscillator_strength
+            )?;
+        }
+        writeln!(out)?;
+        writeln!(
+            out,
+            " CI ENERGY CORRECTION    = {:17.6} EV",
+            meci_res.ci_energy_correction_ev
+        )?;
+        writeln!(
+            out,
+            " CI TOTAL ENERGY         = {:17.6} EV",
+            meci_res.total_energy_ev
+        )?;
+        writeln!(
+            out,
+            " CI HEAT OF FORMATION    = {:17.5} KCAL/MOL",
+            meci_res.heat_of_formation_kcal
+        )?;
+        writeln!(out)?;
+    }
+
+    if is_uv_vis {
+        if let Some((ref meci_res, _)) = meci_result {
+            let spectrum = simulate_uv_vis_spectrum(&meci_res.states, 100.0, 800.0, 1.0, 20.0);
+            writeln!(out, "           UV-VIS ABSORPTION SPECTRUM")?;
+            writeln!(out)?;
+            writeln!(
+                out,
+                " LAMBDA_MAX = {:.1} NM,  EPSILON_MAX = {:.1} L/(MOL*CM)",
+                spectrum.lambda_max_nm, spectrum.epsilon_max
+            )?;
+            writeln!(out)?;
+            writeln!(out, "   WAVELENGTH (NM)     EPSILON (L/MOL/CM)")?;
+            for (i, (&wl, &eps)) in spectrum
+                .wavelengths_nm
+                .iter()
+                .zip(spectrum.extinction_coefficients.iter())
+                .enumerate()
+            {
+                if eps > 1.0 || i % 50 == 0 {
+                    writeln!(out, "     {:7.1}             {:12.1}", wl, eps)?;
+                }
+            }
+            writeln!(out)?;
+        }
     }
 
     writeln!(out, " == MOPAC_RS DONE ==")?;

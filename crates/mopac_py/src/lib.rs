@@ -12,6 +12,10 @@ use pyo3::exceptions::PyValueError;
 use pyo3::prelude::*;
 use pyo3::types::PyDict;
 
+use mopac_core::ci::meci::{run_meci, CiActiveSpace, MeciOptions, MeciWorkspace};
+use mopac_core::ci::spectrum::{
+    compute_transition_dipoles_and_oscillator_strengths, simulate_uv_vis_spectrum,
+};
 use mopac_core::constants::codata2018::EV_TO_KCAL_MOL;
 use mopac_core::corrections::dispersion::{
     compute_dispersion_energy_and_gradients, DispersionModel,
@@ -1403,6 +1407,283 @@ pub fn drc(
     })
 }
 
+/// Single CI electronic state result exposed to Python.
+#[pyclass(get_all)]
+#[derive(Debug, Clone)]
+pub struct CiStatePy {
+    /// State index (1-indexed)
+    pub root: usize,
+    /// Absolute CI energy eigenvalue in eV
+    pub energy_ev: f64,
+    /// Excitation energy relative to ground state in eV
+    pub excitation_energy_ev: f64,
+    /// Excitation energy in cm^-1
+    pub excitation_energy_cm1: f64,
+    /// Absorption wavelength in nm
+    pub wavelength_nm: f64,
+    /// Spin multiplicity (1=Singlet, 2=Doublet, 3=Triplet)
+    pub multiplicity: usize,
+    /// Spin label
+    pub spin_label: String,
+    /// S^2 expectation value
+    pub s_squared: f64,
+    /// Transition dipole moment [x, y, z] in Debye
+    pub transition_dipole_debye: [f64; 3],
+    /// Total transition dipole magnitude in Debye
+    pub dipole_strength_debye: f64,
+    /// Polarization in Angstroms^2 [x, y, z]
+    pub polarization_angstrom2: [f64; 3],
+    /// Dimensionless oscillator strength
+    pub oscillator_strength: f64,
+}
+
+/// Complete MECI calculation result exposed to Python.
+#[pyclass(get_all)]
+#[derive(Debug, Clone)]
+pub struct MeciPyResult {
+    /// All computed CI states
+    pub states: Vec<CiStatePy>,
+    /// Number of microstates
+    pub num_microstates: usize,
+    /// Target root index (1-indexed)
+    pub target_root: usize,
+    /// CI energy correction in eV
+    pub ci_energy_correction_ev: f64,
+    /// Total electronic energy in eV
+    pub electronic_energy_ev: f64,
+    /// Total energy in eV
+    pub total_energy_ev: f64,
+    /// Heat of formation in kcal/mol
+    pub heat_of_formation_kcal: f64,
+}
+
+/// Simulated UV-Vis spectrum exposed to Python.
+#[pyclass(get_all)]
+#[derive(Debug, Clone)]
+pub struct UvVisSpectrumPy {
+    /// Wavelength grid in nm
+    pub wavelengths_nm: Vec<f64>,
+    /// Molar extinction coefficients in L/(mol*cm)
+    pub extinction_coefficients: Vec<f64>,
+    /// Peak absorption wavelength in nm
+    pub lambda_max_nm: f64,
+    /// Maximum extinction coefficient
+    pub epsilon_max: f64,
+}
+
+/// Run Multi-Electron Configuration Interaction (MECI) excited state calculation.
+///
+/// Parameters:
+/// - `atomic_numbers`: list of integer atomic numbers
+/// - `coordinates`: 3D coordinates in Angstroms
+/// - `method`: Semi-empirical Hamiltonian (default: "PM6")
+/// - `active_orbitals`: Number of active orbitals (default: 2)
+/// - `target_root`: Target root state, 1-indexed (default: 1 = ground state)
+/// - `use_nddo`: Enable full NDDO integrals (default: true)
+#[pyfunction]
+#[pyo3(signature = (
+    atomic_numbers,
+    coordinates,
+    method = "PM6",
+    active_orbitals = 2,
+    target_root = 1,
+    use_nddo = true
+))]
+pub fn meci(
+    atomic_numbers: Vec<u8>,
+    coordinates: Vec<[f64; 3]>,
+    method: Option<&str>,
+    active_orbitals: Option<usize>,
+    target_root: Option<usize>,
+    use_nddo: Option<bool>,
+) -> PyResult<MeciPyResult> {
+    let natoms = atomic_numbers.len();
+    if natoms == 0 {
+        return Err(PyValueError::new_err("atomic_numbers cannot be empty"));
+    }
+    if coordinates.len() != natoms {
+        return Err(PyValueError::new_err("Coordinate count mismatch"));
+    }
+
+    let model = get_model(method.unwrap_or("PM6"))?;
+    let batch = MolecularBatch::new_for_model(atomic_numbers, &coordinates, model.as_ref());
+    let mut scf_ws = ScfWorkspace::allocate(batch.norbs);
+    let nddo = use_nddo.unwrap_or(true);
+
+    let scf_opts = ScfOptions {
+        use_nddo: nddo,
+        ..ScfOptions::default()
+    };
+    let scf_res = run_rhf_scf_with_options(&batch, model.as_ref(), &mut scf_ws, &scf_opts);
+    if !scf_res.converged {
+        return Err(PyValueError::new_err("SCF did not converge"));
+    }
+
+    let n_orbs = active_orbitals.unwrap_or(2);
+    let active_space = CiActiveSpace::new(n_orbs, n_orbs);
+    let options = MeciOptions {
+        active_space,
+        target_root: target_root.unwrap_or(1),
+        spin_target: None,
+        use_nddo: nddo,
+    };
+
+    // Compute active MO indices
+    let mut total_valence_elecs = 0.0f64;
+    for &z in &batch.atomic_numbers {
+        if let Some(p) = model.get_element(z) {
+            total_valence_elecs += p.core_charge;
+        }
+    }
+    let n_occ = (total_valence_elecs.round() as usize) / 2;
+    let n_occ_active = n_orbs.div_ceil(2);
+    let start_mo = n_occ - n_occ_active;
+    let active_mo_indices: Vec<usize> = (start_mo..start_mo + n_orbs).collect();
+
+    let max_microstates = 100;
+    let mut meci_ws = MeciWorkspace::allocate(n_orbs, max_microstates);
+
+    let mut meci_res = run_meci(
+        &batch,
+        model.as_ref(),
+        &scf_ws.eigenvectors,
+        &scf_ws.eigenvalues,
+        scf_res.electronic_energy_ev,
+        scf_res.total_energy_ev,
+        &options,
+        &mut meci_ws,
+    );
+
+    compute_transition_dipoles_and_oscillator_strengths(
+        &batch,
+        model.as_ref(),
+        &scf_ws.eigenvectors,
+        &active_mo_indices,
+        &mut meci_res,
+    );
+
+    let states: Vec<CiStatePy> = meci_res
+        .states
+        .iter()
+        .map(|s| CiStatePy {
+            root: s.root,
+            energy_ev: s.energy_ev,
+            excitation_energy_ev: s.excitation_energy_ev,
+            excitation_energy_cm1: s.excitation_energy_cm1,
+            wavelength_nm: s.wavelength_nm,
+            multiplicity: s.spin.multiplicity,
+            spin_label: s.spin.label.to_string(),
+            s_squared: s.spin.s_squared,
+            transition_dipole_debye: s.transition_dipole_debye,
+            dipole_strength_debye: s.dipole_strength_debye,
+            polarization_angstrom2: s.polarization_angstrom2,
+            oscillator_strength: s.oscillator_strength,
+        })
+        .collect();
+
+    Ok(MeciPyResult {
+        states,
+        num_microstates: meci_res.microstates.len(),
+        target_root: meci_res.target_root,
+        ci_energy_correction_ev: meci_res.ci_energy_correction_ev,
+        electronic_energy_ev: meci_res.electronic_energy_ev,
+        total_energy_ev: meci_res.total_energy_ev,
+        heat_of_formation_kcal: meci_res.heat_of_formation_kcal,
+    })
+}
+
+/// Simulate UV-Vis electronic absorption spectrum from CI states.
+///
+/// Parameters:
+/// - `atomic_numbers`: list of integer atomic numbers
+/// - `coordinates`: 3D coordinates in Angstroms
+/// - `method`: Semi-empirical Hamiltonian (default: "PM6")
+/// - `active_orbitals`: Number of active orbitals (default: 2)
+/// - `min_wavelength_nm`: Minimum wavelength in nm (default: 100.0)
+/// - `max_wavelength_nm`: Maximum wavelength in nm (default: 800.0)
+/// - `step_nm`: Wavelength step size in nm (default: 1.0)
+/// - `fwhm_nm`: Gaussian broadening FWHM in nm (default: 20.0)
+/// - `use_nddo`: Enable full NDDO integrals (default: true)
+#[pyfunction]
+#[pyo3(signature = (
+    atomic_numbers,
+    coordinates,
+    method = "PM6",
+    active_orbitals = 2,
+    min_wavelength_nm = 100.0,
+    max_wavelength_nm = 800.0,
+    step_nm = 1.0,
+    fwhm_nm = 20.0,
+    use_nddo = true
+))]
+pub fn uv_vis_spectrum(
+    atomic_numbers: Vec<u8>,
+    coordinates: Vec<[f64; 3]>,
+    method: Option<&str>,
+    active_orbitals: Option<usize>,
+    min_wavelength_nm: Option<f64>,
+    max_wavelength_nm: Option<f64>,
+    step_nm: Option<f64>,
+    fwhm_nm: Option<f64>,
+    use_nddo: Option<bool>,
+) -> PyResult<UvVisSpectrumPy> {
+    // Run MECI first to get CI states
+    let meci_res = meci(
+        atomic_numbers,
+        coordinates,
+        method,
+        active_orbitals,
+        Some(1),
+        use_nddo,
+    )?;
+
+    // Convert back to CiState-like data for spectrum simulation
+    // We can directly use the oscillator strengths and wavelengths from CiStatePy
+    let min_wl = min_wavelength_nm.unwrap_or(100.0);
+    let max_wl = max_wavelength_nm.unwrap_or(800.0);
+    let step = step_nm.unwrap_or(1.0);
+    let fwhm = fwhm_nm.unwrap_or(20.0);
+
+    // Build lightweight CiState vec for spectrum simulation
+    use mopac_core::ci::meci::{CiState, StateSpin};
+    let ci_states: Vec<CiState> = meci_res
+        .states
+        .iter()
+        .map(|s| CiState {
+            root: s.root,
+            energy_ev: s.energy_ev,
+            excitation_energy_ev: s.excitation_energy_ev,
+            excitation_energy_cm1: s.excitation_energy_cm1,
+            wavelength_nm: s.wavelength_nm,
+            spin: StateSpin {
+                s_squared: s.s_squared,
+                s: ((1.0 + 4.0 * s.s_squared).sqrt() - 1.0) / 2.0,
+                multiplicity: s.multiplicity,
+                label: match s.multiplicity {
+                    1 => "Singlet",
+                    2 => "Doublet",
+                    3 => "Triplet",
+                    _ => "Unknown",
+                },
+            },
+            transition_dipole_debye: s.transition_dipole_debye,
+            dipole_strength_debye: s.dipole_strength_debye,
+            polarization_angstrom2: s.polarization_angstrom2,
+            oscillator_strength: s.oscillator_strength,
+            eigenvector: Vec::new(),
+        })
+        .collect();
+
+    let spectrum = simulate_uv_vis_spectrum(&ci_states, min_wl, max_wl, step, fwhm);
+
+    Ok(UvVisSpectrumPy {
+        wavelengths_nm: spectrum.wavelengths_nm,
+        extinction_coefficients: spectrum.extinction_coefficients,
+        lambda_max_nm: spectrum.lambda_max_nm,
+        epsilon_max: spectrum.epsilon_max,
+    })
+}
+
 /// Object-oriented MOPAC Calculator class compatible with PyTorch / RDKit / ASE workflows.
 #[pyclass]
 pub struct MopacCalculator {
@@ -1585,6 +1866,50 @@ impl MopacCalculator {
             Some(self.use_nddo),
         )
     }
+
+    /// Run MECI excited state calculation.
+    #[pyo3(signature = (atomic_numbers, coordinates, active_orbitals = 2, target_root = 1))]
+    fn meci(
+        &self,
+        atomic_numbers: Vec<u8>,
+        coordinates: Vec<[f64; 3]>,
+        active_orbitals: Option<usize>,
+        target_root: Option<usize>,
+    ) -> PyResult<MeciPyResult> {
+        meci(
+            atomic_numbers,
+            coordinates,
+            Some(&self.method),
+            active_orbitals,
+            target_root,
+            Some(self.use_nddo),
+        )
+    }
+
+    /// Simulate UV-Vis absorption spectrum.
+    #[pyo3(signature = (atomic_numbers, coordinates, active_orbitals = 2, min_wavelength_nm = 100.0, max_wavelength_nm = 800.0, step_nm = 1.0, fwhm_nm = 20.0))]
+    fn uv_vis_spectrum(
+        &self,
+        atomic_numbers: Vec<u8>,
+        coordinates: Vec<[f64; 3]>,
+        active_orbitals: Option<usize>,
+        min_wavelength_nm: Option<f64>,
+        max_wavelength_nm: Option<f64>,
+        step_nm: Option<f64>,
+        fwhm_nm: Option<f64>,
+    ) -> PyResult<UvVisSpectrumPy> {
+        uv_vis_spectrum(
+            atomic_numbers,
+            coordinates,
+            Some(&self.method),
+            active_orbitals,
+            min_wavelength_nm,
+            max_wavelength_nm,
+            step_nm,
+            fwhm_nm,
+            Some(self.use_nddo),
+        )
+    }
 }
 
 /// MOPAC_RS Python Module
@@ -1600,6 +1925,9 @@ fn mopac_py(m: &Bound<'_, PyModule>) -> PyResult<()> {
     m.add_class::<IrcPyResult>()?;
     m.add_class::<DrcFramePy>()?;
     m.add_class::<DrcPyResult>()?;
+    m.add_class::<CiStatePy>()?;
+    m.add_class::<MeciPyResult>()?;
+    m.add_class::<UvVisSpectrumPy>()?;
     m.add_class::<MopacCalculator>()?;
     m.add_function(wrap_pyfunction!(calculate, m)?)?;
     m.add_function(wrap_pyfunction!(optimize, m)?)?;
@@ -1607,6 +1935,8 @@ fn mopac_py(m: &Bound<'_, PyModule>) -> PyResult<()> {
     m.add_function(wrap_pyfunction!(frequencies, m)?)?;
     m.add_function(wrap_pyfunction!(irc, m)?)?;
     m.add_function(wrap_pyfunction!(drc, m)?)?;
+    m.add_function(wrap_pyfunction!(meci, m)?)?;
+    m.add_function(wrap_pyfunction!(uv_vis_spectrum, m)?)?;
 
     let py = m.py();
     let py_code = r#"
