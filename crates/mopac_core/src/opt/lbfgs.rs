@@ -6,6 +6,7 @@
 //!
 //! Licensed under the Apache License, Version 2.0 (the "License").
 
+use crate::constants::codata2018::EV_TO_KCAL_MOL;
 use crate::gradients::nuclear_gradients::{compute_cartesian_gradients_with_options, compute_gradient_norms, GradientWorkspace};
 use crate::parameters::ParameterModel;
 use crate::scf::scf_loop::{run_rhf_scf_adaptive_with_nddo, ScfResult};
@@ -28,6 +29,9 @@ pub struct OptimizationOptions {
     pub history_capacity: usize,
     /// Whether to evaluate full NDDO 22-multipole potential energy surface and gradients (default: false)
     pub use_nddo: bool,
+    /// Optional coordinate optimization mask (length: 3 * natoms).
+    /// `true` = active degree of freedom, `false` = frozen/pinned coordinate.
+    pub opt_mask: Option<Vec<bool>>,
 }
 
 impl Default for OptimizationOptions {
@@ -40,6 +44,7 @@ impl Default for OptimizationOptions {
             max_step_size: 0.2,
             history_capacity: 6,
             use_nddo: false,
+            opt_mask: None,
         }
     }
 }
@@ -64,6 +69,38 @@ fn dot(a: &[f64], b: &[f64]) -> f64 {
         sum += a[i] * b[i];
     }
     sum
+}
+
+/// Compute Root-Mean-Square (RMS) and Maximum Gradient Norm considering optional coordinate mask.
+fn compute_effective_gradient_norms(gradients_3d: &[[f64; 3]], mask: Option<&[bool]>) -> (f64, f64) {
+    match mask {
+        Some(m) => {
+            let mut sum_sq = 0.0;
+            let mut max_norm = 0.0f64;
+            let mut n_active_coords = 0;
+            for (a, g) in gradients_3d.iter().enumerate() {
+                for c in 0..3 {
+                    if m[3 * a + c] {
+                        n_active_coords += 1;
+                        let val = g[c] * EV_TO_KCAL_MOL;
+                        let sq = val * val;
+                        sum_sq += sq;
+                        let abs_val = val.abs();
+                        if abs_val > max_norm {
+                            max_norm = abs_val;
+                        }
+                    }
+                }
+            }
+            let rms = if n_active_coords > 0 {
+                (sum_sq / (n_active_coords as f64)).sqrt()
+            } else {
+                0.0
+            };
+            (rms, max_norm)
+        }
+        None => compute_gradient_norms(gradients_3d),
+    }
 }
 
 /// Run L-BFGS molecular geometry relaxation.
@@ -95,7 +132,18 @@ pub fn optimize_geometry_lbfgs(
     let mut gradients_3d = vec![[0.0f64; 3]; natoms];
     compute_cartesian_gradients_with_options(batch, model, &scf_ws.density, grad_ws, &mut gradients_3d, options.use_nddo);
 
-    let (mut rms_g, mut max_g) = compute_gradient_norms(&gradients_3d);
+    // Apply optimization mask: zero out gradients on frozen degrees of freedom
+    if let Some(ref m) = options.opt_mask {
+        for a in 0..natoms {
+            for c in 0..3 {
+                if !m[3 * a + c] {
+                    gradients_3d[a][c] = 0.0;
+                }
+            }
+        }
+    }
+
+    let (mut rms_g, mut max_g) = compute_effective_gradient_norms(&gradients_3d, options.opt_mask.as_deref());
     let initial_rms_g = rms_g;
 
     if rms_g < options.grad_rms_tol && max_g < options.grad_max_tol {
@@ -197,6 +245,13 @@ pub fn optimize_geometry_lbfgs(
         for j in 0..ncoords {
             step[j] = p[j] * scale;
         }
+        if let Some(ref m) = options.opt_mask {
+            for j in 0..ncoords {
+                if !m[j] {
+                    step[j] = 0.0;
+                }
+            }
+        }
 
         let mut trial_coords = vec![0.0f64; ncoords];
         for j in 0..ncoords {
@@ -217,7 +272,19 @@ pub fn optimize_geometry_lbfgs(
         last_scf = scf_res;
 
         compute_cartesian_gradients_with_options(batch, model, &scf_ws.density, grad_ws, &mut gradients_3d, options.use_nddo);
-        let (new_rms_g, new_max_g) = compute_gradient_norms(&gradients_3d);
+
+        // Apply optimization mask to trial gradients
+        if let Some(ref m) = options.opt_mask {
+            for a in 0..natoms {
+                for c in 0..3 {
+                    if !m[3 * a + c] {
+                        gradients_3d[a][c] = 0.0;
+                    }
+                }
+            }
+        }
+
+        let (new_rms_g, new_max_g) = compute_effective_gradient_norms(&gradients_3d, options.opt_mask.as_deref());
 
         let mut new_grad = vec![0.0f64; ncoords];
         for i in 0..natoms {

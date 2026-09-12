@@ -1029,6 +1029,7 @@ fn test_scrutiny_lbfgs_geometry_optimization() {
         max_step_size: 0.1,
         history_capacity: 5,
         use_nddo: false,
+        opt_mask: None,
     };
 
     let res = optimize_geometry_lbfgs(&mut batch, &am1, &mut scf_ws, &mut grad_ws, &opts);
@@ -1344,6 +1345,7 @@ fn test_scrutiny_full_nddo_lbfgs_water_relaxation() {
         max_step_size: 0.1,
         history_capacity: 5,
         use_nddo: true,
+        opt_mask: None,
     };
 
     let res = optimize_geometry_lbfgs(&mut batch, &am1, &mut scf_ws, &mut grad_ws, &opts);
@@ -1370,6 +1372,69 @@ fn test_scrutiny_full_nddo_lbfgs_water_relaxation() {
         r_oh > 0.85 && r_oh < 1.05,
         "Optimized NDDO OH bond length must be physical [0.85, 1.05] Å: got {:.4} Å",
         r_oh
+    );
+}
+
+/// Scrutiny Test 21: Constrained Geometry Optimization with Coordinate Pinning.
+///
+/// Verifies that when an atom is pinned (opt_mask = false), its Cartesian coordinates
+/// remain bit-exact identical throughout the optimization while unpinned atoms relax.
+#[test]
+fn test_scrutiny_constrained_geometry_relaxation_coordinate_pinning() {
+    use mopac_core::gradients::GradientWorkspace;
+    use mopac_core::opt::{optimize_geometry_lbfgs, OptimizationOptions};
+    use mopac_core::parameters::am1::Am1Model;
+    use mopac_core::types::{MolecularBatch, ScfWorkspace};
+
+    let am1 = Am1Model;
+
+    let pinned_x = 0.0;
+    let pinned_y = 0.0;
+    let pinned_z = 0.123456789;
+
+    let coords = vec![
+        [pinned_x, pinned_y, pinned_z], // Atom 0: Oxygen pinned
+        [0.0, 0.85, -0.65],             // Atom 1: Hydrogen active
+        [0.0, -0.85, -0.65],            // Atom 2: Hydrogen active
+    ];
+    let mut batch = MolecularBatch::new(vec![8, 1, 1], &coords);
+    let mut scf_ws = ScfWorkspace::allocate(batch.norbs);
+    let mut grad_ws = GradientWorkspace::allocate(batch.norbs);
+
+    // Freeze Atom 0 (false, false, false), allow Atoms 1 and 2 to relax (true...)
+    let opt_mask = vec![
+        false, false, false, // Oxygen pinned
+        true, true, true,    // H1 active
+        true, true, true,    // H2 active
+    ];
+
+    let opts = OptimizationOptions {
+        max_cycles: 25,
+        grad_rms_tol: 1.0,
+        grad_max_tol: 2.0,
+        energy_tol_ev: 1e-5,
+        max_step_size: 0.1,
+        history_capacity: 5,
+        use_nddo: false,
+        opt_mask: Some(opt_mask),
+    };
+
+    let res = optimize_geometry_lbfgs(&mut batch, &am1, &mut scf_ws, &mut grad_ws, &opts);
+
+    assert!(res.converged, "Constrained optimization must converge");
+    assert!(res.final_energy_ev < res.initial_energy_ev, "Energy must decrease");
+
+    // Verify pinned atom coordinates remained strictly identical
+    assert_eq!(batch.x[0], pinned_x, "Pinned atom X coordinate changed!");
+    assert_eq!(batch.y[0], pinned_y, "Pinned atom Y coordinate changed!");
+    assert_eq!(batch.z[0], pinned_z, "Pinned atom Z coordinate changed!");
+
+    // Verify unpinned atoms relaxed
+    assert_ne!(batch.y[1], 0.85, "Active atom Y coordinate should have relaxed");
+
+    println!(
+        "✅ Constrained Optimization Succeeded in {} cycles: Pinned Atom 0 remained at exactly ({:.9}, {:.9}, {:.9}), E dropped by {:.6} eV",
+        res.cycles, batch.x[0], batch.y[0], batch.z[0], res.initial_energy_ev - res.final_energy_ev
     );
 }
 

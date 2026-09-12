@@ -503,6 +503,13 @@ fn main() -> Result<(), Box<dyn std::error::Error>> {
 
     let (scf_final, total_scf_cycles) = if is_opt {
         println!(" [Optimizer] Starting Cartesian L-BFGS Relaxation...");
+        let mut opt_mask = Vec::with_capacity(3 * parsed.atoms.len());
+        for a in &parsed.atoms {
+            opt_mask.push(a.opt_x);
+            opt_mask.push(a.opt_y);
+            opt_mask.push(a.opt_z);
+        }
+
         let opts = OptimizationOptions {
             max_cycles: 100,
             grad_rms_tol: 0.5,
@@ -511,6 +518,7 @@ fn main() -> Result<(), Box<dyn std::error::Error>> {
             max_step_size: 0.1,
             history_capacity: 6,
             use_nddo,
+            opt_mask: Some(opt_mask),
         };
 
         let mut grad_ws = GradientWorkspace::allocate(batch.norbs);
