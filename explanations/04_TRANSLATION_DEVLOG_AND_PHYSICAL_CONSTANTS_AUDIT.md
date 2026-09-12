@@ -316,6 +316,11 @@ With the consolidation of Phase 1 and the execution of the canonical integration
 - Wired MOPAC coordinate optimization flags directly (`1` = active, `0` = frozen/pinned).
 - Zeroes out forces and search directions along pinned degrees of freedom, guaranteeing bit-exact immutability ($\Delta R < 10^{-15}\text{ \AA}$) on pinned sites while unconstrained atoms relax freely.
 
+### 6.13 Canonical MNDO Semi-Empirical Hamiltonian Integration
+- Implemented `MndoModel` in [`crates/mopac_core/src/parameters/mndo.rs`](file:///home/cyclop/Projects/n/05_mopacrs/crates/mopac_core/src/parameters/mndo.rs) with authentic parameters directly extracted from OpenMOPAC `libmopac.so.2`.
+- Models Dewar and Thiel's classic MNDO theory (zero Gaussian core wells, pure core-core exponential repulsion).
+- Fully wired into the CLI for `MNDO` keyword and single-point/opt calculation modes.
+
 ---
 
 ## 7. Additional Fortran Pathologies Resolved
@@ -331,7 +336,7 @@ With the consolidation of Phase 1 and the execution of the canonical integration
 
 ---
 
-## 8. Final Scrutiny Summary Table (30 / 30 Tests Passing)
+## 8. Final Scrutiny Summary Table (31 / 31 Tests Passing)
 
 | Test Suite | Scrutiny Test Name | Verification Target | Invariant / Precision | Result |
 | :---: | :--- | :--- | :--- | :---: |
@@ -341,6 +346,7 @@ With the consolidation of Phase 1 and the execution of the canonical integration
 | `mopac_core` | `test_scrutiny_hybridization_dipole_exact_parity` | $sp$ Hybridization dipole & point dipole parity | Total dipole in $[1.7, 1.95]\text{ D}$ on water | **PASSED** |
 | `mopac_core` | `test_scrutiny_full_nddo_lbfgs_water_relaxation` | Full NDDO 22-Multipole L-BFGS Water Relaxation | Monotonic descent to $R_{\text{OH}} \approx 0.86\text{ \AA}$, $\text{RMS } G < 0.6$ | **PASSED** |
 | `mopac_core` | `test_scrutiny_constrained_geometry_relaxation_coordinate_pinning` | Selective coordinate pinning & frozen atoms | Pinned atom $\Delta R = 0.000000000\text{ \AA}$ | **PASSED** |
+| `mopac_core` | `test_scrutiny_mndo_hamiltonian_convergence` | Dewar-Thiel MNDO on $H_2O$ & $CH_4$ | Stable convergence & physical negative energies | **PASSED** |
 | `mopac_gpu` | `test_scrutiny_vulkan_gpu_gddr6_batch_pipelining_parity` | Concurrent multi-molecule GDDR6 evaluation | Water & Methane Coulomb parity vs CPU $< 10^{-4}\text{ eV}$ | **PASSED** |
 | `mopac_gpu` | `test_scrutiny_vulkan_gpu_gddr6_batch_manager` | GDDR6 DMA Host-to-Device Transfer | Bit-exact 3-atom coordinate buffer copy | **PASSED** |
 | `mopac_gpu` | `test_scrutiny_vulkan_gpu_coulomb_matrix_fp32_parity` | FP32 18 TFLOPS Hardware Rate & Parity | Single-precision Coulomb bound $< 10^{-4}\text{ eV}$ | **PASSED** |

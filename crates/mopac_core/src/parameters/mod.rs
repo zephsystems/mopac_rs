@@ -3,11 +3,13 @@
 //! Licensed under the Apache License, Version 2.0 (the "License").
 
 pub mod am1;
+pub mod mndo;
 pub mod pm3;
 pub mod pm6;
 pub mod rm1;
 
 pub use am1::Am1Model;
+pub use mndo::MndoModel;
 pub use pm3::Pm3Model;
 pub use pm6::Pm6Model;
 pub use rm1::Rm1Model;

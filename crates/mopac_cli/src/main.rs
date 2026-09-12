@@ -8,6 +8,7 @@ use mopac_core::constants::codata2018::EV_TO_KCAL_MOL;
 use mopac_core::gradients::GradientWorkspace;
 use mopac_core::opt::{optimize_geometry_lbfgs, OptimizationOptions};
 use mopac_core::parameters::am1::Am1Model;
+use mopac_core::parameters::mndo::MndoModel;
 use mopac_core::parameters::pm3::Pm3Model;
 use mopac_core::parameters::pm6::Pm6Model;
 use mopac_core::parameters::rm1::Rm1Model;
@@ -231,6 +232,8 @@ fn parse_mopac_input(content: &str) -> io::Result<ParsedInput> {
             method = Some("RM1".to_string());
         } else if u == "AM1" {
             method = Some("AM1".to_string());
+        } else if u == "MNDO" {
+            method = Some("MNDO".to_string());
         } else if u == "NDDO" {
             is_nddo_requested = true;
         }
@@ -457,6 +460,7 @@ fn main() -> Result<(), Box<dyn std::error::Error>> {
         "PM6" => Box::new(Pm6Model),
         "PM3" => Box::new(Pm3Model),
         "RM1" => Box::new(Rm1Model),
+        "MNDO" => Box::new(MndoModel),
         _ => Box::new(Am1Model),
     };
 

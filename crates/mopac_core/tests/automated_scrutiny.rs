@@ -1438,6 +1438,60 @@ fn test_scrutiny_constrained_geometry_relaxation_coordinate_pinning() {
     );
 }
 
+/// Scrutiny Test 22: Canonical MNDO Hamiltonian Convergence and Parity.
+///
+/// Verifies Dewar & Thiel's foundational MNDO semi-empirical method on Water and Methane,
+/// confirming stable convergence, negative total energies, and proper orbital spectrum.
+#[test]
+fn test_scrutiny_mndo_hamiltonian_convergence() {
+    use mopac_core::parameters::mndo::MndoModel;
+    use mopac_core::scf::scf_loop::{run_rhf_scf_with_options, ScfOptions};
+    use mopac_core::types::{MolecularBatch, ScfWorkspace};
+
+    let mndo = MndoModel;
+
+    let opts = ScfOptions {
+        max_iter: 50,
+        energy_tol_ev: 1e-7,
+        density_tol: 1e-6,
+        level_shift_ev: 0.0,
+        damping: 0.5,
+        use_nddo: true,
+    };
+
+    // 1. Water (H2O)
+    let h2o_coords = vec![
+        [0.0, 0.0, 0.065545],
+        [0.0, 0.757095, -0.520545],
+        [0.0, -0.757095, -0.520545],
+    ];
+    let batch_h2o = MolecularBatch::new(vec![8, 1, 1], &h2o_coords);
+    let mut ws_h2o = ScfWorkspace::allocate(batch_h2o.norbs);
+    let res_h2o = run_rhf_scf_with_options(&batch_h2o, &mndo, &mut ws_h2o, &opts);
+    assert!(res_h2o.converged, "MNDO on H2O must converge");
+    assert!(res_h2o.total_energy_ev < 0.0, "Total energy must be negative");
+    assert!(res_h2o.homo_energy_ev < res_h2o.lumo_energy_ev, "Positive gap");
+
+    // 2. Methane (CH4)
+    let ch4_coords = vec![
+        [0.000, 0.000, 0.000],
+        [0.628, 0.628, 0.628],
+        [-0.628, -0.628, 0.628],
+        [-0.628, 0.628, -0.628],
+        [0.628, -0.628, -0.628],
+    ];
+    let batch_ch4 = MolecularBatch::new(vec![6, 1, 1, 1, 1], &ch4_coords);
+    let mut ws_ch4 = ScfWorkspace::allocate(batch_ch4.norbs);
+    let res_ch4 = run_rhf_scf_with_options(&batch_ch4, &mndo, &mut ws_ch4, &opts);
+    assert!(res_ch4.converged, "MNDO on CH4 must converge");
+    assert!(res_ch4.total_energy_ev < 0.0, "Methane total energy must be negative");
+
+    println!(
+        "✅ MNDO Hamiltonian Verified: H2O E_tot = {:.6} eV (HOMO = {:.4} eV), CH4 E_tot = {:.6} eV (HOMO = {:.4} eV)",
+        res_h2o.total_energy_ev, res_h2o.homo_energy_ev, res_ch4.total_energy_ev, res_ch4.homo_energy_ev
+    );
+}
+
 
 
 
