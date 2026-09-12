@@ -33,6 +33,10 @@ use mopac_core::parameters::{
 use mopac_core::properties::{
     compute_dipole_moment, compute_heat_of_formation, compute_mulliken_population,
 };
+use mopac_core::reactions::{
+    run_dynamic_reaction_coordinate, trace_intrinsic_reaction_coordinate, DrcEnsemble, DrcOptions,
+    DrcWorkspace, InitialVelocities, IrcDirection, IrcOptions, IrcWorkspace,
+};
 use mopac_core::scf::scf_loop::{run_rhf_scf_with_options, ScfOptions};
 use mopac_core::solvation::CosmoParams;
 use mopac_core::types::{MolecularBatch, ScfWorkspace};
@@ -366,6 +370,185 @@ impl VibrationalResultPy {
             modes_list.append(m.to_dict(py)?)?;
         }
         dict.set_item("normal_modes", modes_list)?;
+        Ok(dict)
+    }
+}
+
+/// Single reaction path point along an Intrinsic Reaction Coordinate.
+#[pyclass(get_all)]
+#[derive(Debug, Clone)]
+pub struct IrcPointPy {
+    /// Integrated reaction coordinate s in amu^(1/2) * Å (0 at TS, >0 forward, <0 reverse)
+    pub path_coordinate: f64,
+    /// Total electronic energy in eV
+    pub energy_ev: f64,
+    /// Standard heat of formation in kcal/mol
+    pub heat_of_formation_kcal: f64,
+    /// Cartesian coordinates in Å (shape: [natoms, 3])
+    pub coordinates: Vec<[f64; 3]>,
+    /// Cartesian gradient RMS in kcal / (mol * Å)
+    pub cartesian_gradient_rms: f64,
+    /// Mass-weighted gradient RMS in kcal / (mol * Å * amu^(1/2))
+    pub mass_weighted_gradient_rms: f64,
+}
+
+#[pymethods]
+impl IrcPointPy {
+    fn __repr__(&self) -> String {
+        format!(
+            "<IrcPoint s={:+.4} E={:.6} eV, dHf={:.3} kcal/mol, grad_rms={:.4}>",
+            self.path_coordinate,
+            self.energy_ev,
+            self.heat_of_formation_kcal,
+            self.cartesian_gradient_rms
+        )
+    }
+
+    fn to_dict<'py>(&self, py: Python<'py>) -> PyResult<Bound<'py, PyDict>> {
+        let dict = PyDict::new_bound(py);
+        dict.set_item("path_coordinate", self.path_coordinate)?;
+        dict.set_item("energy_ev", self.energy_ev)?;
+        dict.set_item("heat_of_formation_kcal", self.heat_of_formation_kcal)?;
+        dict.set_item("coordinates", &self.coordinates)?;
+        dict.set_item("cartesian_gradient_rms", self.cartesian_gradient_rms)?;
+        dict.set_item(
+            "mass_weighted_gradient_rms",
+            self.mass_weighted_gradient_rms,
+        )?;
+        Ok(dict)
+    }
+}
+
+/// Comprehensive result of Intrinsic Reaction Coordinate path tracing.
+#[pyclass(get_all)]
+#[derive(Debug, Clone)]
+pub struct IrcPyResult {
+    /// Sequence of reaction path points ordered monotonically along reaction coordinate s
+    pub points: Vec<IrcPointPy>,
+    /// Index of transition state point in the points list (s = 0.0)
+    pub ts_point_index: usize,
+    /// Whether forward reaction branch converged to a local minimum
+    pub forward_converged: bool,
+    /// Whether reverse reaction branch converged to a local minimum
+    pub reverse_converged: bool,
+}
+
+#[pymethods]
+impl IrcPyResult {
+    fn __repr__(&self) -> String {
+        format!(
+            "<IrcPyResult points={} ts_idx={} fwd_conv={} rev_conv={}>",
+            self.points.len(),
+            self.ts_point_index,
+            self.forward_converged,
+            self.reverse_converged
+        )
+    }
+
+    fn to_dict<'py>(&self, py: Python<'py>) -> PyResult<Bound<'py, PyDict>> {
+        let dict = PyDict::new_bound(py);
+        dict.set_item("ts_point_index", self.ts_point_index)?;
+        dict.set_item("forward_converged", self.forward_converged)?;
+        dict.set_item("reverse_converged", self.reverse_converged)?;
+        let pts_list = pyo3::types::PyList::empty_bound(py);
+        for p in &self.points {
+            pts_list.append(p.to_dict(py)?)?;
+        }
+        dict.set_item("points", pts_list)?;
+        Ok(dict)
+    }
+}
+
+/// Recorded frame along Dynamic Reaction Coordinate Born-Oppenheimer Molecular Dynamics.
+#[pyclass(get_all)]
+#[derive(Debug, Clone)]
+pub struct DrcFramePy {
+    /// Integration step index (0-indexed)
+    pub step: usize,
+    /// Elapsed simulation time in femtoseconds
+    pub time_fs: f64,
+    /// Potential energy in eV
+    pub potential_energy_ev: f64,
+    /// Classical kinetic energy in eV
+    pub kinetic_energy_ev: f64,
+    /// Total energy (potential + kinetic) in eV
+    pub total_energy_ev: f64,
+    /// Instantaneous kinetic temperature in Kelvin
+    pub temperature_k: f64,
+    /// Atomic Cartesian coordinates in Å (shape: [natoms, 3])
+    pub coordinates: Vec<[f64; 3]>,
+    /// Atomic velocities in Å / fs (shape: [natoms, 3])
+    pub velocities: Vec<[f64; 3]>,
+    /// Cartesian forces in eV / Å (shape: [natoms, 3])
+    pub forces: Vec<[f64; 3]>,
+}
+
+#[pymethods]
+impl DrcFramePy {
+    fn __repr__(&self) -> String {
+        format!(
+            "<DrcFrame step={} t={:.2} fs, E_tot={:.6} eV, T={:.1} K>",
+            self.step, self.time_fs, self.total_energy_ev, self.temperature_k
+        )
+    }
+
+    fn to_dict<'py>(&self, py: Python<'py>) -> PyResult<Bound<'py, PyDict>> {
+        let dict = PyDict::new_bound(py);
+        dict.set_item("step", self.step)?;
+        dict.set_item("time_fs", self.time_fs)?;
+        dict.set_item("potential_energy_ev", self.potential_energy_ev)?;
+        dict.set_item("kinetic_energy_ev", self.kinetic_energy_ev)?;
+        dict.set_item("total_energy_ev", self.total_energy_ev)?;
+        dict.set_item("temperature_k", self.temperature_k)?;
+        dict.set_item("coordinates", &self.coordinates)?;
+        dict.set_item("velocities", &self.velocities)?;
+        dict.set_item("forces", &self.forces)?;
+        Ok(dict)
+    }
+}
+
+/// Comprehensive result of Dynamic Reaction Coordinate simulation.
+#[pyclass(get_all)]
+#[derive(Debug, Clone)]
+pub struct DrcPyResult {
+    /// Recorded trajectory frames
+    pub frames: Vec<DrcFramePy>,
+    /// Initial total energy in eV
+    pub initial_energy_ev: f64,
+    /// Final total energy in eV
+    pub final_energy_ev: f64,
+    /// Linear energy drift in eV / ps
+    pub energy_drift_ev_per_ps: f64,
+    /// Maximum absolute energy drift in eV
+    pub max_energy_drift_ev: f64,
+    /// Average trajectory temperature in Kelvin
+    pub average_temperature_k: f64,
+}
+
+#[pymethods]
+impl DrcPyResult {
+    fn __repr__(&self) -> String {
+        format!(
+            "<DrcPyResult frames={} drift={:.3e} eV/ps, max_dev={:.3e} eV, avg_T={:.1} K>",
+            self.frames.len(),
+            self.energy_drift_ev_per_ps,
+            self.max_energy_drift_ev,
+            self.average_temperature_k
+        )
+    }
+
+    fn to_dict<'py>(&self, py: Python<'py>) -> PyResult<Bound<'py, PyDict>> {
+        let dict = PyDict::new_bound(py);
+        dict.set_item("initial_energy_ev", self.initial_energy_ev)?;
+        dict.set_item("final_energy_ev", self.final_energy_ev)?;
+        dict.set_item("energy_drift_ev_per_ps", self.energy_drift_ev_per_ps)?;
+        dict.set_item("max_energy_drift_ev", self.max_energy_drift_ev)?;
+        dict.set_item("average_temperature_k", self.average_temperature_k)?;
+        let frames_list = pyo3::types::PyList::empty_bound(py);
+        for f in &self.frames {
+            frames_list.append(f.to_dict(py)?)?;
+        }
+        dict.set_item("frames", frames_list)?;
         Ok(dict)
     }
 }
@@ -993,6 +1176,233 @@ pub fn frequencies(
     })
 }
 
+/// Trace Intrinsic Reaction Coordinate (IRC) path from a transition state.
+///
+/// Parameters:
+/// - `atomic_numbers`: list of integer atomic numbers (e.g. `[7, 1, 1, 1]`)
+/// - `coordinates`: 3D coordinates in Ångströms of the transition state
+/// - `method`: Semi-empirical Hamiltonian ("PM6", "AM1", "RM1", "PM3", "MNDO"; default: "PM6")
+/// - `step_size`: Path arc length step size in amu^(1/2) * Å (default: 0.1)
+/// - `max_points`: Maximum number of reaction path points per direction (default: 50)
+/// - `direction`: Path direction: "both", "forward", or "reverse" (default: "both")
+/// - `use_nddo`: Enable full NDDO potential energy surface (default: false)
+#[pyfunction]
+#[pyo3(signature = (
+    atomic_numbers,
+    coordinates,
+    method = None,
+    step_size = None,
+    max_points = None,
+    direction = None,
+    use_nddo = None,
+))]
+pub fn irc(
+    atomic_numbers: Vec<u8>,
+    coordinates: Vec<[f64; 3]>,
+    method: Option<&str>,
+    step_size: Option<f64>,
+    max_points: Option<usize>,
+    direction: Option<&str>,
+    use_nddo: Option<bool>,
+) -> PyResult<IrcPyResult> {
+    let natoms = atomic_numbers.len();
+    if natoms == 0 {
+        return Err(PyValueError::new_err("atomic_numbers cannot be empty"));
+    }
+    if coordinates.len() != natoms {
+        return Err(PyValueError::new_err(format!(
+            "Mismatch between atomic_numbers ({}) and coordinates ({})",
+            natoms,
+            coordinates.len()
+        )));
+    }
+
+    let m_name = method.unwrap_or("PM6");
+    let model = get_model(m_name)?;
+
+    let irc_dir = match direction.unwrap_or("both").to_lowercase().as_str() {
+        "forward" | "fwd" => IrcDirection::Forward,
+        "reverse" | "rev" => IrcDirection::Reverse,
+        "both" => IrcDirection::Both,
+        other => {
+            return Err(PyValueError::new_err(format!(
+                "Unknown IRC direction '{}'. Supported: 'both', 'forward', 'reverse'",
+                other
+            )))
+        }
+    };
+
+    let mut batch = MolecularBatch::new(atomic_numbers, &coordinates);
+    let mut scf_ws = ScfWorkspace::allocate(batch.norbs);
+    let mut grad_ws = GradientWorkspace::allocate(batch.norbs);
+    let mut irc_ws = IrcWorkspace::allocate(&batch);
+
+    let opts = IrcOptions {
+        step_size: step_size.unwrap_or(0.1),
+        max_points: max_points.unwrap_or(50),
+        corrector_max_iter: 25,
+        corrector_tol: 1e-4,
+        grad_rms_tol: 0.05,
+        energy_increase_tol: 0.02,
+        direction: irc_dir,
+        use_nddo: use_nddo.unwrap_or(false),
+        transition_vector: None,
+    };
+
+    let res = trace_intrinsic_reaction_coordinate(
+        &mut batch,
+        model.as_ref(),
+        &mut scf_ws,
+        &mut grad_ws,
+        &mut irc_ws,
+        &opts,
+    );
+
+    let points = res
+        .points
+        .into_iter()
+        .map(|p| IrcPointPy {
+            path_coordinate: p.path_coordinate,
+            energy_ev: p.energy_ev,
+            heat_of_formation_kcal: p.heat_of_formation_kcal,
+            coordinates: p.coordinates,
+            cartesian_gradient_rms: p.cartesian_gradient_rms,
+            mass_weighted_gradient_rms: p.mass_weighted_gradient_rms,
+        })
+        .collect();
+
+    Ok(IrcPyResult {
+        points,
+        ts_point_index: res.ts_point_index,
+        forward_converged: res.forward_converged,
+        reverse_converged: res.reverse_converged,
+    })
+}
+
+/// Run Dynamic Reaction Coordinate (DRC) / Born-Oppenheimer Molecular Dynamics.
+///
+/// Parameters:
+/// - `atomic_numbers`: list of integer atomic numbers (e.g. `[7, 7]`)
+/// - `coordinates`: 3D coordinates in Ångströms
+/// - `method`: Semi-empirical Hamiltonian ("PM6", "AM1", "RM1", "PM3", "MNDO"; default: "PM6")
+/// - `time_step_fs`: Integrator time step in femtoseconds (default: 0.5 fs)
+/// - `total_steps`: Number of MD integration steps (default: 500)
+/// - `ensemble`: Thermodynamic ensemble: "nve" or "nvt" (default: "nve")
+/// - `temperature_k`: Target temperature in Kelvin for NVT ensemble (default: 298.15 K)
+/// - `berendsen_tau_fs`: Berendsen thermostat coupling constant in femtoseconds (default: 100.0 fs)
+/// - `recording_interval`: Stride interval for saving trajectory frames (default: 1)
+/// - `use_nddo`: Enable full NDDO potential energy surface (default: false)
+#[pyfunction]
+#[pyo3(signature = (
+    atomic_numbers,
+    coordinates,
+    method = None,
+    time_step_fs = None,
+    total_steps = None,
+    ensemble = None,
+    temperature_k = None,
+    berendsen_tau_fs = None,
+    recording_interval = None,
+    use_nddo = None,
+))]
+pub fn drc(
+    atomic_numbers: Vec<u8>,
+    coordinates: Vec<[f64; 3]>,
+    method: Option<&str>,
+    time_step_fs: Option<f64>,
+    total_steps: Option<usize>,
+    ensemble: Option<&str>,
+    temperature_k: Option<f64>,
+    berendsen_tau_fs: Option<f64>,
+    recording_interval: Option<usize>,
+    use_nddo: Option<bool>,
+) -> PyResult<DrcPyResult> {
+    let natoms = atomic_numbers.len();
+    if natoms == 0 {
+        return Err(PyValueError::new_err("atomic_numbers cannot be empty"));
+    }
+    if coordinates.len() != natoms {
+        return Err(PyValueError::new_err(format!(
+            "Mismatch between atomic_numbers ({}) and coordinates ({})",
+            natoms,
+            coordinates.len()
+        )));
+    }
+
+    let m_name = method.unwrap_or("PM6");
+    let model = get_model(m_name)?;
+
+    let target_t = temperature_k.unwrap_or(298.15);
+    let (drc_ensemble, init_vel) = match ensemble.unwrap_or("nve").to_lowercase().as_str() {
+        "nve" => (DrcEnsemble::Nve, InitialVelocities::Zero),
+        "nvt" => (
+            DrcEnsemble::Nvt,
+            InitialVelocities::MaxwellBoltzmann {
+                temperature_k: target_t,
+                seed: None,
+            },
+        ),
+        other => {
+            return Err(PyValueError::new_err(format!(
+                "Unknown DRC ensemble '{}'. Supported: 'nve', 'nvt'",
+                other
+            )))
+        }
+    };
+
+    let mut batch = MolecularBatch::new(atomic_numbers, &coordinates);
+    let mut scf_ws = ScfWorkspace::allocate(batch.norbs);
+    let mut grad_ws = GradientWorkspace::allocate(batch.norbs);
+    let mut drc_ws = DrcWorkspace::allocate(&batch);
+
+    let opts = DrcOptions {
+        time_step_fs: time_step_fs.unwrap_or(0.5),
+        total_steps: total_steps.unwrap_or(500),
+        ensemble: drc_ensemble,
+        target_temperature_k: target_t,
+        berendsen_tau_fs: berendsen_tau_fs.unwrap_or(100.0),
+        recording_interval: recording_interval.unwrap_or(1),
+        initial_velocities: init_vel,
+        use_nddo: use_nddo.unwrap_or(false),
+        scf_energy_tol: 1e-8,
+        scf_density_tol: 1e-7,
+    };
+
+    let res = run_dynamic_reaction_coordinate(
+        &mut batch,
+        model.as_ref(),
+        &mut scf_ws,
+        &mut grad_ws,
+        &mut drc_ws,
+        &opts,
+    );
+
+    let frames = res
+        .frames
+        .into_iter()
+        .map(|f| DrcFramePy {
+            step: f.step,
+            time_fs: f.time_fs,
+            potential_energy_ev: f.potential_energy_ev,
+            kinetic_energy_ev: f.kinetic_energy_ev,
+            total_energy_ev: f.total_energy_ev,
+            temperature_k: f.temperature_k,
+            coordinates: f.coordinates,
+            velocities: f.velocities,
+            forces: f.forces,
+        })
+        .collect();
+
+    Ok(DrcPyResult {
+        frames,
+        initial_energy_ev: res.initial_energy_ev,
+        final_energy_ev: res.final_energy_ev,
+        energy_drift_ev_per_ps: res.energy_drift_ev_per_ps,
+        max_energy_drift_ev: res.max_energy_drift_ev,
+        average_temperature_k: res.average_temperature_k,
+    })
+}
+
 /// Object-oriented MOPAC Calculator class compatible with PyTorch / RDKit / ASE workflows.
 #[pyclass]
 pub struct MopacCalculator {
@@ -1127,6 +1537,54 @@ impl MopacCalculator {
             Some(self.use_nddo),
         )
     }
+
+    /// Trace Intrinsic Reaction Coordinate (IRC) path from a transition state.
+    #[pyo3(signature = (atomic_numbers, coordinates, step_size = 0.1, max_points = 50, direction = "both"))]
+    fn irc(
+        &self,
+        atomic_numbers: Vec<u8>,
+        coordinates: Vec<[f64; 3]>,
+        step_size: Option<f64>,
+        max_points: Option<usize>,
+        direction: Option<&str>,
+    ) -> PyResult<IrcPyResult> {
+        irc(
+            atomic_numbers,
+            coordinates,
+            Some(&self.method),
+            step_size,
+            max_points,
+            direction,
+            Some(self.use_nddo),
+        )
+    }
+
+    /// Propagate Dynamic Reaction Coordinate (DRC) / Born-Oppenheimer Molecular Dynamics.
+    #[pyo3(signature = (atomic_numbers, coordinates, time_step_fs = 0.5, total_steps = 500, ensemble = "nve", temperature_k = 298.15, berendsen_tau_fs = 100.0, recording_interval = 1))]
+    fn drc(
+        &self,
+        atomic_numbers: Vec<u8>,
+        coordinates: Vec<[f64; 3]>,
+        time_step_fs: Option<f64>,
+        total_steps: Option<usize>,
+        ensemble: Option<&str>,
+        temperature_k: Option<f64>,
+        berendsen_tau_fs: Option<f64>,
+        recording_interval: Option<usize>,
+    ) -> PyResult<DrcPyResult> {
+        drc(
+            atomic_numbers,
+            coordinates,
+            Some(&self.method),
+            time_step_fs,
+            total_steps,
+            ensemble,
+            temperature_k,
+            berendsen_tau_fs,
+            recording_interval,
+            Some(self.use_nddo),
+        )
+    }
 }
 
 /// MOPAC_RS Python Module
@@ -1138,11 +1596,17 @@ fn mopac_py(m: &Bound<'_, PyModule>) -> PyResult<()> {
     m.add_class::<NormalModePy>()?;
     m.add_class::<ThermodynamicsPy>()?;
     m.add_class::<VibrationalResultPy>()?;
+    m.add_class::<IrcPointPy>()?;
+    m.add_class::<IrcPyResult>()?;
+    m.add_class::<DrcFramePy>()?;
+    m.add_class::<DrcPyResult>()?;
     m.add_class::<MopacCalculator>()?;
     m.add_function(wrap_pyfunction!(calculate, m)?)?;
     m.add_function(wrap_pyfunction!(optimize, m)?)?;
     m.add_function(wrap_pyfunction!(transition_state, m)?)?;
     m.add_function(wrap_pyfunction!(frequencies, m)?)?;
+    m.add_function(wrap_pyfunction!(irc, m)?)?;
+    m.add_function(wrap_pyfunction!(drc, m)?)?;
 
     let py = m.py();
     let py_code = r#"

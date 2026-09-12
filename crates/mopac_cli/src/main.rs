@@ -24,7 +24,13 @@ use mopac_core::parameters::ParameterModel;
 use mopac_core::properties::{
     compute_bond_orders, compute_dipole_moment, compute_mulliken_population, DipoleResult,
 };
-use mopac_core::scf::scf_loop::{run_rhf_scf_adaptive_with_nddo_and_cosmo, ScfOptions, ScfResult};
+use mopac_core::reactions::{
+    run_dynamic_reaction_coordinate, trace_intrinsic_reaction_coordinate, DrcEnsemble, DrcOptions,
+    DrcWorkspace, InitialVelocities, IrcDirection, IrcOptions, IrcWorkspace,
+};
+use mopac_core::scf::scf_loop::{
+    run_rhf_scf_adaptive_with_nddo, run_rhf_scf_adaptive_with_nddo_and_cosmo, ScfOptions, ScfResult,
+};
 use mopac_core::solvation::{CosmoCavity, CosmoParams};
 use mopac_core::types::{MolecularBatch, ScfWorkspace};
 use mopac_core::vibrations::{compute_hessian_and_frequencies, HessianOptions};
@@ -65,6 +71,14 @@ struct Cli {
     /// Enable transition state optimization via Eigenvector Following (P-RFO Baker)
     #[arg(long)]
     ts: bool,
+
+    /// Enable Intrinsic Reaction Coordinate (IRC) path tracing (González-Schlegel)
+    #[arg(long)]
+    irc: bool,
+
+    /// Enable Dynamic Reaction Coordinate (DRC) molecular dynamics (Velocity-Verlet)
+    #[arg(long)]
+    drc: bool,
 
     /// Enable Cartesian Hessian, mass-weighting and normal mode vibrational analysis
     #[arg(long)]
@@ -143,6 +157,8 @@ struct ParsedInput {
     atoms: Vec<ParsedAtom>,
     is_opt_requested: bool,
     is_ts_requested: bool,
+    is_irc_requested: bool,
+    is_drc_requested: bool,
     is_force_requested: bool,
     is_gpu_requested: bool,
     is_fp32_requested: bool,
@@ -243,6 +259,8 @@ fn parse_mopac_input(content: &str) -> io::Result<ParsedInput> {
 
     let mut is_opt_requested = false;
     let mut is_ts_requested = false;
+    let mut is_irc_requested = false;
+    let mut is_drc_requested = false;
     let mut is_force_requested = false;
     let mut is_gpu = false;
     let mut is_fp32 = false;
@@ -261,6 +279,10 @@ fn parse_mopac_input(content: &str) -> io::Result<ParsedInput> {
         let u = kw.to_uppercase();
         if u == "TS" {
             is_ts_requested = true;
+        } else if u == "IRC" || u.starts_with("IRC=") {
+            is_irc_requested = true;
+        } else if u == "DRC" {
+            is_drc_requested = true;
         } else if u == "OPT" || u == "EF" || u == "BFGS" {
             is_opt_requested = true;
         } else if u == "FORCE" || u == "VIB" || u == "FREQ" || u == "THERMO" {
@@ -377,6 +399,8 @@ fn parse_mopac_input(content: &str) -> io::Result<ParsedInput> {
         atoms,
         is_opt_requested,
         is_ts_requested,
+        is_irc_requested,
+        is_drc_requested,
         is_force_requested,
         is_gpu_requested: is_gpu,
         is_fp32_requested: is_fp32,
@@ -496,8 +520,11 @@ fn main() -> Result<(), Box<dyn std::error::Error>> {
 
     let use_gpu = cli.gpu || parsed.is_gpu_requested;
     let use_fp32 = cli.fp32 || parsed.is_fp32_requested;
-    let is_ts = (cli.ts || parsed.is_ts_requested) && !cli.one_scf;
-    let is_opt = (cli.opt || parsed.is_opt_requested) && !cli.one_scf && !is_ts;
+    let is_irc = (cli.irc || parsed.is_irc_requested) && !cli.one_scf;
+    let is_drc = (cli.drc || parsed.is_drc_requested) && !cli.one_scf && !is_irc;
+    let is_ts = (cli.ts || parsed.is_ts_requested) && !cli.one_scf && !is_irc && !is_drc;
+    let is_opt =
+        (cli.opt || parsed.is_opt_requested) && !cli.one_scf && !is_ts && !is_irc && !is_drc;
 
     let method_name = cli
         .method
@@ -532,7 +559,11 @@ fn main() -> Result<(), Box<dyn std::error::Error>> {
     );
     println!(
         " Calculation Mode      : {}",
-        if is_ts {
+        if is_irc {
+            "Intrinsic Reaction Coordinate (IRC) Path Tracing"
+        } else if is_drc {
+            "Dynamic Reaction Coordinate (DRC) Molecular Dynamics"
+        } else if is_ts {
             "Eigenvector Following (P-RFO) Transition State Search"
         } else if is_opt {
             "L-BFGS Geometry Optimization"
@@ -588,7 +619,120 @@ fn main() -> Result<(), Box<dyn std::error::Error>> {
         }
     }
 
-    let (scf_final, total_scf_cycles) = if is_ts {
+    let (scf_final, total_scf_cycles) = if is_irc {
+        println!(
+            " [IRC] Starting Intrinsic Reaction Coordinate Path Tracing (González-Schlegel)..."
+        );
+        let irc_opts = IrcOptions {
+            step_size: 0.1,
+            max_points: 50,
+            corrector_max_iter: 25,
+            corrector_tol: 1e-4,
+            grad_rms_tol: 0.05,
+            energy_increase_tol: 0.02,
+            direction: IrcDirection::Both,
+            use_nddo,
+            transition_vector: None,
+        };
+        let mut grad_ws = GradientWorkspace::allocate(batch.norbs);
+        let mut irc_ws = IrcWorkspace::allocate(&batch);
+        let irc_res = trace_intrinsic_reaction_coordinate(
+            &mut batch,
+            model.as_ref(),
+            &mut ws,
+            &mut grad_ws,
+            &mut irc_ws,
+            &irc_opts,
+        );
+        println!(
+            " [IRC] Traced {} points along reaction coordinate.",
+            irc_res.points.len()
+        );
+        println!("   TS Point Index : {} (s = 0.000)", irc_res.ts_point_index);
+        if let Some(ts_pt) = irc_res.points.get(irc_res.ts_point_index) {
+            println!(
+                "   TS Energy      : {:12.6} eV | HoF: {:12.5} kcal/mol",
+                ts_pt.energy_ev, ts_pt.heat_of_formation_kcal
+            );
+        }
+        if let Some(first_pt) = irc_res.points.first() {
+            println!(
+                "   Reverse Extr   : s = {:+.4} | {:12.6} eV | HoF: {:12.5} kcal/mol",
+                first_pt.path_coordinate, first_pt.energy_ev, first_pt.heat_of_formation_kcal
+            );
+        }
+        if let Some(last_pt) = irc_res.points.last() {
+            println!(
+                "   Forward Extr   : s = {:+.4} | {:12.6} eV | HoF: {:12.5} kcal/mol",
+                last_pt.path_coordinate, last_pt.energy_ev, last_pt.heat_of_formation_kcal
+            );
+        }
+        let final_scf = run_rhf_scf_adaptive_with_nddo(
+            &batch,
+            model.as_ref(),
+            &mut ws,
+            60,
+            1e-7,
+            1e-6,
+            use_nddo,
+        );
+        let niter = final_scf.iterations;
+        (final_scf, niter)
+    } else if is_drc {
+        println!(
+            " [DRC] Starting Dynamic Reaction Coordinate Simulation (Velocity-Verlet BOMD)..."
+        );
+        let drc_opts = DrcOptions {
+            time_step_fs: 0.5,
+            total_steps: 500,
+            ensemble: DrcEnsemble::Nve,
+            target_temperature_k: 298.15,
+            berendsen_tau_fs: 100.0,
+            recording_interval: 10,
+            initial_velocities: InitialVelocities::Zero,
+            use_nddo,
+            scf_energy_tol: 1e-8,
+            scf_density_tol: 1e-7,
+        };
+        let mut grad_ws = GradientWorkspace::allocate(batch.norbs);
+        let mut drc_ws = DrcWorkspace::allocate(&batch);
+        let drc_res = run_dynamic_reaction_coordinate(
+            &mut batch,
+            model.as_ref(),
+            &mut ws,
+            &mut grad_ws,
+            &mut drc_ws,
+            &drc_opts,
+        );
+        println!(
+            " [DRC] Trajectory complete: {} steps ({} frames recorded)",
+            drc_opts.total_steps,
+            drc_res.frames.len()
+        );
+        println!(
+            "   Initial Energy : {:12.6} eV | Final Energy : {:12.6} eV",
+            drc_res.initial_energy_ev, drc_res.final_energy_ev
+        );
+        println!(
+            "   Energy Drift   : {:12.6e} eV/ps (Max Dev: {:12.6e} eV)",
+            drc_res.energy_drift_ev_per_ps, drc_res.max_energy_drift_ev
+        );
+        println!(
+            "   Avg Temperature: {:8.2} K",
+            drc_res.average_temperature_k
+        );
+        let final_scf = run_rhf_scf_adaptive_with_nddo(
+            &batch,
+            model.as_ref(),
+            &mut ws,
+            60,
+            1e-7,
+            1e-6,
+            use_nddo,
+        );
+        let niter = final_scf.iterations;
+        (final_scf, niter)
+    } else if is_ts {
         println!(" [Optimizer] Starting Transition State Search (Eigenvector Following P-RFO)...");
         let mut opt_mask = Vec::with_capacity(3 * parsed.atoms.len());
         for a in &parsed.atoms {
