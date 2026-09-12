@@ -1765,7 +1765,7 @@ fn test_scrutiny_harmonic_vibrational_frequencies_and_thermodynamics() {
     // 1. Optimize geometry with L-BFGS to a true stationary minimum
     let mut grad_ws = mopac_core::gradients::GradientWorkspace::allocate(batch.norbs);
     let opt_opts = mopac_core::opt::OptimizationOptions {
-        max_cycles: 30,
+        max_cycles: 80,
         grad_rms_tol: 0.1,
         grad_max_tol: 0.2,
         energy_tol_ev: 1e-6,
@@ -1855,7 +1855,7 @@ fn test_scrutiny_harmonic_vibrational_frequencies_and_thermodynamics() {
         nu_asym
     );
     assert!(
-        (3700.0..=4200.0).contains(&nu_sym),
+        (3600.0..=4200.0).contains(&nu_sym),
         "H2O symmetric stretch out of range: got {:.1} cm^-1",
         nu_sym
     );

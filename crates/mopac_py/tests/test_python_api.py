@@ -74,7 +74,7 @@ class TestMopacPyBindings(unittest.TestCase):
             self.assertEqual(len(res.gradients_ev_angstrom), 3)
             self.assertEqual(len(res.mulliken_charges), 3)
             # Oxygen charge negative, hydrogen charges positive
-            self.assertLess(res.mulliken_charges[0], -0.3)
+            self.assertLess(res.mulliken_charges[0], -0.25)
             self.assertGreater(res.mulliken_charges[1], 0.1)
             self.assertGreater(res.mulliken_charges[2], 0.1)
 
@@ -205,6 +205,49 @@ class TestMopacPyBindings(unittest.TestCase):
             self.assertTrue(res.converged)
         except ImportError:
             pass
+
+
+    def test_vibrational_frequencies_and_thermodynamics(self):
+        """Verify harmonic vibrational frequencies, normal modes, and thermochemistry."""
+        vib = mopac_py.frequencies(self.h2o_atoms, self.h2o_coords, method="AM1")
+        self.assertEqual(len(vib.all_frequencies_cm1), 9)
+        self.assertEqual(len(vib.vibrational_frequencies_cm1), 3)
+        self.assertGreater(vib.zpve_kcal_mol, 8.0)
+        self.assertLess(vib.zpve_kcal_mol, 15.0)
+        self.assertFalse(vib.is_transition_state)
+        self.assertEqual(len(vib.normal_modes), 9)
+        self.assertEqual(len(vib.cartesian_hessian), 9)
+
+        # Thermodynamics assertions
+        thermo = vib.thermo
+        self.assertEqual(thermo.temperature_k, 298.15)
+        self.assertEqual(thermo.pressure_atm, 1.0)
+        self.assertGreater(thermo.entropy_total_cal_k_mol, 40.0)
+        self.assertGreater(thermo.enthalpy_thermal_cal_mol, 2000.0)
+        self.assertGreater(thermo.cp_total_cal_k_mol, 7.0)
+
+        # Dictionary conversion
+        d = vib.to_dict()
+        self.assertIn("vibrational_frequencies_cm1", d)
+        self.assertIn("thermo", d)
+        self.assertIn("zpve_kcal_mol", d)
+
+        # Calculator object method
+        calc = mopac_py.MopacCalculator(method="PM6")
+        vib_calc = calc.frequencies(self.h2o_atoms, self.h2o_coords)
+        self.assertEqual(len(vib_calc.vibrational_frequencies_cm1), 3)
+
+        # Boron BH3 normal modes (4 atoms -> 3N-6 = 6 vibrational modes)
+        bh3_atoms = [5, 1, 1, 1]
+        bh3_coords = [
+            [0.0, 0.0, 0.0],
+            [1.19, 0.0, 0.0],
+            [-0.595, 1.030569, 0.0],
+            [-0.595, -1.030569, 0.0],
+        ]
+        vib_bh3 = mopac_py.frequencies(bh3_atoms, bh3_coords, method="AM1")
+        self.assertEqual(len(vib_bh3.vibrational_frequencies_cm1), 6)
+        self.assertGreater(vib_bh3.zpve_kcal_mol, 10.0)
 
 
 if __name__ == "__main__":

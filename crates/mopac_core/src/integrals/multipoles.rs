@@ -1174,6 +1174,170 @@ pub fn assemble_nddo_two_center_fock(
     }
 }
 
+/// Assemble full two-center two-electron NDDO Coulomb and Exchange into the Fock matrix for UHF.
+///
+/// Uses total density `p_tot` ($P^\alpha + P^\beta$) for Coulomb interactions and spin-channel
+/// density `p_spin` ($P^\alpha$ or $P^\beta$) for exchange interactions, matching OpenMOPAC `fock2.F90`.
+pub fn assemble_nddo_two_center_fock_spin(
+    pairs: &[DiatomicPairIntegrals],
+    p_tot: &AlignedMatrix<f64>,
+    p_spin: &AlignedMatrix<f64>,
+    fock: &mut AlignedMatrix<f64>,
+) {
+    for pair in pairs {
+        let ia = pair.orb_start_a;
+        let ja = pair.orb_start_b;
+        let na = pair.norb_a;
+        let nb = pair.norb_b;
+        let w = &pair.w;
+
+        if na >= 4 && nb >= 4 {
+            let mut pja = [0.0f64; 16];
+            let mut pjb = [0.0f64; 16];
+            let mut pk = [0.0f64; 16];
+
+            for r in 0..4 {
+                for c in 0..4 {
+                    pja[r * 4 + c] = p_tot.get(ia + r, ia + c);
+                    pjb[r * 4 + c] = p_tot.get(ja + r, ja + c);
+                    pk[r * 4 + c] = p_spin.get(ia + r, ja + c);
+                }
+            }
+
+            let mut f_block_a = [0.0f64; 10];
+            let mut f_block_b = [0.0f64; 10];
+            contract_jab(&pja, &pjb, w, &mut f_block_a, &mut f_block_b);
+
+            for r in 0..4 {
+                for c in 0..=r {
+                    let idx = (r * (r + 1)) / 2 + c;
+                    let val_a = f_block_a[idx];
+                    let cur_a = fock.get(ia + r, ia + c);
+                    fock.set(ia + r, ia + c, cur_a + val_a);
+                    if r != c {
+                        fock.set(ia + c, ia + r, cur_a + val_a);
+                    }
+
+                    let val_b = f_block_b[idx];
+                    let cur_b = fock.get(ja + r, ja + c);
+                    fock.set(ja + r, ja + c, cur_b + val_b);
+                    if r != c {
+                        fock.set(ja + c, ja + r, cur_b + val_b);
+                    }
+                }
+            }
+
+            let mut f_ab = [0.0f64; 16];
+            contract_kab(&pk, w, &mut f_ab);
+
+            for r in 0..4 {
+                for c in 0..4 {
+                    let val = f_ab[r * 4 + c];
+                    let cur = fock.get(ia + r, ja + c);
+                    fock.set(ia + r, ja + c, cur + val);
+                    fock.set(ja + c, ia + r, cur + val);
+                }
+            }
+        } else if na >= 4 && nb == 1 {
+            let p_b = p_tot.get(ja, ja);
+            for r in 0..4 {
+                for c in 0..=r {
+                    let idx = (r * (r + 1)) / 2 + c;
+                    let val = p_b * w[idx];
+                    let cur = fock.get(ia + r, ia + c);
+                    fock.set(ia + r, ia + c, cur + val);
+                    if r != c {
+                        fock.set(ia + c, ia + r, cur + val);
+                    }
+                }
+            }
+
+            let mut sumdia = 0.0;
+            let mut sumoff = 0.0;
+            for r in 0..4 {
+                let idx_dia = (r * (r + 1)) / 2 + r;
+                sumdia += p_tot.get(ia + r, ia + r) * w[idx_dia];
+                for c in 0..r {
+                    let idx_off = (r * (r + 1)) / 2 + c;
+                    sumoff += p_tot.get(ia + r, ia + c) * w[idx_off];
+                }
+            }
+            let cur_b = fock.get(ja, ja);
+            fock.set(ja, ja, cur_b + sumdia + 2.0 * sumoff);
+
+            for r in 0..4 {
+                let mut s = 0.0;
+                for c in 0..4 {
+                    let idx = if r >= c {
+                        (r * (r + 1)) / 2 + c
+                    } else {
+                        (c * (c + 1)) / 2 + r
+                    };
+                    s += p_spin.get(ia + c, ja) * w[idx];
+                }
+                let cur = fock.get(ia + r, ja);
+                fock.set(ia + r, ja, cur - s);
+                fock.set(ja, ia + r, cur - s);
+            }
+        } else if na == 1 && nb >= 4 {
+            let p_a = p_tot.get(ia, ia);
+            for r in 0..4 {
+                for c in 0..=r {
+                    let idx = (r * (r + 1)) / 2 + c;
+                    let val = p_a * w[idx];
+                    let cur = fock.get(ja + r, ja + c);
+                    fock.set(ja + r, ja + c, cur + val);
+                    if r != c {
+                        fock.set(ja + c, ja + r, cur + val);
+                    }
+                }
+            }
+
+            let mut sumdia = 0.0;
+            let mut sumoff = 0.0;
+            for r in 0..4 {
+                let idx_dia = (r * (r + 1)) / 2 + r;
+                sumdia += p_tot.get(ja + r, ja + r) * w[idx_dia];
+                for c in 0..r {
+                    let idx_off = (r * (r + 1)) / 2 + c;
+                    sumoff += p_tot.get(ja + r, ja + c) * w[idx_off];
+                }
+            }
+            let cur_a = fock.get(ia, ia);
+            fock.set(ia, ia, cur_a + sumdia + 2.0 * sumoff);
+
+            for r in 0..4 {
+                let mut s = 0.0;
+                for c in 0..4 {
+                    let idx = if r >= c {
+                        (r * (r + 1)) / 2 + c
+                    } else {
+                        (c * (c + 1)) / 2 + r
+                    };
+                    s += p_spin.get(ia, ja + c) * w[idx];
+                }
+                let cur = fock.get(ia, ja + r);
+                fock.set(ia, ja + r, cur - s);
+                fock.set(ja + r, ia, cur - s);
+            }
+        } else if na == 1 && nb == 1 {
+            let w0 = w[0];
+            let p_a = p_tot.get(ia, ia);
+            let p_b = p_tot.get(ja, ja);
+            let p_ab = p_spin.get(ia, ja);
+
+            let cur_a = fock.get(ia, ia);
+            fock.set(ia, ia, cur_a + p_b * w0);
+            let cur_b = fock.get(ja, ja);
+            fock.set(ja, ja, cur_b + p_a * w0);
+
+            let cur_ab = fock.get(ia, ja);
+            fock.set(ia, ja, cur_ab - p_ab * w0);
+            fock.set(ja, ia, cur_ab - p_ab * w0);
+        }
+    }
+}
+
 /// Apply rotated electron-nuclear attractions $E_{1B}$ and $E_{2A}$ to $H^{\text{core}}$.
 ///
 /// Direct port of OpenMOPAC `hcore.F90` lines 270-300.

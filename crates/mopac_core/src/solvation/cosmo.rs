@@ -369,6 +369,107 @@ impl CosmoState {
 
         total_dielectric_energy_ev
     }
+
+    /// Compute analytical Cartesian nuclear gradients $\nabla E_{\text{diel}}$ (in eV / Å)
+    /// of the dielectric reaction field matching OpenMOPAC `diegrd` (`cosmo.F90`).
+    ///
+    /// Evaluates:
+    /// 1. Inter-segment electrostatic forces between conductor screening charges on different atoms.
+    /// 2. Segment-atom electrostatic forces between screening charges and solute atomic net charges.
+    pub fn compute_dielectric_gradients(
+        &self,
+        batch: &MolecularBatch,
+        model: &dyn ParameterModel,
+        density: &AlignedMatrix<f64>,
+        gradients: &mut [[f64; 3]],
+    ) {
+        let fepsi = self.params.dielectric_scaling();
+        if fepsi <= 1e-12 {
+            return;
+        }
+
+        let nseg = self.cavity.num_segments();
+        let natoms = batch.natoms;
+        assert_eq!(gradients.len(), natoms);
+
+        // Precompute solute net atomic charges: Q_A = Z_core_A - sum_{mu in A} P_{mu, mu}
+        let mut net_charges = vec![0.0f64; natoms];
+        for (a, net_charge) in net_charges.iter_mut().enumerate() {
+            let z = batch.atomic_numbers[a];
+            let z_core = model.get_element(z).map(|p| p.core_charge).unwrap_or(0.0);
+            let orb_offset = batch.orbital_offsets[a];
+            let num_ao = batch.basis_types[a].num_orbitals();
+            let mut p_pop = 0.0f64;
+            for mu in 0..num_ao {
+                p_pop += density.get(orb_offset + mu, orb_offset + mu);
+            }
+            *net_charge = z_core - p_pop;
+        }
+
+        // 1. Conductor screening charge segment-segment forces
+        for k in 0..nseg {
+            let iak = self.cavity.segments[k].atom_index;
+            let xk = self.cavity.segments[k].position;
+            let qsk = self.q_nuc[k] + self.q_elec[k];
+
+            for l in 0..k {
+                let ial = self.cavity.segments[l].atom_index;
+                if ial != iak {
+                    let xl = self.cavity.segments[l].position;
+                    let qsl = self.q_nuc[l] + self.q_elec[l];
+
+                    let dx = xl[0] - xk[0];
+                    let dy = xl[1] - xk[1];
+                    let dz = xl[2] - xk[2];
+                    let dist2 = dx * dx + dy * dy + dz * dz;
+
+                    if dist2 > 1e-10 {
+                        let dist3 = dist2 * dist2.sqrt();
+                        let ff = qsk * qsl * (-A0_EV) / (dist3 * fepsi);
+
+                        gradients[iak][0] -= dx * ff;
+                        gradients[iak][1] -= dy * ff;
+                        gradients[iak][2] -= dz * ff;
+
+                        gradients[ial][0] += dx * ff;
+                        gradients[ial][1] += dy * ff;
+                        gradients[ial][2] += dz * ff;
+                    }
+                }
+            }
+        }
+
+        // 2. Segment-atom electrostatic forces
+        for k in 0..nseg {
+            let iak = self.cavity.segments[k].atom_index;
+            let xk = self.cavity.segments[k].position;
+            let qsk = self.q_nuc[k] + self.q_elec[k];
+
+            for j in 0..natoms {
+                if j != iak {
+                    let xj = [batch.x[j], batch.y[j], batch.z[j]];
+                    let dx = xk[0] - xj[0];
+                    let dy = xk[1] - xj[1];
+                    let dz = xk[2] - xj[2];
+                    let dist2 = dx * dx + dy * dy + dz * dz;
+
+                    if dist2 > 1e-10 {
+                        let dist3 = dist2 * dist2.sqrt();
+                        let ff0 = -qsk * (-A0_EV) / dist3;
+                        let ff = -ff0 * net_charges[j];
+
+                        gradients[iak][0] += dx * ff;
+                        gradients[iak][1] += dy * ff;
+                        gradients[iak][2] += dz * ff;
+
+                        gradients[j][0] -= dx * ff;
+                        gradients[j][1] -= dy * ff;
+                        gradients[j][2] -= dz * ff;
+                    }
+                }
+            }
+        }
+    }
 }
 
 #[cfg(test)]

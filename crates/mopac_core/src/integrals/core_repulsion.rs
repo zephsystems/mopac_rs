@@ -26,20 +26,20 @@ pub fn compute_pair_core_repulsion(
     let gab = dewar_klopman_monopole(r_angstrom, elem_a.gss, elem_b.gss);
 
     // Standard exponential screening term
-    // For N-H and O-H pairs in AM1, MOPAC applies distance scaling on H
-    let h_scale_a = if elem_a.z == 1 && (elem_b.z == 7 || elem_b.z == 8) {
+    // For N-H and O-H pairs in AM1/MNDO, MOPAC applies distance scaling on the heavy atom (N or O)
+    let scale_a = if (elem_a.z == 7 || elem_a.z == 8) && elem_b.z == 1 {
         r_angstrom
     } else {
         1.0
     };
-    let h_scale_b = if elem_b.z == 1 && (elem_a.z == 7 || elem_a.z == 8) {
+    let scale_b = if (elem_b.z == 7 || elem_b.z == 8) && elem_a.z == 1 {
         r_angstrom
     } else {
         1.0
     };
 
-    let exp_a = h_scale_a * (-elem_a.alpha * r_angstrom).exp();
-    let exp_b = h_scale_b * (-elem_b.alpha * r_angstrom).exp();
+    let exp_a = scale_a * (-elem_a.alpha * r_angstrom).exp();
+    let exp_b = scale_b * (-elem_b.alpha * r_angstrom).exp();
     let base_scale = 1.0 + exp_a + exp_b;
 
     let base_repulsion = elem_a.core_charge * elem_b.core_charge * gab * base_scale;
@@ -47,21 +47,51 @@ pub fn compute_pair_core_repulsion(
     // Gaussian core corrections
     let mut gaussian_sum = 0.0;
 
-    for k in 0..elem_a.num_gaussians {
-        let g = &elem_a.gaussians[k];
-        let dr = r_angstrom - g.c;
-        let exponent = g.b * dr * dr;
-        if exponent < 25.0 {
-            gaussian_sum += g.a * (-exponent).exp();
-        }
-    }
+    let is_am1_b_pair = (elem_a.z == 5 || elem_b.z == 5)
+        && matches!(
+            if elem_a.z == 5 { elem_b.z } else { elem_a.z },
+            1 | 6 | 9 | 17 | 35 | 53
+        );
 
-    for k in 0..elem_b.num_gaussians {
-        let g = &elem_b.gaussians[k];
-        let dr = r_angstrom - g.c;
-        let exponent = g.b * dr * dr;
-        if exponent < 25.0 {
-            gaussian_sum += g.a * (-exponent).exp();
+    if is_am1_b_pair {
+        let other = if elem_a.z == 5 { elem_b } else { elem_a };
+        let b_pairs: &[(f64, f64, f64)] = match other.z {
+            1 => &[(0.412253, 10.0, 0.832586), (-0.149917, 6.0, 1.186220)],
+            6 => &[(0.261751, 8.0, 1.063995), (0.050275, 5.0, 1.936492)],
+            _ => &[(0.359244, 9.0, 0.819351), (0.074729, 9.0, 1.574414)],
+        };
+        for &(a, b, c) in b_pairs {
+            let dr = r_angstrom - c;
+            let exponent = b * dr * dr;
+            if exponent <= 25.0 {
+                gaussian_sum += a * (-exponent).exp();
+            }
+        }
+        for k in 0..other.num_gaussians {
+            let g = &other.gaussians[k];
+            let dr = r_angstrom - g.c;
+            let exponent = g.b * dr * dr;
+            if exponent <= 25.0 {
+                gaussian_sum += g.a * (-exponent).exp();
+            }
+        }
+    } else {
+        for k in 0..elem_a.num_gaussians {
+            let g = &elem_a.gaussians[k];
+            let dr = r_angstrom - g.c;
+            let exponent = g.b * dr * dr;
+            if exponent < 25.0 {
+                gaussian_sum += g.a * (-exponent).exp();
+            }
+        }
+
+        for k in 0..elem_b.num_gaussians {
+            let g = &elem_b.gaussians[k];
+            let dr = r_angstrom - g.c;
+            let exponent = g.b * dr * dr;
+            if exponent < 25.0 {
+                gaussian_sum += g.a * (-exponent).exp();
+            }
         }
     }
 

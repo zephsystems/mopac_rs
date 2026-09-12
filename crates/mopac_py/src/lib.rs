@@ -30,6 +30,7 @@ use mopac_core::properties::{
 use mopac_core::scf::scf_loop::{run_rhf_scf_with_options, ScfOptions};
 use mopac_core::solvation::CosmoParams;
 use mopac_core::types::{MolecularBatch, ScfWorkspace};
+use mopac_core::vibrations::{compute_hessian_and_frequencies, HessianOptions};
 
 /// Resolve model instance by string identifier.
 fn get_model(method: &str) -> PyResult<Box<dyn ParameterModel>> {
@@ -147,6 +148,160 @@ impl OptimizationPyResult {
             "<OptimizationPyResult converged={} cycles={} E_final={:.6} eV, dHf={:.3} kcal/mol, grad_rms={:.4}>",
             self.converged, self.cycles, self.final_energy_ev, self.final_heat_of_formation_kcal, self.final_grad_rms
         )
+    }
+}
+
+/// Normal vibrational mode with harmonic frequency and Cartesian displacement vectors.
+#[pyclass(get_all)]
+#[derive(Debug, Clone)]
+pub struct NormalModePy {
+    /// Harmonic frequency in cm^-1 (negative if imaginary)
+    pub frequency_cm1: f64,
+    /// Effective reduced mass in amu
+    pub reduced_mass_amu: f64,
+    /// Force constant in mdyne/Å
+    pub force_constant_mdyne_a: f64,
+    /// Normalized Cartesian displacements (delta x, delta y, delta z) for each atom
+    pub displacements: Vec<[f64; 3]>,
+}
+
+#[pymethods]
+impl NormalModePy {
+    fn __repr__(&self) -> String {
+        format!(
+            "<NormalMode freq={:.1} cm^-1, mass={:.3} amu, k={:.3} mdyne/A>",
+            self.frequency_cm1, self.reduced_mass_amu, self.force_constant_mdyne_a
+        )
+    }
+
+    /// Convert normal mode to Python dictionary.
+    fn to_dict<'py>(&self, py: Python<'py>) -> PyResult<Bound<'py, PyDict>> {
+        let dict = PyDict::new_bound(py);
+        dict.set_item("frequency_cm1", self.frequency_cm1)?;
+        dict.set_item("reduced_mass_amu", self.reduced_mass_amu)?;
+        dict.set_item("force_constant_mdyne_a", self.force_constant_mdyne_a)?;
+        dict.set_item("displacements", &self.displacements)?;
+        Ok(dict)
+    }
+}
+
+/// Statistical thermodynamic properties computed from vibrational, rotational, and translational partition functions.
+#[pyclass(get_all)]
+#[derive(Debug, Clone)]
+pub struct ThermodynamicsPy {
+    pub temperature_k: f64,
+    pub pressure_atm: f64,
+    /// Zero-Point Vibrational Energy in kcal/mol
+    pub zpve_kcal_mol: f64,
+    /// Thermal vibrational energy E_vib(T) in cal/mol
+    pub e_vib_cal_mol: f64,
+    /// Thermal rotational energy E_rot(T) in cal/mol
+    pub e_rot_cal_mol: f64,
+    /// Thermal translational energy E_trans(T) in cal/mol
+    pub e_trans_cal_mol: f64,
+    /// Total thermal enthalpy correction H(T) - H(0) in cal/mol
+    pub enthalpy_thermal_cal_mol: f64,
+    /// Constant volume vibrational heat capacity Cv,vib in cal/(mol·K)
+    pub cv_vib_cal_k_mol: f64,
+    /// Constant volume rotational heat capacity Cv,rot in cal/(mol·K)
+    pub cv_rot_cal_k_mol: f64,
+    /// Constant pressure translational heat capacity Cp,trans = 5/2 R in cal/(mol·K)
+    pub cp_trans_cal_k_mol: f64,
+    /// Total constant pressure heat capacity Cp(T) = Cv + R in cal/(mol·K)
+    pub cp_total_cal_k_mol: f64,
+    /// Vibrational entropy S_vib in cal/(mol·K)
+    pub entropy_vib_cal_k_mol: f64,
+    /// Rotational entropy S_rot in cal/(mol·K)
+    pub entropy_rot_cal_k_mol: f64,
+    /// Translational entropy S_trans (Sackur-Tetrode) in cal/(mol·K)
+    pub entropy_trans_cal_k_mol: f64,
+    /// Total standard entropy S°(T) in cal/(mol·K)
+    pub entropy_total_cal_k_mol: f64,
+    /// Gibbs free energy thermal correction G_corr = H_thermal - T*S° in kcal/mol
+    pub gibbs_correction_kcal_mol: f64,
+}
+
+#[pymethods]
+impl ThermodynamicsPy {
+    fn __repr__(&self) -> String {
+        format!(
+            "<Thermodynamics T={:.2} K, ZPVE={:.2} kcal/mol, S°={:.2} cal/(mol·K), H_thermal={:.2} cal/mol, G_corr={:.2} kcal/mol>",
+            self.temperature_k, self.zpve_kcal_mol, self.entropy_total_cal_k_mol, self.enthalpy_thermal_cal_mol, self.gibbs_correction_kcal_mol
+        )
+    }
+
+    /// Convert thermodynamics properties to Python dictionary.
+    fn to_dict<'py>(&self, py: Python<'py>) -> PyResult<Bound<'py, PyDict>> {
+        let dict = PyDict::new_bound(py);
+        dict.set_item("temperature_k", self.temperature_k)?;
+        dict.set_item("pressure_atm", self.pressure_atm)?;
+        dict.set_item("zpve_kcal_mol", self.zpve_kcal_mol)?;
+        dict.set_item("e_vib_cal_mol", self.e_vib_cal_mol)?;
+        dict.set_item("e_rot_cal_mol", self.e_rot_cal_mol)?;
+        dict.set_item("e_trans_cal_mol", self.e_trans_cal_mol)?;
+        dict.set_item("enthalpy_thermal_cal_mol", self.enthalpy_thermal_cal_mol)?;
+        dict.set_item("cv_vib_cal_k_mol", self.cv_vib_cal_k_mol)?;
+        dict.set_item("cv_rot_cal_k_mol", self.cv_rot_cal_k_mol)?;
+        dict.set_item("cp_trans_cal_k_mol", self.cp_trans_cal_k_mol)?;
+        dict.set_item("cp_total_cal_k_mol", self.cp_total_cal_k_mol)?;
+        dict.set_item("entropy_vib_cal_k_mol", self.entropy_vib_cal_k_mol)?;
+        dict.set_item("entropy_rot_cal_k_mol", self.entropy_rot_cal_k_mol)?;
+        dict.set_item("entropy_trans_cal_k_mol", self.entropy_trans_cal_k_mol)?;
+        dict.set_item("entropy_total_cal_k_mol", self.entropy_total_cal_k_mol)?;
+        dict.set_item("gibbs_correction_kcal_mol", self.gibbs_correction_kcal_mol)?;
+        Ok(dict)
+    }
+}
+
+/// Comprehensive results of Hessian and normal coordinate analysis.
+#[pyclass(get_all)]
+#[derive(Debug, Clone)]
+pub struct VibrationalResultPy {
+    /// All 3N harmonic frequencies in cm^-1 (sorted ascending)
+    pub all_frequencies_cm1: Vec<f64>,
+    /// Genuine internal vibrational frequencies (3N-6 or 3N-5) in cm^-1
+    pub vibrational_frequencies_cm1: Vec<f64>,
+    /// Normal modes with atom displacement vectors
+    pub normal_modes: Vec<NormalModePy>,
+    /// Zero-Point Vibrational Energy (ZPVE) in kcal/mol
+    pub zpve_kcal_mol: f64,
+    /// Statistical thermodynamic properties
+    pub thermo: ThermodynamicsPy,
+    /// Whether molecule is a transition state (first vibrational frequency < -10 cm^-1)
+    pub is_transition_state: bool,
+    /// Full Cartesian Hessian matrix [3N x 3N] in kcal / (mol * Å^2)
+    pub cartesian_hessian: Vec<Vec<f64>>,
+}
+
+#[pymethods]
+impl VibrationalResultPy {
+    fn __repr__(&self) -> String {
+        format!(
+            "<VibrationalResult num_vib={}, ZPVE={:.2} kcal/mol, is_TS={}>",
+            self.vibrational_frequencies_cm1.len(),
+            self.zpve_kcal_mol,
+            self.is_transition_state
+        )
+    }
+
+    /// Convert vibrational result to Python dictionary.
+    fn to_dict<'py>(&self, py: Python<'py>) -> PyResult<Bound<'py, PyDict>> {
+        let dict = PyDict::new_bound(py);
+        dict.set_item("all_frequencies_cm1", &self.all_frequencies_cm1)?;
+        dict.set_item(
+            "vibrational_frequencies_cm1",
+            &self.vibrational_frequencies_cm1,
+        )?;
+        dict.set_item("zpve_kcal_mol", self.zpve_kcal_mol)?;
+        dict.set_item("is_transition_state", self.is_transition_state)?;
+        dict.set_item("thermo", self.thermo.to_dict(py)?)?;
+        dict.set_item("cartesian_hessian", &self.cartesian_hessian)?;
+        let modes_list = pyo3::types::PyList::empty_bound(py);
+        for m in &self.normal_modes {
+            modes_list.append(m.to_dict(py)?)?;
+        }
+        dict.set_item("normal_modes", modes_list)?;
+        Ok(dict)
     }
 }
 
@@ -492,6 +647,156 @@ pub fn optimize(
     })
 }
 
+/// Compute Cartesian Hessian, harmonic vibrational frequencies, normal modes, and thermodynamics.
+///
+/// Parameters:
+/// - `atomic_numbers`: list of integer atomic numbers (e.g. `[8, 1, 1]`)
+/// - `coordinates`: 3D coordinates in Ångströms (e.g. `[[0.0, 0.0, 0.0], ...]`)
+/// - `method`: Semi-empirical Hamiltonian ("PM6", "AM1", "RM1", "PM3", "MNDO"; default: "PM6")
+/// - `temperature_k`: Temperature in Kelvin for thermodynamics (default: 298.15 K)
+/// - `pressure_atm`: Pressure in standard atmospheres (default: 1.0 atm)
+/// - `rotational_symmetry_number`: Rotational symmetry number sigma (e.g. 2 for C2v water; default: 1.0)
+/// - `step_size_angstrom`: Finite difference displacement step size in Ångströms (default: 0.005 Å)
+/// - `project_external`: Project out 6 translational/rotational external motions via Eckart frame (default: true)
+/// - `use_nddo`: Enable full NDDO potential energy surface and second derivatives (default: false)
+#[pyfunction]
+#[pyo3(signature = (
+    atomic_numbers,
+    coordinates,
+    method = "PM6",
+    temperature_k = 298.15,
+    pressure_atm = 1.0,
+    rotational_symmetry_number = 1.0,
+    step_size_angstrom = 0.005,
+    project_external = true,
+    use_nddo = false,
+))]
+pub fn frequencies(
+    atomic_numbers: Vec<u8>,
+    coordinates: Vec<[f64; 3]>,
+    method: Option<&str>,
+    temperature_k: Option<f64>,
+    pressure_atm: Option<f64>,
+    rotational_symmetry_number: Option<f64>,
+    step_size_angstrom: Option<f64>,
+    project_external: Option<bool>,
+    use_nddo: Option<bool>,
+) -> PyResult<VibrationalResultPy> {
+    let method_str = method.unwrap_or("PM6");
+    let model = get_model(method_str)?;
+
+    let natoms = atomic_numbers.len();
+    if natoms == 0 {
+        return Err(PyValueError::new_err(
+            "Molecule must have at least one atom",
+        ));
+    }
+    if coordinates.len() != natoms {
+        return Err(PyValueError::new_err(format!(
+            "Mismatch between atomic_numbers ({}) and coordinates ({})",
+            natoms,
+            coordinates.len()
+        )));
+    }
+
+    let mut total_valence_elecs = 0.0;
+    for &z in &atomic_numbers {
+        if let Some(p) = model.get_element(z) {
+            total_valence_elecs += p.core_charge;
+        } else {
+            return Err(PyValueError::new_err(format!(
+                "Unsupported element Z={} for semi-empirical method '{}'",
+                z, method_str
+            )));
+        }
+    }
+
+    let nelec = total_valence_elecs.round() as usize;
+    if !nelec.is_multiple_of(2) {
+        return Err(PyValueError::new_err(format!(
+            "Open-shell radical detected ({} valence electrons). Closed-shell RHF requires an even number of valence electrons (requires UHF/ROHF).",
+            nelec
+        )));
+    }
+
+    let mut batch = MolecularBatch::new(atomic_numbers, &coordinates);
+    let mut ws = ScfWorkspace::allocate(batch.norbs);
+
+    let scf_opts = ScfOptions {
+        max_iter: 100,
+        energy_tol_ev: 1e-8,
+        density_tol: 1e-7,
+        use_nddo: use_nddo.unwrap_or(false),
+        ..Default::default()
+    };
+
+    let hess_opts = HessianOptions {
+        delta: step_size_angstrom.unwrap_or(1.0e-3),
+        recompute_scf: true,
+        use_nddo: use_nddo.unwrap_or(false),
+        project_external: project_external.unwrap_or(true),
+        temperature_k: temperature_k.unwrap_or(298.15),
+        pressure_atm: pressure_atm.unwrap_or(1.0),
+        rotational_symmetry_number: rotational_symmetry_number.unwrap_or(1.0),
+    };
+
+    let res =
+        compute_hessian_and_frequencies(&mut batch, model.as_ref(), &mut ws, &scf_opts, &hess_opts);
+
+    let normal_modes: Vec<NormalModePy> = res
+        .normal_modes
+        .into_iter()
+        .map(|m| NormalModePy {
+            frequency_cm1: m.frequency_cm1,
+            reduced_mass_amu: m.reduced_mass_amu,
+            force_constant_mdyne_a: m.force_constant_mdyne_a,
+            displacements: m.displacements,
+        })
+        .collect();
+
+    let thermo = ThermodynamicsPy {
+        temperature_k: res.thermo.temperature_k,
+        pressure_atm: res.thermo.pressure_atm,
+        zpve_kcal_mol: res.thermo.zpve_kcal_mol,
+        e_vib_cal_mol: res.thermo.e_vib_cal_mol,
+        e_rot_cal_mol: res.thermo.e_rot_cal_mol,
+        e_trans_cal_mol: res.thermo.e_trans_cal_mol,
+        enthalpy_thermal_cal_mol: res.thermo.enthalpy_thermal_cal_mol,
+        cv_vib_cal_k_mol: res.thermo.cv_vib_cal_k_mol,
+        cv_rot_cal_k_mol: res.thermo.cv_rot_cal_k_mol,
+        cp_trans_cal_k_mol: res.thermo.cp_trans_cal_k_mol,
+        cp_total_cal_k_mol: res.thermo.cp_total_cal_k_mol,
+        entropy_vib_cal_k_mol: res.thermo.entropy_vib_cal_k_mol,
+        entropy_rot_cal_k_mol: res.thermo.entropy_rot_cal_k_mol,
+        entropy_trans_cal_k_mol: res.thermo.entropy_trans_cal_k_mol,
+        entropy_total_cal_k_mol: res.thermo.entropy_total_cal_k_mol,
+        gibbs_correction_kcal_mol: res.thermo.gibbs_correction_kcal_mol,
+    };
+
+    let is_transition_state = res
+        .vibrational_frequencies_cm1
+        .first()
+        .is_some_and(|&f| f < -10.0);
+
+    let n3 = 3 * natoms;
+    let mut cartesian_hessian = vec![vec![0.0; n3]; n3];
+    for (r, row) in cartesian_hessian.iter_mut().enumerate() {
+        for (c, val) in row.iter_mut().enumerate() {
+            *val = res.cartesian_hessian.get(r, c);
+        }
+    }
+
+    Ok(VibrationalResultPy {
+        all_frequencies_cm1: res.all_frequencies_cm1,
+        vibrational_frequencies_cm1: res.vibrational_frequencies_cm1,
+        normal_modes,
+        zpve_kcal_mol: res.zpve_kcal_mol,
+        thermo,
+        is_transition_state,
+        cartesian_hessian,
+    })
+}
+
 /// Object-oriented MOPAC Calculator class compatible with PyTorch / RDKit / ASE workflows.
 #[pyclass]
 pub struct MopacCalculator {
@@ -578,6 +883,29 @@ impl MopacCalculator {
             Some(self.use_nddo),
         )
     }
+
+    /// Compute harmonic vibrational frequencies, normal modes, and thermodynamics.
+    #[pyo3(signature = (atomic_numbers, coordinates, temperature_k = 298.15, pressure_atm = 1.0, rotational_symmetry_number = 1.0))]
+    fn frequencies(
+        &self,
+        atomic_numbers: Vec<u8>,
+        coordinates: Vec<[f64; 3]>,
+        temperature_k: Option<f64>,
+        pressure_atm: Option<f64>,
+        rotational_symmetry_number: Option<f64>,
+    ) -> PyResult<VibrationalResultPy> {
+        frequencies(
+            atomic_numbers,
+            coordinates,
+            Some(&self.method),
+            temperature_k,
+            pressure_atm,
+            rotational_symmetry_number,
+            Some(0.005),
+            Some(true),
+            Some(self.use_nddo),
+        )
+    }
 }
 
 /// MOPAC_RS Python Module
@@ -585,9 +913,13 @@ impl MopacCalculator {
 fn mopac_py(m: &Bound<'_, PyModule>) -> PyResult<()> {
     m.add_class::<CalculationResult>()?;
     m.add_class::<OptimizationPyResult>()?;
+    m.add_class::<NormalModePy>()?;
+    m.add_class::<ThermodynamicsPy>()?;
+    m.add_class::<VibrationalResultPy>()?;
     m.add_class::<MopacCalculator>()?;
     m.add_function(wrap_pyfunction!(calculate, m)?)?;
     m.add_function(wrap_pyfunction!(optimize, m)?)?;
+    m.add_function(wrap_pyfunction!(frequencies, m)?)?;
 
     let py = m.py();
     let py_code = r#"

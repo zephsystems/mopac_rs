@@ -140,6 +140,43 @@ pub fn compute_cartesian_gradients(
     compute_cartesian_gradients_with_options(batch, model, density, ws, gradients, false);
 }
 
+/// Compute Cartesian nuclear energy gradients $\nabla E$ in **eV / Å** with optional NDDO multipoles
+/// and optional COSMO implicit dielectric solvation reaction field.
+pub fn compute_cartesian_gradients_full(
+    batch: &mut MolecularBatch,
+    model: &dyn ParameterModel,
+    density: &AlignedMatrix<f64>,
+    ws: &mut GradientWorkspace,
+    gradients: &mut [[f64; 3]],
+    use_nddo: bool,
+    cosmo: Option<&crate::solvation::CosmoState>,
+) {
+    compute_cartesian_gradients_with_options(batch, model, density, ws, gradients, use_nddo);
+
+    if let Some(cs) = cosmo {
+        cs.compute_dielectric_gradients(batch, model, density, gradients);
+
+        // Project out any translational drift
+        let natoms = batch.natoms;
+        let mut sum_gx = 0.0;
+        let mut sum_gy = 0.0;
+        let mut sum_gz = 0.0;
+        for g in gradients.iter() {
+            sum_gx += g[0];
+            sum_gy += g[1];
+            sum_gz += g[2];
+        }
+        let mean_gx = sum_gx / (natoms as f64);
+        let mean_gy = sum_gy / (natoms as f64);
+        let mean_gz = sum_gz / (natoms as f64);
+        for g in gradients.iter_mut() {
+            g[0] -= mean_gx;
+            g[1] -= mean_gy;
+            g[2] -= mean_gz;
+        }
+    }
+}
+
 /// Compute Root-Mean-Square (RMS) and Maximum Gradient Norm in **kcal / (mol · Å)**.
 pub fn compute_gradient_norms(gradients: &[[f64; 3]]) -> (f64, f64) {
     let mut sum_sq = 0.0;

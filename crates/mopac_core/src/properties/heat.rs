@@ -16,6 +16,7 @@ pub fn get_isolated_atom_energy_and_heat(z: u8, model: &dyn ParameterModel) -> (
 
     let (ios, iop, eheat): (f64, f64, f64) = match z {
         1 => (1.0, 0.0, 52.102),
+        5 => (2.0, 1.0, 135.700),
         6 => (2.0, 2.0, 170.890),
         7 => (2.0, 3.0, 113.000),
         8 => (2.0, 4.0, 59.559),

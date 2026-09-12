@@ -12,4 +12,8 @@ description = "High-performance Data-Oriented semi-empirical quantum chemistry c
 [dependencies]
 
 [dev-dependencies]
+criterion = { version = "0.8.2", default-features = false }
 
+[[bench]]
+name = "quantum_benchmarks"
+harness = false
