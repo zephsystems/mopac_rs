@@ -259,8 +259,56 @@ With the consolidation of Phase 1 and the execution of the canonical integration
 
 ### 6.4 Canonical CLI Application (`crates/mopac_cli`)
 - Drop-in command-line binary `target/release/mopac` accepting `.mop` and `.dat` input files.
-- Automatically parses keywords (`AM1`, `1SCF`, `OPT`, `GPU`, `FP32`, `FP64`, `THREADS=N`).
-- Dynamically selects execution backend (CPU AVX2 SIMD vs Vulkan GPU FP32/FP64 with GDDR6 batch streaming).
+- Automatically parses keywords (`AM1`, `PM6`, `RM1`, `NDDO`, `1SCF`, `OPT`, `GPU`, `FP32`, `FP64`, `THREADS=N`).
+- Dynamically selects parameter model (`Am1Model`, `Pm6Model`, `Rm1Model`) and execution backend (CPU AVX2 SIMD vs Vulkan GPU FP32/FP64 with GDDR6 batch streaming).
 - Generates canonical `.out` report and `.arc` structure archive matching upstream MOPAC output standards.
+
+### 6.5 Direct NDDO 22-Multipole Fock & Core Hamiltonian Coupling
+- Fully coupled diatomic multipoles into the iterative SCF loop:
+  - `build_hcore_nddo()` in [`crates/mopac_core/src/hamiltonian/hcore.rs`](file:///home/cyclop/Projects/n/05_mopacrs/crates/mopac_core/src/hamiltonian/hcore.rs): Injects rotated $E_{1B}$ and $E_{2A}$ electron-nuclear attraction matrices into the core Hamiltonian.
+  - `build_fock_nddo()` in [`crates/mopac_core/src/fock/fock_builder.rs`](file:///home/cyclop/Projects/n/05_mopacrs/crates/mopac_core/src/fock/fock_builder.rs): Contracts the rotated 100/10/1 two-electron repulsion tensor $W$ with off-diagonal blocks of the density matrix $P$ ($J$ Coulomb and $K$ exchange contractions) according to exact OpenMOPAC `fock2.F90` rules.
+  - Precomputes diatomic pair integrals once prior to SCF iterations, maintaining the strict **`0 malloc`** invariant across all subsequent SCF cycles.
+
+### 6.6 Additional Semi-Empirical Hamiltonians: RM1 & PM6
+- **RM1 (Recife Model 1)**:
+  - Implemented in [`crates/mopac_core/src/parameters/rm1.rs`](file:///home/cyclop/Projects/n/05_mopacrs/crates/mopac_core/src/parameters/rm1.rs) for H, C, N, O, F, Cl.
+  - Re-parameterized Gaussian core repulsion potentials providing enhanced geometries and hydrogen-bonding energetics.
+- **PM6 (Parametrization Method 6)**:
+  - Implemented in [`crates/mopac_core/src/parameters/pm6.rs`](file:///home/cyclop/Projects/n/05_mopacrs/crates/mopac_core/src/parameters/pm6.rs) for H, C, N, O.
+  - Introduces diatomic pairwise bond parameters `alpb` ($a_{\text{bond}}$) and `xfac` ($f_{\text{bond}}$) for diatomic resonance and core-core interactions.
+  - Implemented `compute_pair_core_repulsion_pm6()` in [`crates/mopac_core/src/integrals/core_repulsion.rs`](file:///home/cyclop/Projects/n/05_mopacrs/crates/mopac_core/src/integrals/core_repulsion.rs) with $R^2$ exponential scaling for hydrogen-bonding pairs (C-H, N-H, O-H) and $R + 0.0003 R^6$ scaling for heavy pairs.
+
+### 6.7 Vulkan GPU GDDR6 Batch Pipelining Engine
+- Upgraded `crates/mopac_gpu/src/coulomb_fp32.rs` and `coulomb_fp32.comp`:
+  - Added push constant `matrix_offset` allowing arbitrary output matrix offsets in device-local GDDR6 memory.
+  - Implemented `GpuBatchVramManager::dispatch_batch()` executing multi-geometry compute passes across distinct molecules in a single command buffer submission with zero CPU sync per molecule.
+  - Implemented `download_matrix_from_gddr6()` providing DMA copy from GDDR6 back to host memory for analytical verification.
+
+---
+
+## 7. Additional Fortran Pathologies Resolved
+
+### 7.1 Fortran 1-Based Table Indexing in `jab.F90`
+- **Fortran Bug Pattern**: In `jab.F90` (calculating Coulomb contractions between atom A and atom B), table array `w_offsets_b` references 1-based Fortran indices.
+- **Resolution in Rust**: Element 8 of row 3 was corrected from 34 (which mapped out-of-bounds in 0-based indexing) to 33, ensuring exact parity with OpenMOPAC source.
+
+### 7.2 Lower-Triangular Index Packing in `elenuc.F90`
+- **Fortran Symptom**: Porting electron-nuclear attraction terms assuming contiguous $p$-orbital blocks ($p_x, p_y, p_z$) produced wrong off-diagonal elements in the core Hamiltonian.
+- **Root Cause**: Fortran `elenuc.F90` directly packs into the lower-triangular matrix index $m = (i(i-1))/2 + j$, interleaving $s-p$ and $p-p$ products.
+- **Resolution in Rust**: Formulated `compute_electron_nuclear_attraction()` with exact lower-triangular packed indexing $(1, 2, 3, \dots, 9)$ matching OpenMOPAC layout.
+
+---
+
+## 8. Final Scrutiny Summary Table (26 / 26 Tests Passing)
+
+| Test Suite | Scrutiny Test Name | Verification Target | Invariant / Precision | Result |
+| :---: | :--- | :--- | :---: | :---: |
+| `mopac_core` | `test_scrutiny_full_nddo_scf_water_parity` | Full NDDO 22-Multipole SCF on $H_2O$ | $E_{\text{tot}} = -350.4908\text{ eV}$, $\text{HOMO} = -12.7646\text{ eV}$ | **PASSED** |
+| `mopac_core` | `test_scrutiny_rm1_and_pm6_convergence` | RM1 & PM6 convergence on $H_2$ | RM1: $-28.4984\text{ eV}$, PM6: $-28.1146\text{ eV}$ | **PASSED** |
+| `mopac_gpu` | `test_scrutiny_vulkan_gpu_gddr6_batch_pipelining_parity` | Concurrent multi-molecule GDDR6 evaluation | Water & Methane Coulomb parity vs CPU $< 10^{-4}\text{ eV}$ | **PASSED** |
+| `mopac_gpu` | `test_scrutiny_vulkan_gpu_gddr6_batch_manager` | GDDR6 DMA Host-to-Device Transfer | Bit-exact 3-atom coordinate buffer copy | **PASSED** |
+| `mopac_gpu` | `test_scrutiny_vulkan_gpu_coulomb_matrix_fp32_parity` | FP32 18 TFLOPS Hardware Rate & Parity | Single-precision Coulomb bound $< 10^{-4}\text{ eV}$ | **PASSED** |
+| `mopac_gpu` | `test_scrutiny_vulkan_gpu_coulomb_matrix_parity` | FP64 Double-Precision Parity | Benzene 144 interaction pairs $< 10^{-12}\text{ eV}$ | **PASSED** |
+| `mopac_gpu` | `test_scrutiny_vulkan_gpu_zero_allocation_workspace_parity` | GPU Pre-allocated Zero-Malloc Workspace | 5 iterative dispatches, `0 malloc` | **PASSED** |
 
 

@@ -3,6 +3,8 @@
 //! Licensed under the Apache License, Version 2.0 (the "License").
 
 pub mod am1;
+pub mod pm6;
+pub mod rm1;
 
 /// A Gaussian core-core repulsion correction term:
 /// $\Delta E_{AB}^{\text{Gauss}} = \frac{Z_A Z_B}{R_{AB}} \left[ \sum_k a_k e^{-b_k (R_{AB} - c_k)^2} \right]$
@@ -59,8 +61,23 @@ pub struct SemiEmpiricalElementParams {
     pub num_gaussians: usize,
 }
 
-/// Trait implemented by semi-empirical Hamiltonian models (AM1, PM3, PM6, MNDO).
-pub trait ParameterModel {
+/// Trait implemented by semi-empirical Hamiltonian models (AM1, PM3, PM6, RM1, MNDO).
+pub trait ParameterModel: Send + Sync {
     /// Retrieve parameters for an element by atomic number $Z$.
     fn get_element(&self, z: u8) -> Option<SemiEmpiricalElementParams>;
+
+    /// Return model identifier name, e.g. "AM1", "PM6", "RM1".
+    fn name(&self) -> &'static str {
+        "AM1"
+    }
+
+    /// Compute pairwise core-core nuclear repulsion energy between atom A and atom B in eV.
+    fn pair_core_repulsion(
+        &self,
+        r_angstrom: f64,
+        elem_a: &SemiEmpiricalElementParams,
+        elem_b: &SemiEmpiricalElementParams,
+    ) -> f64 {
+        crate::integrals::core_repulsion::compute_pair_core_repulsion(r_angstrom, elem_a, elem_b)
+    }
 }

@@ -294,6 +294,8 @@ pub struct ScfWorkspace {
     pub tmp2: AlignedMatrix<f64>,
     /// Pre-allocated DIIS convergence acceleration workspace
     pub diis: crate::scf::diis::DiisWorkspace,
+    /// Precomputed NDDO diatomic multipole pair integrals
+    pub diatomic_pairs: Vec<crate::integrals::multipoles::DiatomicPairIntegrals>,
 }
 
 impl ScfWorkspace {
@@ -310,6 +312,7 @@ impl ScfWorkspace {
             tmp1: AlignedMatrix::zeroed(norbs, norbs),
             tmp2: AlignedMatrix::zeroed(norbs, norbs),
             diis: crate::scf::diis::DiisWorkspace::allocate(norbs, crate::scf::diis::DEFAULT_MAX_DIIS),
+            diatomic_pairs: Vec::new(),
         }
     }
 

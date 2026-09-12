@@ -135,3 +135,76 @@ pub fn build_fock(
         }
     }
 }
+
+/// Build the Fock matrix $F = H^{\text{core}} + G(P)$ using full NDDO 22 multipoles.
+///
+/// Axiomatic formulation matching OpenMOPAC `fock1.F90` and `fock2.F90`:
+/// 1. Copy $H^{\text{core}}$.
+/// 2. Add one-center two-electron Coulomb and Exchange.
+/// 3. Assemble two-center two-electron Coulomb and Exchange via rotated 22 multipoles ($W$),
+///    `contract_jab`, `contract_kab`, and heavy-light/light-light routines.
+pub fn build_fock_nddo(
+    batch: &MolecularBatch,
+    model: &dyn ParameterModel,
+    pairs: &[crate::integrals::multipoles::DiatomicPairIntegrals],
+    h_core: &AlignedMatrix<f64>,
+    density: &AlignedMatrix<f64>,
+    fock: &mut AlignedMatrix<f64>,
+) {
+    assert_eq!(fock.rows, batch.norbs);
+    assert_eq!(fock.cols, batch.norbs);
+
+    // 1. Copy H_core into Fock matrix
+    fock.data.copy_from_slice(&h_core.data);
+
+    // 2. One-center two-electron interactions
+    for i in 0..batch.natoms {
+        let za = batch.atomic_numbers[i];
+        let p_a = match model.get_element(za) {
+            Some(p) => p,
+            None => continue,
+        };
+
+        let orb_start = batch.orbital_offsets[i];
+        match batch.basis_types[i] {
+            BasisType::S => {
+                let p_ss = density.get(orb_start, orb_start);
+                let cur = fock.get(orb_start, orb_start);
+                fock.set(orb_start, orb_start, cur + 0.5 * p_ss * p_a.gss);
+            }
+            BasisType::SP => {
+                let p_ss = density.get(orb_start, orb_start);
+                let p_xx = density.get(orb_start + 1, orb_start + 1);
+                let p_yy = density.get(orb_start + 2, orb_start + 2);
+                let p_zz = density.get(orb_start + 3, orb_start + 3);
+
+                // s orbital diagonal
+                let f_ss = fock.get(orb_start, orb_start)
+                    + 0.5 * p_ss * p_a.gss
+                    + (p_xx + p_yy + p_zz) * (p_a.gsp - 0.5 * p_a.hsp);
+                fock.set(orb_start, orb_start, f_ss);
+
+                // p orbitals diagonal
+                let p_p_sum = p_xx + p_yy + p_zz;
+                for p_idx in 1..=3 {
+                    let idx = orb_start + p_idx;
+                    let p_ii = density.get(idx, idx);
+                    let other_p = p_p_sum - p_ii;
+                    let f_pp = fock.get(idx, idx)
+                        + 0.5 * p_ii * p_a.gpp
+                        + p_ss * (p_a.gsp - 0.5 * p_a.hsp)
+                        + other_p * (p_a.gp2 - 0.25 * (p_a.gpp - p_a.gp2));
+                    fock.set(idx, idx, f_pp);
+                }
+            }
+            BasisType::SPD => {
+                let p_ss = density.get(orb_start, orb_start);
+                let cur = fock.get(orb_start, orb_start);
+                fock.set(orb_start, orb_start, cur + 0.5 * p_ss * p_a.gss);
+            }
+        }
+    }
+
+    // 3. Assemble two-center two-electron Coulomb & Exchange from precomputed pairs
+    crate::integrals::multipoles::assemble_nddo_two_center_fock(pairs, density, fock);
+}

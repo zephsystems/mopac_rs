@@ -8,8 +8,10 @@ use mopac_core::constants::codata2018::EV_TO_KCAL_MOL;
 use mopac_core::gradients::GradientWorkspace;
 use mopac_core::opt::{optimize_geometry_lbfgs, OptimizationOptions};
 use mopac_core::parameters::am1::Am1Model;
+use mopac_core::parameters::pm6::Pm6Model;
+use mopac_core::parameters::rm1::Rm1Model;
 use mopac_core::parameters::ParameterModel;
-use mopac_core::scf::scf_loop::{run_rhf_scf_adaptive, ScfResult};
+use mopac_core::scf::scf_loop::{run_rhf_scf_adaptive_with_nddo, ScfResult};
 use mopac_core::types::{MolecularBatch, ScfWorkspace};
 use mopac_gpu::{GpuCoulombCalculator, VulkanContext};
 use mopac_gpu::coulomb_fp32::GpuCoulombCalculatorFP32;
@@ -30,6 +32,14 @@ struct Cli {
     /// Input file path (.mop or .dat)
     #[arg(value_name = "INPUT")]
     input: PathBuf,
+
+    /// Semi-empirical method / Hamiltonian (AM1, PM6, RM1)
+    #[arg(long)]
+    method: Option<String>,
+
+    /// Enable full NDDO 22-multipole two-center electron repulsion integrals
+    #[arg(long, default_value_t = false)]
+    nddo: bool,
 
     /// Enable Vulkan GPU acceleration
     #[arg(long, default_value_t = false)]
@@ -82,6 +92,8 @@ struct ParsedInput {
     is_opt_requested: bool,
     is_gpu_requested: bool,
     is_fp32_requested: bool,
+    method: Option<String>,
+    is_nddo_requested: bool,
 }
 
 fn symbol_to_atomic_number(sym: &str) -> Option<u8> {
@@ -197,6 +209,8 @@ fn parse_mopac_input(content: &str) -> io::Result<ParsedInput> {
     let mut is_1scf = false;
     let mut is_gpu = false;
     let mut is_fp32 = false;
+    let mut method = None;
+    let mut is_nddo_requested = false;
 
     for kw in &keywords {
         let u = kw.to_uppercase();
@@ -208,6 +222,14 @@ fn parse_mopac_input(content: &str) -> io::Result<ParsedInput> {
             is_gpu = true;
         } else if u == "FP32" {
             is_fp32 = true;
+        } else if u == "PM6" {
+            method = Some("PM6".to_string());
+        } else if u == "RM1" {
+            method = Some("RM1".to_string());
+        } else if u == "AM1" {
+            method = Some("AM1".to_string());
+        } else if u == "NDDO" {
+            is_nddo_requested = true;
         }
     }
 
@@ -280,6 +302,8 @@ fn parse_mopac_input(content: &str) -> io::Result<ParsedInput> {
         is_opt_requested,
         is_gpu_requested: is_gpu,
         is_fp32_requested: is_fp32,
+        method,
+        is_nddo_requested,
     })
 }
 
@@ -367,19 +391,32 @@ fn main() -> Result<(), Box<dyn std::error::Error>> {
     let use_fp32 = cli.fp32 || parsed.is_fp32_requested;
     let is_opt = (cli.opt || parsed.is_opt_requested) && !cli.one_scf;
 
+    let method_name = cli.method
+        .or(parsed.method)
+        .unwrap_or_else(|| "AM1".to_string())
+        .to_uppercase();
+
+    let model: Box<dyn ParameterModel> = match method_name.as_str() {
+        "PM6" => Box::new(Pm6Model),
+        "RM1" => Box::new(Rm1Model),
+        _ => Box::new(Am1Model),
+    };
+
+    let use_nddo = cli.nddo || parsed.is_nddo_requested;
+
     println!("===============================================================================");
     println!("                          MOPAC_RS CANONICAL QUANTUM ENGINE                     ");
     println!("                                Version 0.1.0-alpha                             ");
     println!("===============================================================================");
     println!(" Job Input File        : {}", input_path.display());
-    println!(" Method / Hamiltonian   : AM1 (Austin Model 1)");
+    println!(" Method / Hamiltonian   : {}", model.name());
+    println!(" NDDO Multipoles       : {}", if use_nddo { "Enabled (Full 22 Multipoles)" } else { "Monopole Approximation" });
     println!(" Calculation Mode      : {}", if is_opt { "L-BFGS Geometry Optimization" } else { "1SCF (Single Point)" });
     println!(" Compute Backend       : {}", if use_gpu { format!("Vulkan GPU ({})", if use_fp32 { "FP32 (18 TFLOPS)" } else { "FP64" }) } else { "CPU SIMD AVX2".to_string() });
     println!(" Number of Atoms       : {}", parsed.atoms.len());
     println!(" Title Line            : \"{}\"", parsed.title);
     println!("-------------------------------------------------------------------------------");
 
-    let model = Am1Model;
     let mut batch = build_batch(&parsed.atoms);
     let mut ws = ScfWorkspace::allocate(batch.norbs);
 
@@ -397,11 +434,11 @@ fn main() -> Result<(), Box<dyn std::error::Error>> {
         println!(" [Vulkan GPU] Device: {} (Discrete: {})", ctx.device_info.device_name, ctx.device_info.is_discrete);
         if use_fp32 {
             let gpu_calc = GpuCoulombCalculatorFP32::new(Arc::clone(&ctx))?;
-            let _gpu_matrix = gpu_calc.compute_batch(&batch, &model)?;
+            let _gpu_matrix = gpu_calc.compute_batch(&batch, model.as_ref())?;
             println!(" [Vulkan GPU] Evaluated pairwise Coulomb matrix using FP32 hardware pipeline.");
         } else {
             let gpu_calc = GpuCoulombCalculator::new(Arc::clone(&ctx))?;
-            let _gpu_matrix = gpu_calc.compute_batch(&batch, &model)?;
+            let _gpu_matrix = gpu_calc.compute_batch(&batch, model.as_ref())?;
             println!(" [Vulkan GPU] Evaluated pairwise Coulomb matrix using native Float64 pipeline.");
         }
     }
@@ -418,7 +455,7 @@ fn main() -> Result<(), Box<dyn std::error::Error>> {
         };
 
         let mut grad_ws = GradientWorkspace::allocate(batch.norbs);
-        let opt_res = optimize_geometry_lbfgs(&mut batch, &model, &mut ws, &mut grad_ws, &opts);
+        let opt_res = optimize_geometry_lbfgs(&mut batch, model.as_ref(), &mut ws, &mut grad_ws, &opts);
 
         println!(" [Optimizer] Optimization finished in {} cycles (Converged: {})", opt_res.cycles, opt_res.converged);
         println!("   Initial Energy: {:12.6} eV | Final Energy: {:12.6} eV", opt_res.initial_energy_ev, opt_res.final_energy_ev);
@@ -426,15 +463,15 @@ fn main() -> Result<(), Box<dyn std::error::Error>> {
         let niter = opt_res.final_scf.iterations;
         (opt_res.final_scf, niter)
     } else {
-        println!(" [SCF] Running Roothaan-Hall Self-Consistent Field...");
-        let res = run_rhf_scf_adaptive(&batch, &model, &mut ws, 60, 1e-7, 1e-6);
+        println!(" [SCF] Running Roothaan-Hall Self-Consistent Field (NDDO: {})...", use_nddo);
+        let res = run_rhf_scf_adaptive_with_nddo(&batch, model.as_ref(), &mut ws, 60, 1e-7, 1e-6, use_nddo);
         let niter = res.iterations;
         (res, niter)
     };
 
     let elapsed = start_time.elapsed();
     let (hof_kcal, charges, pops, dipole, dipole_tot) =
-        compute_wavefunction_properties(&batch, &model, &ws, &scf_final);
+        compute_wavefunction_properties(&batch, model.as_ref(), &ws, &scf_final);
 
     println!("-------------------------------------------------------------------------------");
     println!("                             FINAL SCF RESULTS                                 ");
@@ -465,7 +502,8 @@ fn main() -> Result<(), Box<dyn std::error::Error>> {
     writeln!(out, " COMMENT:  {}", parsed.comment)?;
     writeln!(out)?;
     writeln!(out, " CALCULATION PARAMETERS:")?;
-    writeln!(out, "   Method:    AM1")?;
+    writeln!(out, "   Method:    {}", model.name())?;
+    writeln!(out, "   NDDO:      {}", if use_nddo { "Enabled (Full 22 Multipoles)" } else { "Monopole Approximation" })?;
     writeln!(out, "   Mode:      {}", if is_opt { "L-BFGS Geometry Optimization" } else { "1SCF" })?;
     writeln!(out, "   Backend:   {}", if use_gpu { "Vulkan GPU" } else { "CPU SIMD AVX2" })?;
     writeln!(out)?;
@@ -500,7 +538,7 @@ fn main() -> Result<(), Box<dyn std::error::Error>> {
 
     // Write .arc file with optimized geometry
     let mut arc = File::create(&arc_file)?;
-    writeln!(arc, "AM1 {}", if is_opt { "OPT" } else { "1SCF" })?;
+    writeln!(arc, "{} {}", model.name(), if is_opt { "OPT" } else { "1SCF" })?;
     writeln!(arc, "{}", parsed.title)?;
     writeln!(arc, "Final Heat of Formation: {:12.5} kcal/mol", hof_kcal)?;
     for i in 0..batch.natoms {

@@ -27,7 +27,7 @@ struct PushConstantsFP32 {
     num_atoms: u32,
     batch_offset: u32,
     ev_angstrom_factor: f32,
-    pad0: f32,
+    matrix_offset: u32,
 }
 
 /// Vulkan FP32 compute pipeline for high-throughput evaluation of Coulomb repulsion matrices.
@@ -193,7 +193,7 @@ impl GpuCoulombCalculatorFP32 {
             num_atoms: n as u32,
             batch_offset: 0,
             ev_angstrom_factor: EV_ANGSTROM_FACTOR as f32,
-            pad0: 0.0,
+            matrix_offset: 0,
         };
 
         unsafe {
@@ -427,7 +427,7 @@ impl GpuCoulombCalculatorFP32 {
                 num_atoms: n as u32,
                 batch_offset: 0,
                 ev_angstrom_factor: EV_ANGSTROM_FACTOR as f32,
-                pad0: 0.0,
+                matrix_offset: 0,
             };
             let pc_bytes = std::slice::from_raw_parts(
                 &pc as *const _ as *const u8,
@@ -508,6 +508,17 @@ impl Drop for GpuCoulombCalculatorFP32 {
     }
 }
 
+/// Descriptor for a single molecular geometry within a contiguous GDDR6 VRAM batch.
+#[derive(Clone, Copy, Debug, PartialEq, Eq)]
+pub struct BatchMoleculeDescriptor {
+    /// Offset in atoms within the VRAM atom buffer.
+    pub atom_offset: u32,
+    /// Number of atoms in this molecule.
+    pub num_atoms: u32,
+    /// Offset in floats within the VRAM matrix buffer where the NxN Coulomb matrix will be stored.
+    pub matrix_offset: u32,
+}
+
 /// Dedicated GDDR6 Device-Local VRAM Memory & Batch Manager.
 ///
 /// Stores multiple molecular systems or large coordinate sets directly in high-speed
@@ -522,6 +533,9 @@ pub struct GpuBatchVramManager {
     staging_buf: vk::Buffer,
     staging_mem: vk::DeviceMemory,
     pub mapped_staging: *mut AtomGpuFP32,
+    matrix_staging_buf: vk::Buffer,
+    matrix_staging_mem: vk::DeviceMemory,
+    pub mapped_matrix_staging: *const f32,
 }
 
 impl GpuBatchVramManager {
@@ -590,6 +604,29 @@ impl GpuBatchVramManager {
             device.map_memory(staging_mem, 0, atom_size, vk::MemoryMapFlags::empty())? as *mut AtomGpuFP32
         };
 
+        // 4. Host-visible staging buffer for downloading computed matrices
+        let mat_staging_info = vk::BufferCreateInfo::default()
+            .size(matrix_size)
+            .usage(vk::BufferUsageFlags::TRANSFER_DST);
+        let matrix_staging_buf = unsafe { device.create_buffer(&mat_staging_info, None)? };
+        let req_mat_staging = unsafe { device.get_buffer_memory_requirements(matrix_staging_buf) };
+        let mem_type_mat_staging = ctx.find_memory_type(
+            req_mat_staging.memory_type_bits,
+            vk::MemoryPropertyFlags::HOST_VISIBLE | vk::MemoryPropertyFlags::HOST_COHERENT,
+        )?;
+        let matrix_staging_mem = unsafe {
+            device.allocate_memory(
+                &vk::MemoryAllocateInfo::default()
+                    .allocation_size(req_mat_staging.size)
+                    .memory_type_index(mem_type_mat_staging),
+                None,
+            )?
+        };
+        let mapped_matrix_staging = unsafe {
+            device.bind_buffer_memory(matrix_staging_buf, matrix_staging_mem, 0)?;
+            device.map_memory(matrix_staging_mem, 0, matrix_size, vk::MemoryMapFlags::empty())? as *const f32
+        };
+
         Ok(Self {
             ctx,
             vram_capacity_atoms,
@@ -600,6 +637,9 @@ impl GpuBatchVramManager {
             staging_buf,
             staging_mem,
             mapped_staging,
+            matrix_staging_buf,
+            matrix_staging_mem,
+            mapped_matrix_staging,
         })
     }
 
@@ -638,6 +678,159 @@ impl GpuBatchVramManager {
 
         Ok(())
     }
+
+    /// Executes the FP32 compute shader on multiple molecular geometries in GDDR6 VRAM in a single dispatch batch,
+    /// with ZERO per-molecule CPU synchronization or bus transfers.
+    pub fn dispatch_batch(
+        &self,
+        calculator: &GpuCoulombCalculatorFP32,
+        molecules: &[BatchMoleculeDescriptor],
+    ) -> Result<(), VulkanError> {
+        if molecules.is_empty() {
+            return Ok(());
+        }
+
+        let device = &self.ctx.device;
+
+        // 1. Create a transient descriptor pool and descriptor set binding the GDDR6 buffers
+        let pool_size = vk::DescriptorPoolSize::default()
+            .ty(vk::DescriptorType::STORAGE_BUFFER)
+            .descriptor_count(2);
+        let pool_info = vk::DescriptorPoolCreateInfo::default()
+            .pool_sizes(std::slice::from_ref(&pool_size))
+            .max_sets(1);
+        let descriptor_pool = unsafe { device.create_descriptor_pool(&pool_info, None)? };
+
+        let alloc_info = vk::DescriptorSetAllocateInfo::default()
+            .descriptor_pool(descriptor_pool)
+            .set_layouts(std::slice::from_ref(&calculator.descriptor_set_layout));
+        let descriptor_set = unsafe { device.allocate_descriptor_sets(&alloc_info)?[0] };
+
+        let atom_size = (self.vram_capacity_atoms * std::mem::size_of::<AtomGpuFP32>()) as u64;
+        let matrix_size = (self.vram_capacity_atoms * self.vram_capacity_atoms * std::mem::size_of::<f32>()) as u64;
+
+        let d_buf0 = vk::DescriptorBufferInfo::default().buffer(self.vram_atom_buf).offset(0).range(atom_size);
+        let d_buf1 = vk::DescriptorBufferInfo::default().buffer(self.vram_matrix_buf).offset(0).range(matrix_size);
+
+        let writes = [
+            vk::WriteDescriptorSet::default()
+                .dst_set(descriptor_set)
+                .dst_binding(0)
+                .descriptor_type(vk::DescriptorType::STORAGE_BUFFER)
+                .buffer_info(std::slice::from_ref(&d_buf0)),
+            vk::WriteDescriptorSet::default()
+                .dst_set(descriptor_set)
+                .dst_binding(1)
+                .descriptor_type(vk::DescriptorType::STORAGE_BUFFER)
+                .buffer_info(std::slice::from_ref(&d_buf1)),
+        ];
+        unsafe { device.update_descriptor_sets(&writes, &[]) };
+
+        // 2. Allocate and record single primary command buffer with pipelined compute dispatches
+        let cmd_alloc = vk::CommandBufferAllocateInfo::default()
+            .command_pool(self.ctx.command_pool)
+            .level(vk::CommandBufferLevel::PRIMARY)
+            .command_buffer_count(1);
+        let cmd = unsafe { device.allocate_command_buffers(&cmd_alloc)?[0] };
+
+        unsafe {
+            device.begin_command_buffer(
+                cmd,
+                &vk::CommandBufferBeginInfo::default().flags(vk::CommandBufferUsageFlags::ONE_TIME_SUBMIT),
+            )?;
+            device.cmd_bind_pipeline(cmd, vk::PipelineBindPoint::COMPUTE, calculator.pipeline);
+            device.cmd_bind_descriptor_sets(
+                cmd,
+                vk::PipelineBindPoint::COMPUTE,
+                calculator.pipeline_layout,
+                0,
+                &[descriptor_set],
+                &[],
+            );
+
+            // Record compute dispatch for each molecule in the batch
+            for mol in molecules {
+                let pc = PushConstantsFP32 {
+                    num_atoms: mol.num_atoms,
+                    batch_offset: mol.atom_offset,
+                    ev_angstrom_factor: EV_ANGSTROM_FACTOR as f32,
+                    matrix_offset: mol.matrix_offset,
+                };
+                let pc_bytes = std::slice::from_raw_parts(
+                    &pc as *const _ as *const u8,
+                    std::mem::size_of::<PushConstantsFP32>(),
+                );
+                device.cmd_push_constants(
+                    cmd,
+                    calculator.pipeline_layout,
+                    vk::ShaderStageFlags::COMPUTE,
+                    0,
+                    pc_bytes,
+                );
+
+                let group_x = mol.num_atoms.div_ceil(16);
+                let group_y = mol.num_atoms.div_ceil(16);
+                device.cmd_dispatch(cmd, group_x, group_y, 1);
+            }
+
+            device.end_command_buffer(cmd)?;
+
+            // 3. Submit pipelined batch to compute queue and synchronize ONCE via fence
+            let fence = device.create_fence(&vk::FenceCreateInfo::default(), None)?;
+            let submit_info = vk::SubmitInfo::default().command_buffers(std::slice::from_ref(&cmd));
+            device.queue_submit(self.ctx.compute_queue, &[submit_info], fence)?;
+            device.wait_for_fences(&[fence], true, u64::MAX)?;
+
+            device.destroy_fence(fence, None);
+            device.free_command_buffers(self.ctx.command_pool, &[cmd]);
+            device.destroy_descriptor_pool(descriptor_pool, None);
+        }
+
+        Ok(())
+    }
+
+    /// Downloads an evaluated pairwise Coulomb matrix from GDDR6 VRAM to host memory.
+    pub fn download_matrix_from_gddr6(
+        &mut self,
+        matrix_offset: u32,
+        num_atoms: usize,
+    ) -> Result<AlignedMatrix<f32>, VulkanError> {
+        let n = num_atoms;
+        let byte_size = (n * n * std::mem::size_of::<f32>()) as u64;
+        let src_offset = (matrix_offset as u64) * (std::mem::size_of::<f32>() as u64);
+
+        let device = &self.ctx.device;
+        unsafe {
+            let cmd_alloc = vk::CommandBufferAllocateInfo::default()
+                .command_pool(self.ctx.command_pool)
+                .level(vk::CommandBufferLevel::PRIMARY)
+                .command_buffer_count(1);
+            let cmd = device.allocate_command_buffers(&cmd_alloc)?[0];
+
+            device.begin_command_buffer(
+                cmd,
+                &vk::CommandBufferBeginInfo::default().flags(vk::CommandBufferUsageFlags::ONE_TIME_SUBMIT),
+            )?;
+            let copy_region = vk::BufferCopy::default()
+                .src_offset(src_offset)
+                .dst_offset(0)
+                .size(byte_size);
+            device.cmd_copy_buffer(cmd, self.vram_matrix_buf, self.matrix_staging_buf, &[copy_region]);
+            device.end_command_buffer(cmd)?;
+
+            let fence = device.create_fence(&vk::FenceCreateInfo::default(), None)?;
+            let submit_info = vk::SubmitInfo::default().command_buffers(std::slice::from_ref(&cmd));
+            device.queue_submit(self.ctx.compute_queue, &[submit_info], fence)?;
+            device.wait_for_fences(&[fence], true, u64::MAX)?;
+
+            device.destroy_fence(fence, None);
+            device.free_command_buffers(self.ctx.command_pool, &[cmd]);
+
+            let mut out = AlignedMatrix::zeroed(n, n);
+            std::ptr::copy_nonoverlapping(self.mapped_matrix_staging, out.data.as_mut_ptr(), n * n);
+            Ok(out)
+        }
+    }
 }
 
 unsafe impl Send for GpuBatchVramManager {}
@@ -651,6 +844,9 @@ impl Drop for GpuBatchVramManager {
             device.unmap_memory(self.staging_mem);
             device.destroy_buffer(self.staging_buf, None);
             device.free_memory(self.staging_mem, None);
+            device.unmap_memory(self.matrix_staging_mem);
+            device.destroy_buffer(self.matrix_staging_buf, None);
+            device.free_memory(self.matrix_staging_mem, None);
             device.destroy_buffer(self.vram_atom_buf, None);
             device.free_memory(self.vram_atom_mem, None);
             device.destroy_buffer(self.vram_matrix_buf, None);

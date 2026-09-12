@@ -70,6 +70,57 @@ pub fn compute_pair_core_repulsion(
     base_repulsion + gaussian_repulsion
 }
 
+/// Compute pairwise core-core nuclear repulsion energy using PM6 formulation.
+///
+/// Direct port of OpenMOPAC `ccrep.F90` lines 70-120.
+pub fn compute_pair_core_repulsion_pm6(
+    r_angstrom: f64,
+    elem_a: &SemiEmpiricalElementParams,
+    elem_b: &SemiEmpiricalElementParams,
+) -> f64 {
+    if r_angstrom < 1e-10 {
+        return 0.0;
+    }
+    let gab = dewar_klopman_monopole(r_angstrom, elem_a.gss, elem_b.gss);
+    let (alpb, xfac) = crate::parameters::pm6::Pm6Model::get_pair_params(elem_a.z, elem_b.z);
+
+    let z_min = elem_a.z.min(elem_b.z);
+    let z_max = elem_a.z.max(elem_b.z);
+
+    let scale = if z_min == 1 && (z_max == 6 || z_max == 7 || z_max == 8) {
+        // C-H, N-H, O-H interaction uses r^2
+        1.0 + 2.0 * xfac * (-alpb * r_angstrom * r_angstrom).exp()
+    } else if xfac > 1e-5 {
+        1.0 + 2.0 * xfac * (-alpb * (r_angstrom + 0.0003 * r_angstrom.powi(6))).exp()
+    } else {
+        1.0 + 10.0 * (-2.18 * r_angstrom).exp()
+    };
+
+    let base_repulsion = elem_a.core_charge * elem_b.core_charge * gab * scale;
+
+    // PM6 VdW Gaussian terms
+    let mut gaussian_sum = 0.0;
+    for k in 0..elem_a.num_gaussians {
+        let g = &elem_a.gaussians[k];
+        let dr = r_angstrom - g.c;
+        let exponent = g.b * dr * dr;
+        if exponent < 25.0 {
+            gaussian_sum += g.a * (-exponent).exp();
+        }
+    }
+    for k in 0..elem_b.num_gaussians {
+        let g = &elem_b.gaussians[k];
+        let dr = r_angstrom - g.c;
+        let exponent = g.b * dr * dr;
+        if exponent < 25.0 {
+            gaussian_sum += g.a * (-exponent).exp();
+        }
+    }
+
+    let gaussian_repulsion = (elem_a.core_charge * elem_b.core_charge / r_angstrom) * gaussian_sum;
+    base_repulsion + gaussian_repulsion
+}
+
 /// Compute the total core-core repulsion energy for an entire molecular system.
 pub fn compute_total_core_repulsion(
     batch: &crate::types::MolecularBatch,
@@ -92,7 +143,7 @@ pub fn compute_total_core_repulsion(
             };
 
             let r = batch.distance(i, j);
-            total_energy += compute_pair_core_repulsion(r, &elem_a, &elem_b);
+            total_energy += model.pair_core_repulsion(r, &elem_a, &elem_b);
         }
     }
 

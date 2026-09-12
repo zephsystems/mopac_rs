@@ -39,6 +39,8 @@ pub struct ScfOptions {
     pub level_shift_ev: f64,
     /// Linear damping factor applied when DIIS is not yet active (default: 0.5)
     pub damping: f64,
+    /// Enable full NDDO 22 diatomic multipoles and rotated attractions (default: false)
+    pub use_nddo: bool,
 }
 
 impl Default for ScfOptions {
@@ -49,6 +51,7 @@ impl Default for ScfOptions {
             density_tol: 1e-6,
             level_shift_ev: 0.0,
             damping: 0.5,
+            use_nddo: false,
         }
     }
 }
@@ -110,7 +113,12 @@ pub fn run_rhf_scf_with_options(
     let enuc = compute_total_core_repulsion(batch, model);
 
     // 3. Build one-electron core Hamiltonian H_core
-    build_hcore(batch, model, &mut ws.h_core);
+    if options.use_nddo {
+        ws.diatomic_pairs = crate::integrals::multipoles::precompute_diatomic_pairs(batch, model);
+        crate::hamiltonian::hcore::build_hcore_nddo(batch, model, &ws.diatomic_pairs, &mut ws.h_core);
+    } else {
+        build_hcore(batch, model, &mut ws.h_core);
+    }
 
     // 4. Initial guess: diagonalize H_core to generate initial density P^(0)
     diagonalize_symmetric(&ws.h_core, &mut ws.eigenvalues, &mut ws.eigenvectors);
@@ -126,7 +134,18 @@ pub fn run_rhf_scf_with_options(
         iters_done = iter;
 
         // Build Fock matrix F = H_core + G(P)
-        build_fock(batch, model, &ws.h_core, &ws.density, &mut ws.fock);
+        if options.use_nddo {
+            crate::fock::fock_builder::build_fock_nddo(
+                batch,
+                model,
+                &ws.diatomic_pairs,
+                &ws.h_core,
+                &ws.density,
+                &mut ws.fock,
+            );
+        } else {
+            build_fock(batch, model, &ws.h_core, &ws.density, &mut ws.fock);
+        }
 
         // Compute physical electronic energy of the current state before level shift
         let e_elec = compute_electronic_energy(&ws.density, &ws.h_core, &ws.fock);
@@ -220,6 +239,7 @@ pub fn run_rhf_scf(
             density_tol,
             level_shift_ev: 0.0,
             damping: 0.5,
+            use_nddo: false,
         },
     )
 }
@@ -241,11 +261,32 @@ pub fn run_rhf_scf_adaptive(
     energy_tol_ev: f64,
     density_tol: f64,
 ) -> ScfResult {
+    run_rhf_scf_adaptive_with_nddo(
+        batch,
+        model,
+        ws,
+        max_iter_per_stage,
+        energy_tol_ev,
+        density_tol,
+        false,
+    )
+}
+
+/// Run an adaptive multi-tier SCF calculation with automatic converger escalation and configurable NDDO multipoles.
+pub fn run_rhf_scf_adaptive_with_nddo(
+    batch: &MolecularBatch,
+    model: &dyn ParameterModel,
+    ws: &mut ScfWorkspace,
+    max_iter_per_stage: usize,
+    energy_tol_ev: f64,
+    density_tol: f64,
+    use_nddo: bool,
+) -> ScfResult {
     let stages = [
-        ScfOptions { max_iter: max_iter_per_stage, energy_tol_ev, density_tol, level_shift_ev: 0.0, damping: 0.5 },
-        ScfOptions { max_iter: max_iter_per_stage * 2, energy_tol_ev, density_tol, level_shift_ev: 8.0, damping: 0.5 },
-        ScfOptions { max_iter: max_iter_per_stage * 2, energy_tol_ev, density_tol, level_shift_ev: 4.44, damping: 0.7 },
-        ScfOptions { max_iter: max_iter_per_stage * 2, energy_tol_ev, density_tol, level_shift_ev: 8.0, damping: 0.7 },
+        ScfOptions { max_iter: max_iter_per_stage, energy_tol_ev, density_tol, level_shift_ev: 0.0, damping: 0.5, use_nddo },
+        ScfOptions { max_iter: max_iter_per_stage * 2, energy_tol_ev, density_tol, level_shift_ev: 8.0, damping: 0.5, use_nddo },
+        ScfOptions { max_iter: max_iter_per_stage * 2, energy_tol_ev, density_tol, level_shift_ev: 4.44, damping: 0.7, use_nddo },
+        ScfOptions { max_iter: max_iter_per_stage * 2, energy_tol_ev, density_tol, level_shift_ev: 8.0, damping: 0.7, use_nddo },
     ];
 
     let mut last_res = ScfResult {

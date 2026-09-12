@@ -5,7 +5,8 @@
 //! `jab.F90`, and `kab.F90`.
 
 use crate::constants::codata2018::{BOHR_RADIUS_ANGSTROMS as A0_BOHR, HARTREE_TO_EV as EV_HARTREE};
-use crate::parameters::SemiEmpiricalElementParams;
+use crate::parameters::{ParameterModel, SemiEmpiricalElementParams};
+use crate::types::{AlignedMatrix, MolecularBatch};
 
 /// Derived multipole parameters for an element ($dd$, $qq$, $ad$, $aq$, $am$, $po$).
 ///
@@ -760,17 +761,14 @@ pub fn compute_electron_nuclear_attraction(
     // For Atom A:
     e1b[0] = core[1][0]; // (s, s)
     if norb_a >= 4 {
-        // (p_i, s)
         for i in 0..3 {
-            e1b[1 + i] = core[2][0] * rot.p[i][0];
-        }
-        // (p_i, p_j)
-        for i in 0..3 {
+            let idx_s = ((i + 1) * (i + 2)) / 2;
+            e1b[idx_s] = core[2][0] * rot.p[i][0]; // (p_i, s)
             for j in 0..=i {
-                let idx = 4 + (i * (i + 1)) / 2 + j;
-                let term_sigma = rot.pp[0][i][j] * core[3][0];
-                let term_pi = (rot.pp[1][i][j] + rot.pp[2][i][j]) * core[4][0];
-                e1b[idx] = term_sigma + term_pi;
+                let idx_pp = idx_s + j + 1; // (p_i, p_j)
+                let term_sigma = rot.p[i][0] * rot.p[j][0] * core[3][0];
+                let term_pi = (rot.p[i][1] * rot.p[j][1] + rot.p[i][2] * rot.p[j][2]) * core[4][0];
+                e1b[idx_pp] = term_sigma + term_pi;
             }
         }
     }
@@ -778,17 +776,14 @@ pub fn compute_electron_nuclear_attraction(
     // For Atom B:
     e2a[0] = core[1][1]; // (s, s)
     if norb_b >= 4 {
-        // (p_i, s)
         for i in 0..3 {
-            e2a[1 + i] = core[2][1] * rot.p[i][0];
-        }
-        // (p_i, p_j)
-        for i in 0..3 {
+            let idx_s = ((i + 1) * (i + 2)) / 2;
+            e2a[idx_s] = core[2][1] * rot.p[i][0]; // (p_i, s)
             for j in 0..=i {
-                let idx = 4 + (i * (i + 1)) / 2 + j;
-                let term_sigma = rot.pp[0][i][j] * core[3][1];
-                let term_pi = (rot.pp[1][i][j] + rot.pp[2][i][j]) * core[4][1];
-                e2a[idx] = term_sigma + term_pi;
+                let idx_pp = idx_s + j + 1; // (p_i, p_j)
+                let term_sigma = rot.p[i][0] * rot.p[j][0] * core[3][1];
+                let term_pi = (rot.p[i][1] * rot.p[j][1] + rot.p[i][2] * rot.p[j][2]) * core[4][1];
+                e2a[idx_pp] = term_sigma + term_pi;
             }
         }
     }
@@ -822,7 +817,7 @@ pub fn contract_jab(
         [0, 1, 3, 6, 1, 2, 4, 7, 3, 4, 5, 8, 6, 7, 8, 9],
         [10, 11, 13, 16, 11, 12, 14, 17, 13, 14, 15, 18, 16, 17, 18, 19],
         [20, 21, 23, 26, 21, 22, 24, 27, 23, 24, 25, 28, 26, 27, 28, 29],
-        [30, 31, 33, 36, 31, 32, 34, 37, 34, 35, 36, 39, 36, 37, 38, 39], // Wait, let's verify line 90 of jab.F90
+        [30, 31, 33, 36, 31, 32, 34, 37, 33, 34, 35, 38, 36, 37, 38, 39],
         [40, 41, 43, 46, 41, 42, 44, 47, 43, 44, 45, 48, 46, 47, 48, 49],
         [50, 51, 53, 56, 51, 52, 54, 57, 53, 54, 55, 58, 56, 57, 58, 59],
         [60, 61, 63, 66, 61, 62, 64, 67, 63, 64, 65, 68, 66, 67, 68, 69],
@@ -878,6 +873,299 @@ pub fn contract_kab(
             s += pk[p] * w[K_COLS[m][p]];
         }
         f_ab[m] -= s;
+    }
+}
+
+/// Precomputed diatomic integrals for an atom pair $(A, B)$ with $A > B$.
+///
+/// Stores rotated two-center two-electron repulsion tensor $W$ and electron-nuclear
+/// attraction vectors $E_{1B}, E_{2A}$ directly in the molecular Cartesian frame.
+#[derive(Debug, Clone)]
+pub struct DiatomicPairIntegrals {
+    pub atom_a: usize,
+    pub atom_b: usize,
+    pub norb_a: usize,
+    pub norb_b: usize,
+    pub orb_start_a: usize,
+    pub orb_start_b: usize,
+    pub w: [f64; 100],
+    pub e1b: [f64; 10],
+    pub e2a: [f64; 10],
+}
+
+/// Precompute all diatomic multipole pairs $(A, B)$ with $A > B$ for a molecular batch.
+pub fn precompute_diatomic_pairs(
+    batch: &MolecularBatch,
+    model: &dyn ParameterModel,
+) -> Vec<DiatomicPairIntegrals> {
+    let mut pairs = Vec::with_capacity((batch.natoms * (batch.natoms - 1)) / 2);
+
+    for i in 0..batch.natoms {
+        let za = batch.atomic_numbers[i];
+        let p_a = match model.get_element(za) {
+            Some(p) => p,
+            None => continue,
+        };
+        let norb_a = batch.basis_types[i].num_orbitals();
+        let orb_start_a = batch.orbital_offsets[i];
+        let params_a = DerivedMultipoleParams::from_element(&p_a);
+
+        for j in 0..i {
+            let zb = batch.atomic_numbers[j];
+            let p_b = match model.get_element(zb) {
+                Some(p) => p,
+                None => continue,
+            };
+            let norb_b = batch.basis_types[j].num_orbitals();
+            let orb_start_b = batch.orbital_offsets[j];
+            let params_b = DerivedMultipoleParams::from_element(&p_b);
+
+            let r_angstrom = batch.distance(i, j);
+            if r_angstrom < 1e-10 {
+                continue;
+            }
+
+            let dx = batch.x[j] - batch.x[i];
+            let dy = batch.y[j] - batch.y[i];
+            let dz = batch.z[j] - batch.z[i];
+            let rot = DiatomicRotation3D::new(dx, dy, dz, r_angstrom);
+
+            let (ri, _gab) = compute_22_multipoles(&params_a, &params_b, r_angstrom);
+            let mut w = [0.0f64; 100];
+            rotate_multipoles_to_w(norb_a, norb_b, &ri, &rot, &mut w);
+
+            let mut e1b = [0.0f64; 10];
+            let mut e2a = [0.0f64; 10];
+            compute_electron_nuclear_attraction(
+                norb_a,
+                norb_b,
+                &params_a,
+                &params_b,
+                p_a.core_charge,
+                p_b.core_charge,
+                r_angstrom,
+                &rot,
+                &mut e1b,
+                &mut e2a,
+            );
+
+            pairs.push(DiatomicPairIntegrals {
+                atom_a: i,
+                atom_b: j,
+                norb_a,
+                norb_b,
+                orb_start_a,
+                orb_start_b,
+                w,
+                e1b,
+                e2a,
+            });
+        }
+    }
+
+    pairs
+}
+
+/// Assemble full two-center two-electron NDDO Coulomb and Exchange into the Fock matrix.
+///
+/// Direct port of OpenMOPAC `fock2.F90`.
+pub fn assemble_nddo_two_center_fock(
+    pairs: &[DiatomicPairIntegrals],
+    density: &AlignedMatrix<f64>,
+    fock: &mut AlignedMatrix<f64>,
+) {
+    for pair in pairs {
+        let ia = pair.orb_start_a;
+        let ja = pair.orb_start_b;
+        let na = pair.norb_a;
+        let nb = pair.norb_b;
+        let w = &pair.w;
+
+        if na >= 4 && nb >= 4 {
+            let mut pja = [0.0f64; 16];
+            let mut pjb = [0.0f64; 16];
+            let mut pk = [0.0f64; 16];
+
+            for r in 0..4 {
+                for c in 0..4 {
+                    pja[r * 4 + c] = density.get(ia + r, ia + c);
+                    pjb[r * 4 + c] = density.get(ja + r, ja + c);
+                    pk[r * 4 + c] = 0.5 * density.get(ia + r, ja + c);
+                }
+            }
+
+            let mut f_block_a = [0.0f64; 10];
+            let mut f_block_b = [0.0f64; 10];
+            contract_jab(&pja, &pjb, w, &mut f_block_a, &mut f_block_b);
+
+            for r in 0..4 {
+                for c in 0..=r {
+                    let idx = (r * (r + 1)) / 2 + c;
+                    let val_a = f_block_a[idx];
+                    let cur_a = fock.get(ia + r, ia + c);
+                    fock.set(ia + r, ia + c, cur_a + val_a);
+                    if r != c {
+                        fock.set(ia + c, ia + r, cur_a + val_a);
+                    }
+
+                    let val_b = f_block_b[idx];
+                    let cur_b = fock.get(ja + r, ja + c);
+                    fock.set(ja + r, ja + c, cur_b + val_b);
+                    if r != c {
+                        fock.set(ja + c, ja + r, cur_b + val_b);
+                    }
+                }
+            }
+
+            let mut f_ab = [0.0f64; 16];
+            contract_kab(&pk, w, &mut f_ab);
+
+            for r in 0..4 {
+                for c in 0..4 {
+                    let val = f_ab[r * 4 + c];
+                    let cur = fock.get(ia + r, ja + c);
+                    fock.set(ia + r, ja + c, cur + val);
+                    fock.set(ja + c, ia + r, cur + val);
+                }
+            }
+        } else if na >= 4 && nb == 1 {
+            let p_b = density.get(ja, ja);
+            for r in 0..4 {
+                for c in 0..=r {
+                    let idx = (r * (r + 1)) / 2 + c;
+                    let val = p_b * w[idx];
+                    let cur = fock.get(ia + r, ia + c);
+                    fock.set(ia + r, ia + c, cur + val);
+                    if r != c {
+                        fock.set(ia + c, ia + r, cur + val);
+                    }
+                }
+            }
+
+            let mut sumdia = 0.0;
+            let mut sumoff = 0.0;
+            for r in 0..4 {
+                let idx_dia = (r * (r + 1)) / 2 + r;
+                sumdia += density.get(ia + r, ia + r) * w[idx_dia];
+                for c in 0..r {
+                    let idx_off = (r * (r + 1)) / 2 + c;
+                    sumoff += density.get(ia + r, ia + c) * w[idx_off];
+                }
+            }
+            let cur_b = fock.get(ja, ja);
+            fock.set(ja, ja, cur_b + sumdia + 2.0 * sumoff);
+
+            for r in 0..4 {
+                let mut s = 0.0;
+                for c in 0..4 {
+                    let idx = if r >= c { (r * (r + 1)) / 2 + c } else { (c * (c + 1)) / 2 + r };
+                    s += density.get(ia + c, ja) * w[idx];
+                }
+                let cur = fock.get(ia + r, ja);
+                fock.set(ia + r, ja, cur - 0.5 * s);
+                fock.set(ja, ia + r, cur - 0.5 * s);
+            }
+        } else if na == 1 && nb >= 4 {
+            let p_a = density.get(ia, ia);
+            for r in 0..4 {
+                for c in 0..=r {
+                    let idx = (r * (r + 1)) / 2 + c;
+                    let val = p_a * w[idx];
+                    let cur = fock.get(ja + r, ja + c);
+                    fock.set(ja + r, ja + c, cur + val);
+                    if r != c {
+                        fock.set(ja + c, ja + r, cur + val);
+                    }
+                }
+            }
+
+            let mut sumdia = 0.0;
+            let mut sumoff = 0.0;
+            for r in 0..4 {
+                let idx_dia = (r * (r + 1)) / 2 + r;
+                sumdia += density.get(ja + r, ja + r) * w[idx_dia];
+                for c in 0..r {
+                    let idx_off = (r * (r + 1)) / 2 + c;
+                    sumoff += density.get(ja + r, ja + c) * w[idx_off];
+                }
+            }
+            let cur_a = fock.get(ia, ia);
+            fock.set(ia, ia, cur_a + sumdia + 2.0 * sumoff);
+
+            for r in 0..4 {
+                let mut s = 0.0;
+                for c in 0..4 {
+                    let idx = if r >= c { (r * (r + 1)) / 2 + c } else { (c * (c + 1)) / 2 + r };
+                    s += density.get(ia, ja + c) * w[idx];
+                }
+                let cur = fock.get(ia, ja + r);
+                fock.set(ia, ja + r, cur - 0.5 * s);
+                fock.set(ja + r, ia, cur - 0.5 * s);
+            }
+        } else if na == 1 && nb == 1 {
+            let w0 = w[0];
+            let p_a = density.get(ia, ia);
+            let p_b = density.get(ja, ja);
+            let p_ab = density.get(ia, ja);
+
+            let cur_a = fock.get(ia, ia);
+            fock.set(ia, ia, cur_a + p_b * w0);
+            let cur_b = fock.get(ja, ja);
+            fock.set(ja, ja, cur_b + p_a * w0);
+
+            let cur_ab = fock.get(ia, ja);
+            fock.set(ia, ja, cur_ab - 0.5 * p_ab * w0);
+            fock.set(ja, ia, cur_ab - 0.5 * p_ab * w0);
+        }
+    }
+}
+
+/// Apply rotated electron-nuclear attractions $E_{1B}$ and $E_{2A}$ to $H^{\text{core}}$.
+///
+/// Direct port of OpenMOPAC `hcore.F90` lines 270-300.
+pub fn apply_electron_nuclear_attractions(
+    pairs: &[DiatomicPairIntegrals],
+    h_core: &mut AlignedMatrix<f64>,
+) {
+    for pair in pairs {
+        let ia = pair.orb_start_a;
+        let ja = pair.orb_start_b;
+        let na = pair.norb_a;
+        let nb = pair.norb_b;
+
+        if na >= 4 {
+            for r in 0..4 {
+                for c in 0..=r {
+                    let idx = (r * (r + 1)) / 2 + c;
+                    let val = pair.e1b[idx];
+                    let cur = h_core.get(ia + r, ia + c);
+                    h_core.set(ia + r, ia + c, cur + val);
+                    if r != c {
+                        h_core.set(ia + c, ia + r, cur + val);
+                    }
+                }
+            }
+        } else {
+            let cur = h_core.get(ia, ia);
+            h_core.set(ia, ia, cur + pair.e1b[0]);
+        }
+
+        if nb >= 4 {
+            for r in 0..4 {
+                for c in 0..=r {
+                    let idx = (r * (r + 1)) / 2 + c;
+                    let val = pair.e2a[idx];
+                    let cur = h_core.get(ja + r, ja + c);
+                    h_core.set(ja + r, ja + c, cur + val);
+                    if r != c {
+                        h_core.set(ja + c, ja + r, cur + val);
+                    }
+                }
+            }
+        } else {
+            let cur = h_core.get(ja, ja);
+            h_core.set(ja, ja, cur + pair.e2a[0]);
+        }
     }
 }
 
@@ -946,5 +1234,49 @@ mod tests {
                 assert!((dot - expected).abs() < 1e-12, "Row dot product failed for {} {}", i, j);
             }
         }
+    }
+
+    #[test]
+    fn test_precompute_and_assemble_nddo_water() {
+        let model = Am1Model;
+        // Water molecule: O at (0, 0, 0), H1 at (0.757, 0.586, 0), H2 at (-0.757, 0.586, 0)
+        let coords = vec![[0.0, 0.0, 0.0], [0.757, 0.586, 0.0], [-0.757, 0.586, 0.0]];
+        let batch = MolecularBatch::new(vec![8, 1, 1], &coords);
+        assert_eq!(batch.norbs, 6); // O: 4, H: 1, H: 1
+
+        let pairs = precompute_diatomic_pairs(&batch, &model);
+        assert_eq!(pairs.len(), 3); // (O, H1), (O, H2), (H1, H2)
+
+        // Test electron-nuclear attraction assembly
+        let mut h_core = AlignedMatrix::zeroed(batch.norbs, batch.norbs);
+        apply_electron_nuclear_attractions(&pairs, &mut h_core);
+        // H_core must be strictly symmetric: H_ij == H_ji
+        for i in 0..batch.norbs {
+            for j in 0..batch.norbs {
+                assert!(
+                    (h_core.get(i, j) - h_core.get(j, i)).abs() < 1e-14,
+                    "H_core symmetry violated at ({}, {})", i, j
+                );
+            }
+        }
+
+        // Test Fock matrix assembly from idempotent identity-like density
+        let mut density = AlignedMatrix::zeroed(batch.norbs, batch.norbs);
+        for i in 0..batch.norbs {
+            density.set(i, i, 1.333); // total valence population
+        }
+        let mut fock = AlignedMatrix::zeroed(batch.norbs, batch.norbs);
+        assemble_nddo_two_center_fock(&pairs, &density, &mut fock);
+
+        // Fock must be strictly symmetric
+        for i in 0..batch.norbs {
+            for j in 0..batch.norbs {
+                assert!(
+                    (fock.get(i, j) - fock.get(j, i)).abs() < 1e-14,
+                    "Fock symmetry violated at ({}, {})", i, j
+                );
+            }
+        }
+        println!("✅ NDDO Precomputation & Fock Assembly verified with strict Hermiticity on H2O!");
     }
 }

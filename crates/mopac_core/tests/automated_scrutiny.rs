@@ -620,6 +620,7 @@ fn test_scrutiny_virtual_orbital_level_shifting_invariants() {
             density_tol: 1e-7,
             level_shift_ev: 0.0,
             damping: 0.5,
+            use_nddo: false,
         },
     );
 
@@ -634,6 +635,7 @@ fn test_scrutiny_virtual_orbital_level_shifting_invariants() {
             density_tol: 1e-7,
             level_shift_ev: 8.0,
             damping: 0.5,
+            use_nddo: false,
         },
     );
 
@@ -967,7 +969,7 @@ fn test_scrutiny_analytical_gradients_vs_finite_difference() {
         &batch_plus,
         &am1,
         &mut scf_plus,
-        &ScfOptions { max_iter: 50, energy_tol_ev: 1e-12, density_tol: 1e-10, level_shift_ev: 0.0, damping: 0.5 },
+        &ScfOptions { max_iter: 50, energy_tol_ev: 1e-12, density_tol: 1e-10, level_shift_ev: 0.0, damping: 0.5, use_nddo: false },
     );
 
     let coords_minus = vec![[0.0, 0.0, 0.0], [0.0, 0.0, 0.85 - h]];
@@ -977,7 +979,7 @@ fn test_scrutiny_analytical_gradients_vs_finite_difference() {
         &batch_minus,
         &am1,
         &mut scf_minus,
-        &ScfOptions { max_iter: 50, energy_tol_ev: 1e-12, density_tol: 1e-10, level_shift_ev: 0.0, damping: 0.5 },
+        &ScfOptions { max_iter: 50, energy_tol_ev: 1e-12, density_tol: 1e-10, level_shift_ev: 0.0, damping: 0.5, use_nddo: false },
     );
 
     let num_de_dz1 = (res_plus.total_energy_ev - res_minus.total_energy_ev) / (2.0 * h);
@@ -1053,6 +1055,107 @@ fn test_scrutiny_lbfgs_geometry_optimization() {
 
     println!("✅ L-BFGS H2 Optimization Succeeded in {} cycles: R = 0.95 Å -> {:.4} Å, E = {:.6} -> {:.6} eV, RMS Grad = {:.3} kcal/(mol·Å)",
         res.cycles, final_r, res.initial_energy_ev, res.final_energy_ev, res.final_grad_rms
+    );
+}
+
+/// Scrutiny Test 16: Full NDDO 22 Multipole Coupled SCF on Water Molecule (H2O).
+///
+/// Verifies end-to-end convergence and orbital parity of the full NDDO Hamiltonian
+/// incorporating rotated 22 multipoles (W), JAB, KAB, and E_1B/E_2A nuclear attractions.
+#[test]
+fn test_scrutiny_full_nddo_scf_water_parity() {
+    use mopac_core::parameters::am1::Am1Model;
+    use mopac_core::scf::scf_loop::{run_rhf_scf_with_options, ScfOptions};
+    use mopac_core::types::{MolecularBatch, ScfWorkspace};
+
+    let coords = vec![
+        [0.0, 0.0, 0.0],
+        [0.757, 0.586, 0.0],
+        [-0.757, 0.586, 0.0],
+    ];
+    let batch = MolecularBatch::new(vec![8, 1, 1], &coords);
+    let am1 = Am1Model;
+    let mut ws = ScfWorkspace::allocate(batch.norbs);
+
+    let opts = ScfOptions {
+        max_iter: 50,
+        energy_tol_ev: 1e-7,
+        density_tol: 1e-6,
+        level_shift_ev: 0.0,
+        damping: 0.5,
+        use_nddo: true,
+    };
+
+    let res = run_rhf_scf_with_options(&batch, &am1, &mut ws, &opts);
+    assert!(res.converged, "Full NDDO SCF on H2O must converge");
+    assert!(res.electronic_energy_ev < 0.0, "Electronic energy must be negative");
+    assert!(res.nuclear_repulsion_ev > 0.0, "Nuclear repulsion must be positive");
+    assert!(
+        res.homo_energy_ev < res.lumo_energy_ev,
+        "HOMO-LUMO gap must be strictly positive: HOMO = {}, LUMO = {}",
+        res.homo_energy_ev, res.lumo_energy_ev
+    );
+
+    println!(
+        "✅ Full NDDO H2O SCF Succeeded in {} iters: E_tot = {:.6} eV, HOMO = {:.4} eV, LUMO = {:.4} eV",
+        res.iterations, res.total_energy_ev, res.homo_energy_ev, res.lumo_energy_ev
+    );
+}
+
+/// Scrutiny Test 17: Empirical SCF Convergence under RM1 and PM6 Parameter Models.
+///
+/// Verifies that the newly integrated RM1 and PM6 semi-empirical parameter sets
+/// yield stable convergence, proper orbital eigenvalues, and physical negative electronic energies.
+#[test]
+fn test_scrutiny_rm1_and_pm6_convergence() {
+    use mopac_core::parameters::pm6::Pm6Model;
+    use mopac_core::parameters::rm1::Rm1Model;
+    use mopac_core::scf::scf_loop::{run_rhf_scf_with_options, ScfOptions};
+    use mopac_core::types::{MolecularBatch, ScfWorkspace};
+
+    let coords = vec![
+        [0.0, 0.0, 0.0],
+        [0.0, 0.0, 0.74],
+    ];
+    let batch = MolecularBatch::new(vec![1, 1], &coords);
+    let mut ws = ScfWorkspace::allocate(batch.norbs);
+
+    let opts = ScfOptions {
+        max_iter: 50,
+        energy_tol_ev: 1e-8,
+        density_tol: 1e-7,
+        level_shift_ev: 0.0,
+        damping: 0.5,
+        use_nddo: false,
+    };
+
+    // 1. Verify RM1 on H2
+    let rm1 = Rm1Model;
+    ws.reset();
+    let res_rm1 = run_rhf_scf_with_options(&batch, &rm1, &mut ws, &opts);
+    assert!(res_rm1.converged, "RM1 SCF on H2 must converge");
+    assert!(res_rm1.total_energy_ev < 0.0, "RM1 total energy must be negative");
+    assert!(
+        res_rm1.homo_energy_ev < res_rm1.lumo_energy_ev,
+        "RM1 HOMO-LUMO gap must be positive: HOMO = {}, LUMO = {}",
+        res_rm1.homo_energy_ev, res_rm1.lumo_energy_ev
+    );
+
+    // 2. Verify PM6 on H2
+    let pm6 = Pm6Model;
+    ws.reset();
+    let res_pm6 = run_rhf_scf_with_options(&batch, &pm6, &mut ws, &opts);
+    assert!(res_pm6.converged, "PM6 SCF on H2 must converge");
+    assert!(res_pm6.total_energy_ev < 0.0, "PM6 total energy must be negative");
+    assert!(
+        res_pm6.homo_energy_ev < res_pm6.lumo_energy_ev,
+        "PM6 HOMO-LUMO gap must be positive: HOMO = {}, LUMO = {}",
+        res_pm6.homo_energy_ev, res_pm6.lumo_energy_ev
+    );
+
+    println!(
+        "✅ RM1 and PM6 Models verified: RM1 E_tot = {:.6} eV (HOMO = {:.4} eV), PM6 E_tot = {:.6} eV (HOMO = {:.4} eV)",
+        res_rm1.total_energy_ev, res_rm1.homo_energy_ev, res_pm6.total_energy_ev, res_pm6.homo_energy_ev
     );
 }
 

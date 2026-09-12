@@ -21,7 +21,7 @@ layout(push_constant) uniform PushConstants {
     uint num_atoms;
     uint batch_offset;
     float ev_angstrom_factor;
-    float pad0;
+    uint matrix_offset;
 } pc;
 
 void main() {
@@ -49,5 +49,5 @@ void main() {
 
     float gamma = pc.ev_angstrom_factor * inversesqrt(r2 + rho_sum * rho_sum);
 
-    gamma_ab[i * pc.num_atoms + j] = gamma;
+    gamma_ab[pc.matrix_offset + i * pc.num_atoms + j] = gamma;
 }

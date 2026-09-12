@@ -250,4 +250,107 @@ fn test_scrutiny_vulkan_gpu_gddr6_batch_manager() {
     println!("✅ Uploaded {} atoms to GDDR6 Device-Local VRAM via DMA copy!", atoms.len());
 }
 
+/// Scrutiny Test 5: GDDR6 Dedicated Device-Local VRAM Batch Pipelining & Parity.
+///
+/// Evaluates multiple distinct molecular geometries (Water and Methane) packed contiguously
+/// in dedicated GDDR6 VRAM within a single compute queue submission, with zero CPU synchronization
+/// between molecules, and verifies mathematical parity against analytical CPU references (< 1e-4 eV).
+#[test]
+fn test_scrutiny_vulkan_gpu_gddr6_batch_pipelining_parity() {
+    use mopac_gpu::{AtomGpuFP32, BatchMoleculeDescriptor, GpuBatchVramManager, GpuCoulombCalculatorFP32};
+
+    let ctx = match VulkanContext::new() {
+        Ok(c) => Arc::new(c),
+        Err(_) => return,
+    };
+
+    let calc = GpuCoulombCalculatorFP32::new(Arc::clone(&ctx))
+        .expect("Failed to create GpuCoulombCalculatorFP32");
+
+    let mut vram_mgr = GpuBatchVramManager::allocate(Arc::clone(&ctx), 256)
+        .expect("Failed to allocate GDDR6 VRAM manager");
+
+    // Molecule 1: Water (H2O, 3 atoms)
+    let water_atoms = [
+        AtomGpuFP32 { x: 0.000, y: 0.000, z: 0.000, gss: 15.36 },  // O
+        AtomGpuFP32 { x: 0.000, y: 0.757, z: 0.586, gss: 12.85 },  // H
+        AtomGpuFP32 { x: 0.000, y: -0.757, z: 0.586, gss: 12.85 }, // H
+    ];
+
+    // Molecule 2: Methane (CH4, 5 atoms)
+    let methane_atoms = [
+        AtomGpuFP32 { x: 0.000, y: 0.000, z: 0.000, gss: 12.80 },   // C
+        AtomGpuFP32 { x: 0.629, y: 0.629, z: 0.629, gss: 12.85 },   // H
+        AtomGpuFP32 { x: -0.629, y: -0.629, z: 0.629, gss: 12.85 }, // H
+        AtomGpuFP32 { x: -0.629, y: 0.629, z: -0.629, gss: 12.85 }, // H
+        AtomGpuFP32 { x: 0.629, y: -0.629, z: -0.629, gss: 12.85 }, // H
+    ];
+
+    // Pack into a single contiguous host buffer
+    let mut all_atoms = Vec::new();
+    all_atoms.extend_from_slice(&water_atoms);
+    all_atoms.extend_from_slice(&methane_atoms);
+
+    // Upload both geometries to GDDR6 VRAM via DMA copy
+    vram_mgr.upload_batch_to_gddr6(&all_atoms, 0)
+        .expect("Failed to upload multi-geometry batch to GDDR6 VRAM");
+
+    let mol_descriptors = [
+        BatchMoleculeDescriptor {
+            atom_offset: 0,
+            num_atoms: 3,
+            matrix_offset: 0,
+        },
+        BatchMoleculeDescriptor {
+            atom_offset: 3,
+            num_atoms: 5,
+            matrix_offset: 9, // 3x3 = 9
+        },
+    ];
+
+    // Dispatch pipelined batch in GDDR6 in a single hardware submission
+    vram_mgr.dispatch_batch(&calc, &mol_descriptors)
+        .expect("Failed to dispatch pipelined batch in GDDR6 VRAM");
+
+    // Download and verify Molecule 1 (Water 3x3)
+    let water_mat = vram_mgr.download_matrix_from_gddr6(0, 3)
+        .expect("Failed to download Water Coulomb matrix");
+    for i in 0..3 {
+        for j in 0..3 {
+            let dx = (water_atoms[i].x - water_atoms[j].x) as f64;
+            let dy = (water_atoms[i].y - water_atoms[j].y) as f64;
+            let dz = (water_atoms[i].z - water_atoms[j].z) as f64;
+            let r = (dx * dx + dy * dy + dz * dz).sqrt();
+            let cpu_ref = dewar_klopman_monopole(r, water_atoms[i].gss as f64, water_atoms[j].gss as f64);
+            let gpu_val = water_mat.get(i, j) as f64;
+            assert!(
+                (gpu_val - cpu_ref).abs() < 1e-4,
+                "Water pair ({},{}) mismatch: GPU={}, CPU={}",
+                i, j, gpu_val, cpu_ref
+            );
+        }
+    }
+
+    // Download and verify Molecule 2 (Methane 5x5)
+    let methane_mat = vram_mgr.download_matrix_from_gddr6(9, 5)
+        .expect("Failed to download Methane Coulomb matrix");
+    for i in 0..5 {
+        for j in 0..5 {
+            let dx = (methane_atoms[i].x - methane_atoms[j].x) as f64;
+            let dy = (methane_atoms[i].y - methane_atoms[j].y) as f64;
+            let dz = (methane_atoms[i].z - methane_atoms[j].z) as f64;
+            let r = (dx * dx + dy * dy + dz * dz).sqrt();
+            let cpu_ref = dewar_klopman_monopole(r, methane_atoms[i].gss as f64, methane_atoms[j].gss as f64);
+            let gpu_val = methane_mat.get(i, j) as f64;
+            assert!(
+                (gpu_val - cpu_ref).abs() < 1e-4,
+                "Methane pair ({},{}) mismatch: GPU={}, CPU={}",
+                i, j, gpu_val, cpu_ref
+            );
+        }
+    }
+
+    println!("✅ GDDR6 VRAM batch pipelining verified for 2 concurrent geometries with zero per-molecule CPU sync!");
+}
+
 
