@@ -3,6 +3,7 @@ members = [
     "crates/mopac_core",
     "crates/mopac_gpu",
     "crates/mopac_cli",
+    "crates/mopac_py",
 ]
 resolver = "2"
 

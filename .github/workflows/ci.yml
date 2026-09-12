@@ -55,3 +55,8 @@ jobs:
           MOP_EOF
           ./target/release/mopac /tmp/water_ci_test.mop
           grep -i "FINAL HEAT OF FORMATION" /tmp/water_ci_test.out
+
+      - name: Python Bindings Build & Verification
+        run: |
+          cargo build --release -p mopac_py
+          python3 crates/mopac_py/tests/test_python_api.py

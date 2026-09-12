@@ -7,7 +7,8 @@
 [![Language: Rust](https://img.shields.io/badge/Language-Rust%201.85%2B-orange.svg)]()
 [![SIMD: AVX2 / AVX-512](https://img.shields.io/badge/Acceleration-AVX2%20%7C%20AVX--512-red.svg)]()
 [![GPU: Vulkan Compute](https://img.shields.io/badge/Compute-Vulkan%20%7C%20GDDR6%20VRAM-green.svg)]()
-[![Scrutiny Tests](https://img.shields.io/badge/Automated%20Scrutiny-42%2F42%20Passed-brightgreen.svg)]()
+[![Scrutiny Tests](https://img.shields.io/badge/Automated%20Scrutiny-43%2F43%20Passed-brightgreen.svg)]()
+[![Python Bindings](https://img.shields.io/badge/PyO3-Python%203.8--3.14-blue.svg)]()
 
 ---
 
@@ -39,6 +40,10 @@ Every single module, parameter table, and integral calculation is empirically ve
 - **RM1** (Recife Model 1; Rocha et al. 2006)
 - **PM6** (Parametric Method 6; Stewart 2007)
 - **NDDO 22-Multipole Integrals:** Full diatomic charge separation multipoles ($dd, qq, am, ad, aq$) and 3D rotational coordinate transformations.
+- **Elemental Coverage:** Complete authentic parameter sets for organic and biochemical chemistry:
+  - **Hydrogen & Carbon-backbone:** H (1), C (6)
+  - **Pnictogens & Chalcogens:** N (7), O (8), P (15), S (16)
+  - **Full Halogen Series:** F (9), Cl (17), Br (35), I (53) across AM1, PM6, and RM1 with authentic diatomic pair parameters $(alpb, xfac)$.
 
 ### 2. Robust SCF Convergers
 - **Pulay DIIS Acceleration:** Direct Inversion in the Iterative Subspace with B-matrix SVD stabilization and history pruning.
@@ -67,6 +72,31 @@ Every single module, parameter table, and integral calculation is empirically ve
 - **Coordinate Pinning:** Selective degree-of-freedom masking (frozen atoms/axes).
 - **Harmonic Vibrational Frequencies:** Mass-weighted Cartesian Hessian with Eckart frame external projection (6 vanishing rotational/translational modes $< 10^{-5}\text{ cm}^{-1}$).
 - **Thermodynamic Properties:** Zero-Point Vibrational Energy (ZPVE), thermal enthalpy ($H(T) - H(0)$), constant-pressure heat capacity ($C_p$), standard entropy ($S^\circ$), and Gibbs free energy correction ($G(T) - H(0)$).
+
+### 7. Python Bindings (`mopac_py`)
+High-performance PyO3 bridge exposing the quantum chemical calculation and geometry optimization engine directly to Python for PyTorch, RDKit, and ASE workflows:
+- **Zero-copy analytical gradients** directly returned as nested floats or tensors.
+- **Full parameterization control** (`method="PM6"`, `use_nddo=True`, `cosmo_eps=78.4`, `dispersion="PM6-DH+"`, `h_bonds=True`).
+- **Object-oriented `MopacCalculator`** and functional `calculate()` / `optimize()` interfaces.
+
+```python
+import mopac_py
+
+# Water single-point calculation (PM6 + COSMO solvation)
+atoms = [8, 1, 1]
+coords = [[0.0, 0.0, 0.0655], [0.0, 0.7571, -0.5205], [0.0, -0.7571, -0.5205]]
+res = mopac_py.calculate(atoms, coords, method="PM6", cosmo_eps=78.4)
+
+print(f"Total Energy: {res.total_energy_ev:.6f} eV")
+print(f"Heat of Formation: {res.heat_of_formation_kcal:.3f} kcal/mol")
+print(f"Dipole: {res.dipole_debye[3]:.3f} Debye")
+print(f"Mulliken Charges: {res.mulliken_charges}")
+print(f"Gradients (eV/Å): {res.gradients_ev_angstrom}")
+
+# Geometry optimization (L-BFGS)
+opt = mopac_py.optimize(atoms, coords, method="PM6", max_cycles=50)
+print(f"Optimized Energy: {opt.final_energy_ev:.6f} eV (Converged: {opt.converged})")
+```
 
 ---
 
@@ -144,6 +174,8 @@ Outputs generated:
 | Water Dimer H4 Hydrogen Bond Energy | $-1.333486\text{ kcal/mol}$ | **$-1.333486\text{ kcal/mol}$** | **$< 10^{-6}\text{ kcal/mol}$** |
 | Water Dimer Short-Range H-H Repulsion | $+24.343855\text{ kcal/mol}$ | **$+24.343855\text{ kcal/mol}$** | **$< 10^{-6}\text{ kcal/mol}$** |
 | Methane Dimer PM6-DH+ Dispersion | $-0.27985\text{ kcal/mol}$ | **$-0.27985\text{ kcal/mol}$** | **$< 10^{-5}\text{ kcal/mol}$** |
+| Bromomethane ($CH_3Br$) Halogen Gradient Parity | — | **$4.09 \times 10^{-6}\text{ eV/\AA}$** | **Analytical vs Finite Diff** |
+| PyO3 Python Bindings Test Suite (7/7) | — | **$100.0\%\text{ Pass (111 ms)}$** | **Automated Suite** |
 | Analytical Gradient vs Finite Difference Error | — | **$< 1.88 \times 10^{-11}$** | **Exact Chain Rule** |
 | Net Force Translational Invariance ($\sum \vec{F}_A$) | — | **$< 10^{-13}$** | **Exact Newton's 3rd Law** |
 

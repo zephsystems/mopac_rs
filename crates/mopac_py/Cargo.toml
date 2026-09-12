@@ -1,0 +1,16 @@
+[package]
+name = "mopac_py"
+version.workspace = true
+edition.workspace = true
+authors.workspace = true
+license.workspace = true
+description = "PyO3 Python bindings for MOPAC_RS quantum chemistry engine"
+
+[lib]
+name = "mopac_py"
+crate-type = ["cdylib"]
+test = false
+
+[dependencies]
+mopac_core = { path = "../mopac_core" }
+pyo3 = { version = "0.22", features = ["abi3-py38", "extension-module"] }

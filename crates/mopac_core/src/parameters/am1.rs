@@ -368,6 +368,94 @@ impl ParameterModel for Am1Model {
                 num_gaussians: 2,
             }),
 
+            // Element 35: Bromine
+            35 => Some(SemiEmpiricalElementParams {
+                z: 35,
+                core_charge: 7.0,
+                uss: -104.6560630,
+                upp: -74.9300520,
+                udd: 0.0,
+                zs: 3.0641330,
+                zp: 2.0383330,
+                zd: 0.0,
+                betas: -19.3998800,
+                betap: -8.9571950,
+                betad: 0.0,
+                alpha: 2.5765460,
+                gss: 15.0364395,
+                gsp: 13.0346824,
+                gpp: 11.2763254,
+                gp2: 9.8544255,
+                hsp: 2.4558683,
+                gaussians: [
+                    GaussianCoreCorrection {
+                        a: 0.0666850,
+                        b: 4.0000000,
+                        c: 1.5000000,
+                    },
+                    GaussianCoreCorrection {
+                        a: 0.0255680,
+                        b: 4.0000000,
+                        c: 2.3000000,
+                    },
+                    GaussianCoreCorrection {
+                        a: 0.0,
+                        b: 0.0,
+                        c: 0.0,
+                    },
+                    GaussianCoreCorrection {
+                        a: 0.0,
+                        b: 0.0,
+                        c: 0.0,
+                    },
+                ],
+                num_gaussians: 2,
+            }),
+
+            // Element 53: Iodine
+            53 => Some(SemiEmpiricalElementParams {
+                z: 53,
+                core_charge: 7.0,
+                uss: -103.5896630,
+                upp: -74.4299970,
+                udd: 0.0,
+                zs: 2.1028580,
+                zp: 2.1611530,
+                zd: 0.0,
+                betas: -8.4433270,
+                betap: -6.3234050,
+                betad: 0.0,
+                alpha: 2.2994240,
+                gss: 15.0404486,
+                gsp: 13.0565580,
+                gpp: 11.1477837,
+                gp2: 9.9140907,
+                hsp: 2.4563820,
+                gaussians: [
+                    GaussianCoreCorrection {
+                        a: 0.0043610,
+                        b: 2.3000000,
+                        c: 1.8000000,
+                    },
+                    GaussianCoreCorrection {
+                        a: 0.0157060,
+                        b: 3.0000000,
+                        c: 2.2400000,
+                    },
+                    GaussianCoreCorrection {
+                        a: 0.0,
+                        b: 0.0,
+                        c: 0.0,
+                    },
+                    GaussianCoreCorrection {
+                        a: 0.0,
+                        b: 0.0,
+                        c: 0.0,
+                    },
+                ],
+                num_gaussians: 2,
+            }),
+
             _ => None,
         }
     }

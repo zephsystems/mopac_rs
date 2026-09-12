@@ -206,44 +206,7 @@ fn atomic_number_to_symbol(z: u8) -> &'static str {
 }
 
 fn get_isolated_atom_energy_and_heat(z: u8, model: &dyn ParameterModel) -> (f64, f64) {
-    let p = match model.get_element(z) {
-        Some(param) => param,
-        None => return (0.0, 0.0),
-    };
-
-    let (ios, iop, eheat): (f64, f64, f64) = match z {
-        1 => (1.0, 0.0, 52.102),
-        6 => (2.0, 2.0, 170.890),
-        7 => (2.0, 3.0, 113.000),
-        8 => (2.0, 4.0, 59.559),
-        9 => (2.0, 5.0, 18.890),
-        15 => (2.0, 3.0, 75.570),
-        16 => (2.0, 4.0, 66.400),
-        17 => (2.0, 5.0, 28.990),
-        _ => (1.0, 0.0, 0.0),
-    };
-
-    if z == 1 {
-        return (p.uss, eheat);
-    }
-
-    let k: f64 = iop;
-    let l: f64 = k.min(6.0 - k);
-    let gssc: f64 = (ios - 1.0).max(0.0);
-    let gspc: f64 = ios * k;
-    let gp2c: f64 = (k * (k - 1.0)) / 2.0 + 0.5 * (l * (l - 1.0)) / 2.0;
-    let gppc: f64 = -0.5 * (l * (l - 1.0)) / 2.0;
-    let hspc: f64 = -k * ios * 0.5;
-
-    let eisol = p.uss * ios
-        + p.upp * iop
-        + p.gss * gssc
-        + p.gpp * gppc
-        + p.gsp * gspc
-        + p.gp2 * gp2c
-        + p.hsp * hspc;
-
-    (eisol, eheat)
+    mopac_core::properties::get_isolated_atom_energy_and_heat(z, model)
 }
 
 fn parse_mopac_input(content: &str) -> io::Result<ParsedInput> {

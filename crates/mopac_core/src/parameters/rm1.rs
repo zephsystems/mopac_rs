@@ -236,6 +236,94 @@ impl ParameterModel for Rm1Model {
                 num_gaussians: 2,
             }),
 
+            // Element 15: Phosphorus
+            15 => Some(SemiEmpiricalElementParams {
+                z: 15,
+                core_charge: 5.0,
+                uss: -41.8153318,
+                upp: -34.3834253,
+                udd: 0.0,
+                zs: 2.1224012,
+                zp: 1.7432795,
+                zd: 0.0,
+                betas: -6.1351497,
+                betap: -5.9444213,
+                betad: 0.0,
+                alpha: 1.9099329,
+                gss: 11.0805926,
+                gsp: 5.6833920,
+                gpp: 7.6041756,
+                gp2: 7.4026518,
+                hsp: 1.1618179,
+                gaussians: [
+                    GaussianCoreCorrection {
+                        a: -0.4106347,
+                        b: 6.0875283,
+                        c: 1.3165026,
+                    },
+                    GaussianCoreCorrection {
+                        a: -0.1629929,
+                        b: 7.0947260,
+                        c: 1.9072132,
+                    },
+                    GaussianCoreCorrection {
+                        a: -0.0488713,
+                        b: 8.9997931,
+                        c: 2.6585778,
+                    },
+                    GaussianCoreCorrection {
+                        a: 0.0,
+                        b: 0.0,
+                        c: 0.0,
+                    },
+                ],
+                num_gaussians: 3,
+            }),
+
+            // Element 16: Sulfur
+            16 => Some(SemiEmpiricalElementParams {
+                z: 16,
+                core_charge: 6.0,
+                uss: -55.1677512,
+                upp: -46.5293042,
+                udd: 0.0,
+                zs: 2.1334431,
+                zp: 1.8746065,
+                zd: 0.0,
+                betas: -1.9591072,
+                betap: -8.7743065,
+                betad: 0.0,
+                alpha: 2.4401564,
+                gss: 12.4882841,
+                gsp: 8.5691057,
+                gpp: 8.5230117,
+                gp2: 7.6686330,
+                hsp: 3.8897893,
+                gaussians: [
+                    GaussianCoreCorrection {
+                        a: -0.7460106,
+                        b: 4.8103800,
+                        c: 0.5938013,
+                    },
+                    GaussianCoreCorrection {
+                        a: -0.0651929,
+                        b: 7.2076086,
+                        c: 1.2949201,
+                    },
+                    GaussianCoreCorrection {
+                        a: -0.0065598,
+                        b: 9.0000018,
+                        c: 1.8006015,
+                    },
+                    GaussianCoreCorrection {
+                        a: 0.0,
+                        b: 0.0,
+                        c: 0.0,
+                    },
+                ],
+                num_gaussians: 3,
+            }),
+
             // Element 17: Chlorine
             17 => Some(SemiEmpiricalElementParams {
                 z: 17,
@@ -265,6 +353,94 @@ impl ParameterModel for Rm1Model {
                         a: 0.0028890,
                         b: 7.0982759,
                         c: 2.5000272,
+                    },
+                    GaussianCoreCorrection {
+                        a: 0.0,
+                        b: 0.0,
+                        c: 0.0,
+                    },
+                    GaussianCoreCorrection {
+                        a: 0.0,
+                        b: 0.0,
+                        c: 0.0,
+                    },
+                ],
+                num_gaussians: 2,
+            }),
+
+            // Element 35: Bromine
+            35 => Some(SemiEmpiricalElementParams {
+                z: 35,
+                core_charge: 7.0,
+                uss: -113.4839818,
+                upp: -76.1872002,
+                udd: 0.0,
+                zs: 5.7315721,
+                zp: 2.0314758,
+                zd: 0.0,
+                betas: -1.3413984,
+                betap: -8.2022599,
+                betad: 0.0,
+                alpha: 2.8671053,
+                gss: 17.1156307,
+                gsp: 15.6241925,
+                gpp: 10.7354629,
+                gp2: 8.8605620,
+                hsp: 2.2351276,
+                gaussians: [
+                    GaussianCoreCorrection {
+                        a: 0.9868994,
+                        b: 4.2848419,
+                        c: 2.0001970,
+                    },
+                    GaussianCoreCorrection {
+                        a: -0.9273125,
+                        b: 4.5400591,
+                        c: 2.0161770,
+                    },
+                    GaussianCoreCorrection {
+                        a: 0.0,
+                        b: 0.0,
+                        c: 0.0,
+                    },
+                    GaussianCoreCorrection {
+                        a: 0.0,
+                        b: 0.0,
+                        c: 0.0,
+                    },
+                ],
+                num_gaussians: 2,
+            }),
+
+            // Element 53: Iodine
+            53 => Some(SemiEmpiricalElementParams {
+                z: 53,
+                core_charge: 7.0,
+                uss: -74.8999784,
+                upp: -51.4102380,
+                udd: 0.0,
+                zs: 2.5300375,
+                zp: 2.3173868,
+                zd: 0.0,
+                betas: -4.1931615,
+                betap: -4.4003841,
+                betad: 0.0,
+                alpha: 2.1415709,
+                gss: 19.9997413,
+                gsp: 7.6895767,
+                gpp: 7.3048834,
+                gp2: 6.8542461,
+                hsp: 1.4160294,
+                gaussians: [
+                    GaussianCoreCorrection {
+                        a: -0.0814772,
+                        b: 1.5606507,
+                        c: 2.0000206,
+                    },
+                    GaussianCoreCorrection {
+                        a: 0.0591499,
+                        b: 5.7611127,
+                        c: 2.2048880,
                     },
                     GaussianCoreCorrection {
                         a: 0.0,

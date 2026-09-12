@@ -2497,3 +2497,167 @@ fn test_scrutiny_cosmo_implicit_solvation_water() {
         dipole_solv.total[3]
     );
 }
+
+/// Scrutiny Test 28: Elemental Parameter Extension (Halogens Br, I and Heteroatoms P, S).
+///
+/// Verifies that:
+/// 1. Heavy halogens (Bromine Z=35, Iodine Z=53) converge under AM1, PM6, and RM1.
+/// 2. Heteroatoms (Phosphorus Z=15, Sulfur Z=16) converge under RM1.
+/// 3. Molecules are physically bound ($E_{\text{tot}} < \sum E_{\text{isol}}$).
+/// 4. Analytical Cartesian gradients match numerical finite-difference gradients for halogen centers.
+#[test]
+fn test_scrutiny_halogens_and_heteroatoms_extension() {
+    use mopac_core::gradients::GradientWorkspace;
+    use mopac_core::parameters::{Am1Model, Pm6Model, Rm1Model};
+    use mopac_core::properties::heat::compute_heat_of_formation;
+    use mopac_core::scf::scf_loop::{run_rhf_scf_with_options, ScfOptions};
+    use mopac_core::types::{MolecularBatch, ScfWorkspace};
+
+    let opts = ScfOptions {
+        max_iter: 40,
+        energy_tol_ev: 1e-7,
+        density_tol: 1e-6,
+        level_shift_ev: 0.0,
+        damping: 0.5,
+        use_nddo: true,
+        cosmo: None,
+    };
+
+    // 1. Methyl Bromide (CH3Br) under AM1, PM6, RM1
+    let ch3br_coords = vec![
+        [0.0, 0.0, 0.0],
+        [0.0, 0.0, 1.93],
+        [1.03, 0.0, -0.36],
+        [-0.515, 0.892, -0.36],
+        [-0.515, -0.892, -0.36],
+    ];
+    let ch3br_elements = vec![6, 35, 1, 1, 1];
+    let mut batch_ch3br = MolecularBatch::new(ch3br_elements.clone(), &ch3br_coords);
+
+    let am1 = Am1Model;
+    let pm6 = Pm6Model;
+    let rm1 = Rm1Model;
+
+    // Test AM1 CH3Br
+    let mut ws_am1 = ScfWorkspace::allocate(batch_ch3br.norbs);
+    let res_ch3br_am1 = run_rhf_scf_with_options(&batch_ch3br, &am1, &mut ws_am1, &opts);
+    assert!(res_ch3br_am1.converged, "AM1 CH3Br must converge");
+    let (bind_am1, hof_am1) =
+        compute_heat_of_formation(res_ch3br_am1.total_energy_ev, &ch3br_elements, &am1, 0.0);
+    assert!(
+        bind_am1 < 0.0,
+        "CH3Br binding energy must be negative: got {}",
+        bind_am1
+    );
+    assert!(
+        hof_am1.is_finite(),
+        "Heat of formation must be finite: got {}",
+        hof_am1
+    );
+
+    // Test PM6 CH3Br
+    let mut ws_pm6 = ScfWorkspace::allocate(batch_ch3br.norbs);
+    let res_ch3br_pm6 = run_rhf_scf_with_options(&batch_ch3br, &pm6, &mut ws_pm6, &opts);
+    assert!(res_ch3br_pm6.converged, "PM6 CH3Br must converge");
+    let (bind_pm6, _hof_pm6) =
+        compute_heat_of_formation(res_ch3br_pm6.total_energy_ev, &ch3br_elements, &pm6, 0.0);
+    assert!(
+        bind_pm6 < 0.0,
+        "PM6 CH3Br binding energy must be negative: got {}",
+        bind_pm6
+    );
+
+    // Test RM1 CH3Br
+    let mut ws_rm1 = ScfWorkspace::allocate(batch_ch3br.norbs);
+    let res_ch3br_rm1 = run_rhf_scf_with_options(&batch_ch3br, &rm1, &mut ws_rm1, &opts);
+    assert!(res_ch3br_rm1.converged, "RM1 CH3Br must converge");
+    let (bind_rm1, _hof_rm1) =
+        compute_heat_of_formation(res_ch3br_rm1.total_energy_ev, &ch3br_elements, &rm1, 0.0);
+    assert!(
+        bind_rm1 < 0.0,
+        "RM1 CH3Br binding energy must be negative: got {}",
+        bind_rm1
+    );
+
+    // Verify analytical gradients vs finite difference on Bromine atom in CH3Br (AM1)
+    let mut grad_ws = GradientWorkspace::allocate(batch_ch3br.norbs);
+    let mut analytical_grads = vec![[0.0f64; 3]; batch_ch3br.natoms];
+    mopac_core::gradients::compute_cartesian_gradients_with_options(
+        &mut batch_ch3br,
+        &am1,
+        &ws_am1.density,
+        &mut grad_ws,
+        &mut analytical_grads,
+        true,
+    );
+
+    // Finite difference on Br z-coordinate (atom index 1, z index 2)
+    let h = 1.0e-4;
+    let mut coords_plus = ch3br_coords.clone();
+    coords_plus[1][2] += h;
+    let batch_plus = MolecularBatch::new(ch3br_elements.clone(), &coords_plus);
+    let mut ws_plus = ScfWorkspace::allocate(batch_plus.norbs);
+    let res_plus = run_rhf_scf_with_options(&batch_plus, &am1, &mut ws_plus, &opts);
+
+    let mut coords_minus = ch3br_coords.clone();
+    coords_minus[1][2] -= h;
+    let batch_minus = MolecularBatch::new(ch3br_elements.clone(), &coords_minus);
+    let mut ws_minus = ScfWorkspace::allocate(batch_minus.norbs);
+    let res_minus = run_rhf_scf_with_options(&batch_minus, &am1, &mut ws_minus, &opts);
+
+    let num_grad_br_z = (res_plus.total_energy_ev - res_minus.total_energy_ev) / (2.0 * h);
+    let diff = (analytical_grads[1][2] - num_grad_br_z).abs();
+    assert!(
+        diff < 1.0e-3,
+        "Analytical gradient dE/dz on Br ({:.6}) must match finite difference ({:.6}), diff={:.2e}",
+        analytical_grads[1][2],
+        num_grad_br_z,
+        diff
+    );
+
+    // 2. Methyl Iodide (CH3I) under AM1, PM6, RM1
+    let ch3i_coords = vec![
+        [0.0, 0.0, 0.0],
+        [0.0, 0.0, 2.14],
+        [1.03, 0.0, -0.36],
+        [-0.515, 0.892, -0.36],
+        [-0.515, -0.892, -0.36],
+    ];
+    let ch3i_elements = vec![6, 53, 1, 1, 1];
+    let batch_ch3i = MolecularBatch::new(ch3i_elements.clone(), &ch3i_coords);
+    let mut ws_ch3i = ScfWorkspace::allocate(batch_ch3i.norbs);
+
+    let res_ch3i_am1 = run_rhf_scf_with_options(&batch_ch3i, &am1, &mut ws_ch3i, &opts);
+    assert!(res_ch3i_am1.converged, "AM1 CH3I must converge");
+
+    ws_ch3i.reset();
+    let res_ch3i_pm6 = run_rhf_scf_with_options(&batch_ch3i, &pm6, &mut ws_ch3i, &opts);
+    assert!(res_ch3i_pm6.converged, "PM6 CH3I must converge");
+
+    ws_ch3i.reset();
+    let res_ch3i_rm1 = run_rhf_scf_with_options(&batch_ch3i, &rm1, &mut ws_ch3i, &opts);
+    assert!(res_ch3i_rm1.converged, "RM1 CH3I must converge");
+
+    // 3. Phosphine (PH3) and Hydrogen Sulfide (H2S) under RM1
+    let ph3_coords = vec![
+        [0.0, 0.0, 0.12],
+        [1.19, 0.0, -0.36],
+        [-0.595, 1.03, -0.36],
+        [-0.595, -1.03, -0.36],
+    ];
+    let batch_ph3 = MolecularBatch::new(vec![15, 1, 1, 1], &ph3_coords);
+    let mut ws_ph3 = ScfWorkspace::allocate(batch_ph3.norbs);
+    let res_ph3_rm1 = run_rhf_scf_with_options(&batch_ph3, &rm1, &mut ws_ph3, &opts);
+    assert!(res_ph3_rm1.converged, "RM1 PH3 must converge");
+
+    let h2s_coords = vec![[0.0, 0.0, 0.10], [0.0, 0.96, -0.60], [0.0, -0.96, -0.60]];
+    let batch_h2s = MolecularBatch::new(vec![16, 1, 1], &h2s_coords);
+    let mut ws_h2s = ScfWorkspace::allocate(batch_h2s.norbs);
+    let res_h2s_rm1 = run_rhf_scf_with_options(&batch_h2s, &rm1, &mut ws_h2s, &opts);
+    assert!(res_h2s_rm1.converged, "RM1 H2S must converge");
+
+    println!(
+        "✅ Scrutiny Test 28 Passed: Halogens (Br, I) and Heteroatoms (P, S) successfully verified across AM1, PM6, RM1 with analytic gradient parity diff={:.2e}.",
+        diff
+    );
+}

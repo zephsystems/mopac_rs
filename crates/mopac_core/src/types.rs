@@ -253,9 +253,11 @@ impl MolecularBatch {
             orbital_offsets.push(norbs);
             let b_type = match z_num {
                 1 => BasisType::S,
-                2..=10 => BasisType::SP,
-                11..=18 => BasisType::SP, // Standard MNDO/AM1/PM3 main group
-                _ => BasisType::SPD,
+                2..=20 => BasisType::SP,  // He..Ca main group
+                31..=38 => BasisType::SP, // Ga..Sr main group (including Br = 35)
+                49..=56 => BasisType::SP, // In..Ba main group (including I = 53)
+                81..=86 => BasisType::SP, // Tl..Rn main group
+                _ => BasisType::SPD,      // Transition metals (Sc..Zn, Y..Cd, La..Hg)
             };
             norbs += b_type.num_orbitals();
             basis_types.push(b_type);
