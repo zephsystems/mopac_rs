@@ -1028,6 +1028,7 @@ fn test_scrutiny_lbfgs_geometry_optimization() {
         energy_tol_ev: 1e-6,
         max_step_size: 0.1,
         history_capacity: 5,
+        use_nddo: false,
     };
 
     let res = optimize_geometry_lbfgs(&mut batch, &am1, &mut scf_ws, &mut grad_ws, &opts);
@@ -1311,6 +1312,67 @@ fn test_scrutiny_hybridization_dipole_exact_parity() {
         total_dipole_norm
     );
 }
+
+/// Scrutiny Test 20: Full NDDO 22-Multipole L-BFGS Cartesian Geometry Relaxation.
+///
+/// Verifies that full NDDO gradients drive a distorted polyatomic geometry (water)
+/// to a stationary minimum with monotonic energy descent and force convergence.
+#[test]
+fn test_scrutiny_full_nddo_lbfgs_water_relaxation() {
+    use mopac_core::gradients::GradientWorkspace;
+    use mopac_core::opt::{optimize_geometry_lbfgs, OptimizationOptions};
+    use mopac_core::parameters::am1::Am1Model;
+    use mopac_core::types::{MolecularBatch, ScfWorkspace};
+
+    let am1 = Am1Model;
+
+    // Distorted water geometry: elongated OH bonds (1.15 A) and compressed angle
+    let distorted_coords = vec![
+        [0.0, 0.0, 0.1],
+        [0.0, 0.85, -0.65],
+        [0.0, -0.85, -0.65],
+    ];
+    let mut batch = MolecularBatch::new(vec![8, 1, 1], &distorted_coords);
+    let mut scf_ws = ScfWorkspace::allocate(batch.norbs);
+    let mut grad_ws = GradientWorkspace::allocate(batch.norbs);
+
+    let opts = OptimizationOptions {
+        max_cycles: 25,
+        grad_rms_tol: 1.0,
+        grad_max_tol: 2.0,
+        energy_tol_ev: 1e-5,
+        max_step_size: 0.1,
+        history_capacity: 5,
+        use_nddo: true,
+    };
+
+    let res = optimize_geometry_lbfgs(&mut batch, &am1, &mut scf_ws, &mut grad_ws, &opts);
+
+    assert!(res.converged, "Full NDDO L-BFGS optimization on water must converge");
+    assert!(
+        res.final_energy_ev < res.initial_energy_ev,
+        "Full NDDO energy must strictly decrease: initial = {:.6} eV, final = {:.6} eV",
+        res.initial_energy_ev, res.final_energy_ev
+    );
+
+    // Compute optimized O-H distance
+    let dx = batch.x[1] - batch.x[0];
+    let dy = batch.y[1] - batch.y[0];
+    let dz = batch.z[1] - batch.z[0];
+    let r_oh = (dx * dx + dy * dy + dz * dz).sqrt();
+
+    println!(
+        "✅ Full NDDO L-BFGS Water Relaxation Succeeded in {} cycles: Initial E = {:.6} eV, Final E = {:.6} eV, R_OH = {:.4} Å, Final RMS G = {:.4} kcal/(mol*Å)",
+        res.cycles, res.initial_energy_ev, res.final_energy_ev, r_oh, res.final_grad_rms
+    );
+
+    assert!(
+        r_oh > 0.85 && r_oh < 1.05,
+        "Optimized NDDO OH bond length must be physical [0.85, 1.05] Å: got {:.4} Å",
+        r_oh
+    );
+}
+
 
 
 

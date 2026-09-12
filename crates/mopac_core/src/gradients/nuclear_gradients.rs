@@ -39,24 +39,29 @@ fn evaluate_frozen_energy(
     model: &dyn ParameterModel,
     density: &AlignedMatrix<f64>,
     ws: &mut GradientWorkspace,
+    use_nddo: bool,
 ) -> f64 {
     let e_nuc = compute_total_core_repulsion(batch, model);
-    build_hcore(batch, model, &mut ws.h_core);
-    build_fock(batch, model, &ws.h_core, density, &mut ws.fock);
+    if use_nddo {
+        let pairs = crate::integrals::multipoles::precompute_diatomic_pairs(batch, model);
+        crate::hamiltonian::hcore::build_hcore_nddo(batch, model, &pairs, &mut ws.h_core);
+        crate::fock::fock_builder::build_fock_nddo(batch, model, &pairs, &ws.h_core, density, &mut ws.fock);
+    } else {
+        build_hcore(batch, model, &mut ws.h_core);
+        build_fock(batch, model, &ws.h_core, density, &mut ws.fock);
+    }
     let e_elec = compute_electronic_energy(density, &ws.h_core, &ws.fock);
     e_elec + e_nuc
 }
 
-/// Compute Cartesian nuclear energy gradients $\nabla E$ in **eV / Å**.
-///
-/// Output: `gradients` is an array of size $N_{\text{atoms}} \times 3$, where each entry is
-/// $(\frac{\partial E}{\partial x_A}, \frac{\partial E}{\partial y_A}, \frac{\partial E}{\partial z_A})$.
-pub fn compute_cartesian_gradients(
+/// Compute Cartesian nuclear energy gradients $\nabla E$ in **eV / Å** with optional NDDO multipoles.
+pub fn compute_cartesian_gradients_with_options(
     batch: &mut MolecularBatch,
     model: &dyn ParameterModel,
     density: &AlignedMatrix<f64>,
     ws: &mut GradientWorkspace,
     gradients: &mut [[f64; 3]],
+    use_nddo: bool,
 ) {
     let natoms = batch.natoms;
     assert_eq!(gradients.len(), natoms);
@@ -75,27 +80,27 @@ pub fn compute_cartesian_gradients(
         // --- X coordinate derivative ---
         let orig_x = batch.x[a];
         batch.x[a] = orig_x + delta;
-        let e_plus_x = evaluate_frozen_energy(batch, model, density, ws);
+        let e_plus_x = evaluate_frozen_energy(batch, model, density, ws, use_nddo);
         batch.x[a] = orig_x - delta;
-        let e_minus_x = evaluate_frozen_energy(batch, model, density, ws);
+        let e_minus_x = evaluate_frozen_energy(batch, model, density, ws, use_nddo);
         batch.x[a] = orig_x;
         let gx = (e_plus_x - e_minus_x) * inv_2delta;
 
         // --- Y coordinate derivative ---
         let orig_y = batch.y[a];
         batch.y[a] = orig_y + delta;
-        let e_plus_y = evaluate_frozen_energy(batch, model, density, ws);
+        let e_plus_y = evaluate_frozen_energy(batch, model, density, ws, use_nddo);
         batch.y[a] = orig_y - delta;
-        let e_minus_y = evaluate_frozen_energy(batch, model, density, ws);
+        let e_minus_y = evaluate_frozen_energy(batch, model, density, ws, use_nddo);
         batch.y[a] = orig_y;
         let gy = (e_plus_y - e_minus_y) * inv_2delta;
 
         // --- Z coordinate derivative ---
         let orig_z = batch.z[a];
         batch.z[a] = orig_z + delta;
-        let e_plus_z = evaluate_frozen_energy(batch, model, density, ws);
+        let e_plus_z = evaluate_frozen_energy(batch, model, density, ws, use_nddo);
         batch.z[a] = orig_z - delta;
-        let e_minus_z = evaluate_frozen_energy(batch, model, density, ws);
+        let e_minus_z = evaluate_frozen_energy(batch, model, density, ws, use_nddo);
         batch.z[a] = orig_z;
         let gz = (e_plus_z - e_minus_z) * inv_2delta;
 
@@ -115,6 +120,17 @@ pub fn compute_cartesian_gradients(
         grad[1] -= mean_gy;
         grad[2] -= mean_gz;
     }
+}
+
+/// Compute Cartesian nuclear energy gradients $\nabla E$ in **eV / Å** using monopole approximation.
+pub fn compute_cartesian_gradients(
+    batch: &mut MolecularBatch,
+    model: &dyn ParameterModel,
+    density: &AlignedMatrix<f64>,
+    ws: &mut GradientWorkspace,
+    gradients: &mut [[f64; 3]],
+) {
+    compute_cartesian_gradients_with_options(batch, model, density, ws, gradients, false);
 }
 
 /// Compute Root-Mean-Square (RMS) and Maximum Gradient Norm in **kcal / (mol · Å)**.

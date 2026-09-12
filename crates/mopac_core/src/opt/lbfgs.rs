@@ -6,9 +6,9 @@
 //!
 //! Licensed under the Apache License, Version 2.0 (the "License").
 
-use crate::gradients::nuclear_gradients::{compute_cartesian_gradients, compute_gradient_norms, GradientWorkspace};
+use crate::gradients::nuclear_gradients::{compute_cartesian_gradients_with_options, compute_gradient_norms, GradientWorkspace};
 use crate::parameters::ParameterModel;
-use crate::scf::scf_loop::{run_rhf_scf_adaptive, ScfResult};
+use crate::scf::scf_loop::{run_rhf_scf_adaptive_with_nddo, ScfResult};
 use crate::types::{MolecularBatch, ScfWorkspace};
 
 /// Configuration options for molecular geometry optimization.
@@ -26,6 +26,8 @@ pub struct OptimizationOptions {
     pub max_step_size: f64,
     /// History capacity for L-BFGS two-loop recursion (default: 6)
     pub history_capacity: usize,
+    /// Whether to evaluate full NDDO 22-multipole potential energy surface and gradients (default: false)
+    pub use_nddo: bool,
 }
 
 impl Default for OptimizationOptions {
@@ -37,6 +39,7 @@ impl Default for OptimizationOptions {
             energy_tol_ev: 1.0e-5,
             max_step_size: 0.2,
             history_capacity: 6,
+            use_nddo: false,
         }
     }
 }
@@ -85,12 +88,12 @@ pub fn optimize_geometry_lbfgs(
 
     // 1. Initial SCF evaluation
     scf_ws.reset();
-    let initial_scf = run_rhf_scf_adaptive(batch, model, scf_ws, 50, 1e-7, 1e-6);
+    let initial_scf = run_rhf_scf_adaptive_with_nddo(batch, model, scf_ws, 50, 1e-7, 1e-6, options.use_nddo);
     let mut current_energy = initial_scf.total_energy_ev;
     let initial_energy = current_energy;
 
     let mut gradients_3d = vec![[0.0f64; 3]; natoms];
-    compute_cartesian_gradients(batch, model, &scf_ws.density, grad_ws, &mut gradients_3d);
+    compute_cartesian_gradients_with_options(batch, model, &scf_ws.density, grad_ws, &mut gradients_3d, options.use_nddo);
 
     let (mut rms_g, mut max_g) = compute_gradient_norms(&gradients_3d);
     let initial_rms_g = rms_g;
@@ -209,11 +212,11 @@ pub fn optimize_geometry_lbfgs(
 
         // 5. Evaluate SCF at trial point
         scf_ws.reset();
-        let scf_res = run_rhf_scf_adaptive(batch, model, scf_ws, 50, 1e-7, 1e-6);
+        let scf_res = run_rhf_scf_adaptive_with_nddo(batch, model, scf_ws, 50, 1e-7, 1e-6, options.use_nddo);
         let new_energy = scf_res.total_energy_ev;
         last_scf = scf_res;
 
-        compute_cartesian_gradients(batch, model, &scf_ws.density, grad_ws, &mut gradients_3d);
+        compute_cartesian_gradients_with_options(batch, model, &scf_ws.density, grad_ws, &mut gradients_3d, options.use_nddo);
         let (new_rms_g, new_max_g) = compute_gradient_norms(&gradients_3d);
 
         let mut new_grad = vec![0.0f64; ncoords];

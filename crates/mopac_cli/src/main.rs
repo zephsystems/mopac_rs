@@ -510,6 +510,7 @@ fn main() -> Result<(), Box<dyn std::error::Error>> {
             energy_tol_ev: 1e-6,
             max_step_size: 0.1,
             history_capacity: 6,
+            use_nddo,
         };
 
         let mut grad_ws = GradientWorkspace::allocate(batch.norbs);
