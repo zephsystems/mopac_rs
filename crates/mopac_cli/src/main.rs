@@ -13,11 +13,14 @@ use mopac_core::parameters::pm3::Pm3Model;
 use mopac_core::parameters::pm6::Pm6Model;
 use mopac_core::parameters::rm1::Rm1Model;
 use mopac_core::parameters::ParameterModel;
+use mopac_core::properties::{
+    compute_bond_orders, compute_dipole_moment, compute_mulliken_population, DipoleResult,
+};
 use mopac_core::scf::scf_loop::{run_rhf_scf_adaptive_with_nddo, ScfOptions, ScfResult};
 use mopac_core::types::{MolecularBatch, ScfWorkspace};
 use mopac_core::vibrations::{compute_hessian_and_frequencies, HessianOptions};
-use mopac_gpu::{GpuCoulombCalculator, VulkanContext};
 use mopac_gpu::coulomb_fp32::GpuCoulombCalculatorFP32;
+use mopac_gpu::{GpuCoulombCalculator, VulkanContext};
 use std::fs::{self, File};
 use std::io::{self, Write};
 use std::path::{Path, PathBuf};
@@ -59,6 +62,14 @@ struct Cli {
     /// Force vibrational frequency and thermodynamic analysis (FORCE / THERMO)
     #[arg(long, default_value_t = false)]
     force: bool,
+
+    /// Calculate and print bond orders and valencies (BONDS)
+    #[arg(long, default_value_t = false)]
+    bonds: bool,
+
+    /// Perform Mulliken population analysis (MULLIK)
+    #[arg(long, default_value_t = false)]
+    mulliken: bool,
 
     /// Force single-point calculation (1SCF)
     #[arg(long = "1scf", default_value_t = false)]
@@ -102,6 +113,10 @@ struct ParsedInput {
     is_fp32_requested: bool,
     method: Option<String>,
     is_nddo_requested: bool,
+    #[allow(dead_code)]
+    is_dipole_requested: bool,
+    is_bonds_requested: bool,
+    is_mullik_requested: bool,
 }
 
 fn symbol_to_atomic_number(sym: &str) -> Option<u8> {
@@ -220,6 +235,9 @@ fn parse_mopac_input(content: &str) -> io::Result<ParsedInput> {
     let mut is_fp32 = false;
     let mut method = None;
     let mut is_nddo_requested = false;
+    let mut is_dipole_requested = false;
+    let mut is_bonds_requested = false;
+    let mut is_mullik_requested = false;
 
     for kw in &keywords {
         let u = kw.to_uppercase();
@@ -227,6 +245,12 @@ fn parse_mopac_input(content: &str) -> io::Result<ParsedInput> {
             is_opt_requested = true;
         } else if u == "FORCE" || u == "VIB" || u == "FREQ" || u == "THERMO" {
             is_force_requested = true;
+        } else if u == "DIPOLE" {
+            is_dipole_requested = true;
+        } else if u == "BONDS" {
+            is_bonds_requested = true;
+        } else if u == "MULLIK" || u == "MULLIKEN" {
+            is_mullik_requested = true;
         } else if u == "1SCF" {
             is_1scf = true;
         } else if u == "GPU" {
@@ -320,6 +344,9 @@ fn parse_mopac_input(content: &str) -> io::Result<ParsedInput> {
         is_fp32_requested: is_fp32,
         method,
         is_nddo_requested,
+        is_dipole_requested,
+        is_bonds_requested,
+        is_mullik_requested,
     })
 }
 
@@ -336,22 +363,12 @@ fn build_batch(atoms: &[ParsedAtom]) -> MolecularBatch {
     MolecularBatch::new(atomic_numbers, &coords)
 }
 
-#[derive(Debug, Clone, Copy)]
-struct DipoleAnalysis {
-    point_chg: [f64; 3],
-    point_chg_tot: f64,
-    hybrid: [f64; 3],
-    hybrid_tot: f64,
-    sum: [f64; 3],
-    sum_tot: f64,
-}
-
 fn compute_wavefunction_properties(
     batch: &MolecularBatch,
     model: &dyn ParameterModel,
     ws: &ScfWorkspace,
     scf: &ScfResult,
-) -> (f64, Vec<f64>, Vec<[f64; 3]>, DipoleAnalysis) {
+) -> (f64, Vec<f64>, Vec<[f64; 3]>, DipoleResult) {
     let mut sum_eisol = 0.0;
     let mut sum_eheat = 0.0;
     for &z in &batch.atomic_numbers {
@@ -363,12 +380,11 @@ fn compute_wavefunction_properties(
     let binding_energy_ev = scf.total_energy_ev - sum_eisol;
     let heat_of_formation_kcal = binding_energy_ev * EV_TO_KCAL_MOL + sum_eheat;
 
-    let mut charges = Vec::with_capacity(batch.natoms);
-    let mut populations = Vec::with_capacity(batch.natoms);
+    let dipole = compute_dipole_moment(batch, model, &ws.density);
+    let charges = dipole.atomic_charges.clone();
 
+    let mut populations = Vec::with_capacity(batch.natoms);
     for i in 0..batch.natoms {
-        let z = batch.atomic_numbers[i];
-        let p = model.get_element(z).unwrap();
         let orb_start = batch.orbital_offsets[i];
         let norbs = batch.basis_types[i].num_orbitals();
 
@@ -377,66 +393,10 @@ fn compute_wavefunction_properties(
         for o in 1..norbs {
             p_pop += ws.density.get(orb_start + o, orb_start + o);
         }
-        let total_pop = s_pop + p_pop;
-        let q = p.core_charge - total_pop;
-        charges.push(q);
-        populations.push([s_pop, p_pop, total_pop]);
+        populations.push([s_pop, p_pop, s_pop + p_pop]);
     }
 
-    // 1. Point-charge dipole moment (e * Angstrom -> Debye: 4.80320425)
-    let mut point_chg = [0.0f64; 3];
-    for (i, &q) in charges.iter().enumerate().take(batch.natoms) {
-        let (x, y, z) = (batch.x[i], batch.y[i], batch.z[i]);
-        point_chg[0] += q * x * 4.80320425;
-        point_chg[1] += q * y * 4.80320425;
-        point_chg[2] += q * z * 4.80320425;
-    }
-    let point_chg_tot = (point_chg[0] * point_chg[0] + point_chg[1] * point_chg[1] + point_chg[2] * point_chg[2]).sqrt();
-
-    // 2. Intra-atomic quantum hybridization dipole moment (sp mixing)
-    // In atomic units: mu = -2.0 * P_{s, p_alpha} * D_1 * 2.54174623 Debye
-    let mut hybrid = [0.0f64; 3];
-    for i in 0..batch.natoms {
-        let z = batch.atomic_numbers[i];
-        if let Some(elem) = model.get_element(z) {
-            if batch.basis_types[i].num_orbitals() >= 4 {
-                let mp = mopac_core::integrals::multipoles::DerivedMultipoleParams::from_element(&elem);
-                let d1 = mp.dd; // in Bohr
-                let orb_start = batch.orbital_offsets[i];
-                let ps_px = ws.density.get(orb_start, orb_start + 1);
-                let ps_py = ws.density.get(orb_start, orb_start + 2);
-                let ps_pz = ws.density.get(orb_start, orb_start + 3);
-
-                let hyf = -2.0 * d1 * 2.54174623;
-                hybrid[0] += ps_px * hyf;
-                hybrid[1] += ps_py * hyf;
-                hybrid[2] += ps_pz * hyf;
-            }
-        }
-    }
-    let hybrid_tot = (hybrid[0] * hybrid[0] + hybrid[1] * hybrid[1] + hybrid[2] * hybrid[2]).sqrt();
-
-    // 3. Sum total dipole vector and scalar norm
-    let sum = [
-        point_chg[0] + hybrid[0],
-        point_chg[1] + hybrid[1],
-        point_chg[2] + hybrid[2],
-    ];
-    let sum_tot = (sum[0] * sum[0] + sum[1] * sum[1] + sum[2] * sum[2]).sqrt();
-
-    (
-        heat_of_formation_kcal,
-        charges,
-        populations,
-        DipoleAnalysis {
-            point_chg,
-            point_chg_tot,
-            hybrid,
-            hybrid_tot,
-            sum,
-            sum_tot,
-        },
-    )
+    (heat_of_formation_kcal, charges, populations, dipole)
 }
 
 fn main() -> Result<(), Box<dyn std::error::Error>> {
@@ -591,9 +551,9 @@ fn main() -> Result<(), Box<dyn std::error::Error>> {
     println!(" HOMO Energy (IP)        : {:15.4} eV", scf_final.homo_energy_ev);
     println!(" LUMO Energy             : {:15.4} eV", scf_final.lumo_energy_ev);
     println!(" HOMO-LUMO Gap           : {:15.4} eV", scf_final.lumo_energy_ev - scf_final.homo_energy_ev);
-    println!(" Total Dipole Moment     : {:15.4} Debye", dipole.sum_tot);
-    println!("   Point-Charge Dipole   : {:15.4} Debye", dipole.point_chg_tot);
-    println!("   Hybridization Dipole  : {:15.4} Debye", dipole.hybrid_tot);
+    println!(" Total Dipole Moment     : {:15.4} Debye", dipole.total[3]);
+    println!("   Point-Charge Dipole   : {:15.4} Debye", dipole.point_charge[3]);
+    println!("   Hybridization Dipole  : {:15.4} Debye", dipole.hybridization[3]);
     println!(" SCF Iterations Total    : {}", total_scf_cycles);
     println!(" Total Wall-Clock Time   : {:.4} seconds", elapsed.as_secs_f64());
 
@@ -614,6 +574,53 @@ fn main() -> Result<(), Box<dyn std::error::Error>> {
         println!("   Heat Capacity (Cp)          : {:12.4} cal/(mol K)", h_res.thermo.cp_total_cal_k_mol);
         println!("   Standard Entropy (S°)       : {:12.4} cal/(mol K)", h_res.thermo.entropy_total_cal_k_mol);
         println!("   Gibbs Free Energy Corr.     : {:12.4} kcal/mol", h_res.thermo.gibbs_correction_kcal_mol);
+    }
+
+    let is_bonds = cli.bonds || parsed.is_bonds_requested;
+    let bond_result = if is_bonds {
+        Some(compute_bond_orders(&batch, &ws.density))
+    } else {
+        None
+    };
+
+    if let Some(ref b_res) = bond_result {
+        println!("-------------------------------------------------------------------------------");
+        println!("                         (VALENCIES)   BOND ORDERS                             ");
+        println!("-------------------------------------------------------------------------------");
+        for i in 0..batch.natoms {
+            let sym_i = atomic_number_to_symbol(batch.atomic_numbers[i]);
+            let mut line = format!("   {:3}  {:2}     ({:6.3})", i + 1, sym_i, b_res.valencies[i]);
+            for j in 0..batch.natoms {
+                if i != j {
+                    let b_val = b_res.bond_orders.get(i, j);
+                    if b_val > 0.01 {
+                        let sym_j = atomic_number_to_symbol(batch.atomic_numbers[j]);
+                        line.push_str(&format!("     {:3}  {:2} {:5.3}", j + 1, sym_j, b_val));
+                    }
+                }
+            }
+            println!("{}", line);
+        }
+    }
+
+    let is_mullik = cli.mulliken || parsed.is_mullik_requested;
+    let mullik_result = if is_mullik {
+        let n_electrons: usize = batch.atomic_numbers.iter().map(|&z| model.get_element(z).unwrap().core_charge as usize).sum();
+        let num_occupied = n_electrons / 2;
+        Some(compute_mulliken_population(&batch, model.as_ref(), &ws.eigenvectors, num_occupied))
+    } else {
+        None
+    };
+
+    if let Some(ref m_res) = mullik_result {
+        println!("-------------------------------------------------------------------------------");
+        println!("                        MULLIKEN POPULATION ANALYSIS                           ");
+        println!("-------------------------------------------------------------------------------");
+        println!("      NO.  ATOM   POPULATION      CHARGE");
+        for i in 0..batch.natoms {
+            let sym = atomic_number_to_symbol(batch.atomic_numbers[i]);
+            println!("    {:4}    {:2}     {:10.6}     {:10.6}", i + 1, sym, m_res.atomic_populations[i], m_res.net_charges[i]);
+        }
     }
     println!("===============================================================================");
 
@@ -642,13 +649,13 @@ fn main() -> Result<(), Box<dyn std::error::Error>> {
     writeln!(out, " NUCLEAR REPULSION       = {:17.6} EV", scf_final.nuclear_repulsion_ev)?;
     writeln!(out, " IONIZATION POTENTIAL    = {:17.5} EV", -scf_final.homo_energy_ev)?;
     writeln!(out, " HOMO LUMO ENERGIES (EV) = {:12.4} {:12.4}", scf_final.homo_energy_ev, scf_final.lumo_energy_ev)?;
-    writeln!(out, " DIPOLE MOMENT           = {:17.4} DEBYE", dipole.sum_tot)?;
+    writeln!(out, " DIPOLE MOMENT           = {:17.4} DEBYE", dipole.total[3])?;
     writeln!(out, " WALL-CLOCK TIME         = {:17.4} SECONDS", elapsed.as_secs_f64())?;
     writeln!(out)?;
     writeln!(out, " DIPOLE           X         Y         Z       TOTAL")?;
-    writeln!(out, " POINT-CHG.   {:9.3} {:9.3} {:9.3} {:10.3}", dipole.point_chg[0], dipole.point_chg[1], dipole.point_chg[2], dipole.point_chg_tot)?;
-    writeln!(out, " HYBRID       {:9.3} {:9.3} {:9.3} {:10.3}", dipole.hybrid[0], dipole.hybrid[1], dipole.hybrid[2], dipole.hybrid_tot)?;
-    writeln!(out, " SUM          {:9.3} {:9.3} {:9.3} {:10.3}", dipole.sum[0], dipole.sum[1], dipole.sum[2], dipole.sum_tot)?;
+    writeln!(out, " POINT-CHG.   {:9.3} {:9.3} {:9.3} {:10.3}", dipole.point_charge[0], dipole.point_charge[1], dipole.point_charge[2], dipole.point_charge[3])?;
+    writeln!(out, " HYBRID       {:9.3} {:9.3} {:9.3} {:10.3}", dipole.hybridization[0], dipole.hybridization[1], dipole.hybridization[2], dipole.hybridization[3])?;
+    writeln!(out, " SUM          {:9.3} {:9.3} {:9.3} {:10.3}", dipole.total[0], dipole.total[1], dipole.total[2], dipole.total[3])?;
     writeln!(out)?;
     writeln!(out, "              NET ATOMIC CHARGES AND DIPOLE CONTRIBUTIONS")?;
     writeln!(out, "  ATOM NO.   TYPE          CHARGE      No. of ELECS.   s-Pop       p-Pop")?;
@@ -668,6 +675,39 @@ fn main() -> Result<(), Box<dyn std::error::Error>> {
         writeln!(out, "  {:4}    {:2}       {:16.9}  {:16.9}  {:16.9}", i + 1, sym, x, y, z)?;
     }
     writeln!(out)?;
+
+    if let Some(ref b_res) = bond_result {
+        writeln!(out, "            (VALENCIES)   BOND ORDERS")?;
+        writeln!(out)?;
+        for i in 0..batch.natoms {
+            let sym_i = atomic_number_to_symbol(batch.atomic_numbers[i]);
+            let mut line = format!("   {:3}  {:2}     ({:6.3})", i + 1, sym_i, b_res.valencies[i]);
+            for j in 0..batch.natoms {
+                if i != j {
+                    let b_val = b_res.bond_orders.get(i, j);
+                    if b_val > 0.01 {
+                        let sym_j = atomic_number_to_symbol(batch.atomic_numbers[j]);
+                        line.push_str(&format!("     {:3}  {:2} {:5.3}", j + 1, sym_j, b_val));
+                    }
+                }
+            }
+            writeln!(out, "{}", line)?;
+        }
+        writeln!(out)?;
+    }
+
+    if let Some(ref m_res) = mullik_result {
+        writeln!(out, "           MULLIKEN POPULATION ANALYSIS")?;
+        writeln!(out)?;
+        writeln!(out, "        MULLIKEN POPULATIONS AND CHARGES")?;
+        writeln!(out)?;
+        writeln!(out, "      NO.  ATOM   POPULATION      CHARGE")?;
+        for i in 0..batch.natoms {
+            let sym = atomic_number_to_symbol(batch.atomic_numbers[i]);
+            writeln!(out, "    {:4}    {:2}     {:10.6}     {:10.6}", i + 1, sym, m_res.atomic_populations[i], m_res.net_charges[i])?;
+        }
+        writeln!(out)?;
+    }
 
     if let Some(ref h_res) = force_result {
         writeln!(out, "           NORMAL COORDINATE ANALYSIS & VIBRATIONAL FREQUENCIES")?;

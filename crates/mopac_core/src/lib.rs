@@ -4,24 +4,28 @@
 //! Licensed under the Apache License, Version 2.0 (the "License").
 
 pub mod constants;
+pub mod corrections;
 pub mod fock;
 pub mod gradients;
 pub mod hamiltonian;
 pub mod integrals;
 pub mod opt;
 pub mod parameters;
+pub mod properties;
 pub mod ri;
 pub mod scf;
 pub mod types;
 pub mod vibrations;
 
 pub use constants::*;
+pub use corrections::*;
 pub use fock::*;
 pub use gradients::*;
 pub use hamiltonian::*;
 pub use integrals::*;
 pub use opt::*;
 pub use parameters::*;
+pub use properties::*;
 pub use ri::*;
 pub use scf::*;
 pub use types::*;

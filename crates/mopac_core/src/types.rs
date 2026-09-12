@@ -122,8 +122,14 @@ impl<T: Copy + Default> Clone for AlignedVec64<T> {
     }
 }
 
+impl<T: Copy + Default + PartialEq> PartialEq for AlignedVec64<T> {
+    fn eq(&self, other: &Self) -> bool {
+        self.deref() == other.deref()
+    }
+}
+
 /// 2D dense row-major matrix backed by a contiguous 64-byte aligned buffer.
-#[derive(Debug, Clone)]
+#[derive(Debug, Clone, PartialEq)]
 pub struct AlignedMatrix<T: Copy + Default> {
     pub rows: usize,
     pub cols: usize,
