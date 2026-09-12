@@ -7,7 +7,9 @@
 //! Licensed under the Apache License, Version 2.0 (the "License").
 
 use crate::constants::codata2018::EV_TO_KCAL_MOL;
-use crate::gradients::nuclear_gradients::{compute_cartesian_gradients_with_options, compute_gradient_norms, GradientWorkspace};
+use crate::gradients::nuclear_gradients::{
+    compute_cartesian_gradients_with_options, compute_gradient_norms, GradientWorkspace,
+};
 use crate::parameters::ParameterModel;
 use crate::scf::scf_loop::{run_rhf_scf_adaptive_with_nddo, ScfResult};
 use crate::types::{MolecularBatch, ScfWorkspace};
@@ -72,7 +74,10 @@ fn dot(a: &[f64], b: &[f64]) -> f64 {
 }
 
 /// Compute Root-Mean-Square (RMS) and Maximum Gradient Norm considering optional coordinate mask.
-fn compute_effective_gradient_norms(gradients_3d: &[[f64; 3]], mask: Option<&[bool]>) -> (f64, f64) {
+fn compute_effective_gradient_norms(
+    gradients_3d: &[[f64; 3]],
+    mask: Option<&[bool]>,
+) -> (f64, f64) {
     match mask {
         Some(m) => {
             let mut sum_sq = 0.0;
@@ -125,12 +130,20 @@ pub fn optimize_geometry_lbfgs(
 
     // 1. Initial SCF evaluation
     scf_ws.reset();
-    let initial_scf = run_rhf_scf_adaptive_with_nddo(batch, model, scf_ws, 50, 1e-7, 1e-6, options.use_nddo);
+    let initial_scf =
+        run_rhf_scf_adaptive_with_nddo(batch, model, scf_ws, 50, 1e-7, 1e-6, options.use_nddo);
     let mut current_energy = initial_scf.total_energy_ev;
     let initial_energy = current_energy;
 
     let mut gradients_3d = vec![[0.0f64; 3]; natoms];
-    compute_cartesian_gradients_with_options(batch, model, &scf_ws.density, grad_ws, &mut gradients_3d, options.use_nddo);
+    compute_cartesian_gradients_with_options(
+        batch,
+        model,
+        &scf_ws.density,
+        grad_ws,
+        &mut gradients_3d,
+        options.use_nddo,
+    );
 
     // Apply optimization mask: zero out gradients on frozen degrees of freedom
     if let Some(ref m) = options.opt_mask {
@@ -143,7 +156,8 @@ pub fn optimize_geometry_lbfgs(
         }
     }
 
-    let (mut rms_g, mut max_g) = compute_effective_gradient_norms(&gradients_3d, options.opt_mask.as_deref());
+    let (mut rms_g, mut max_g) =
+        compute_effective_gradient_norms(&gradients_3d, options.opt_mask.as_deref());
     let initial_rms_g = rms_g;
 
     if rms_g < options.grad_rms_tol && max_g < options.grad_max_tol {
@@ -198,7 +212,11 @@ pub fn optimize_geometry_lbfgs(
             let y_last = &y_hist[k - 1];
             let sy = dot(s_last, y_last);
             let yy = dot(y_last, y_last);
-            if yy.abs() > 1e-12 { sy / yy } else { 1.0 }
+            if yy.abs() > 1e-12 {
+                sy / yy
+            } else {
+                1.0
+            }
         } else {
             1.0
         };
@@ -267,11 +285,19 @@ pub fn optimize_geometry_lbfgs(
 
         // 5. Evaluate SCF at trial point
         scf_ws.reset();
-        let scf_res = run_rhf_scf_adaptive_with_nddo(batch, model, scf_ws, 50, 1e-7, 1e-6, options.use_nddo);
+        let scf_res =
+            run_rhf_scf_adaptive_with_nddo(batch, model, scf_ws, 50, 1e-7, 1e-6, options.use_nddo);
         let new_energy = scf_res.total_energy_ev;
         last_scf = scf_res;
 
-        compute_cartesian_gradients_with_options(batch, model, &scf_ws.density, grad_ws, &mut gradients_3d, options.use_nddo);
+        compute_cartesian_gradients_with_options(
+            batch,
+            model,
+            &scf_ws.density,
+            grad_ws,
+            &mut gradients_3d,
+            options.use_nddo,
+        );
 
         // Apply optimization mask to trial gradients
         if let Some(ref m) = options.opt_mask {
@@ -284,7 +310,8 @@ pub fn optimize_geometry_lbfgs(
             }
         }
 
-        let (new_rms_g, new_max_g) = compute_effective_gradient_norms(&gradients_3d, options.opt_mask.as_deref());
+        let (new_rms_g, new_max_g) =
+            compute_effective_gradient_norms(&gradients_3d, options.opt_mask.as_deref());
 
         let mut new_grad = vec![0.0f64; ncoords];
         for i in 0..natoms {

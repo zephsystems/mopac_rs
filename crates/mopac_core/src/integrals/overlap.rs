@@ -56,13 +56,7 @@ pub fn fill_aux_b(beta: f64, k_max: usize, b: &mut [f64]) {
 
 /// Helper to configure spheroidal coordinate parameters $\alpha, \beta$ and fill $A, B$ tables.
 #[inline(always)]
-fn set_ab_tables(
-    s1: f64,
-    s2: f64,
-    rab: f64,
-    a_tab: &mut [f64; 9],
-    b_tab: &mut [f64; 9],
-) {
+fn set_ab_tables(s1: f64, s2: f64, rab: f64, a_tab: &mut [f64; 9], b_tab: &mut [f64; 9]) {
     let alpha = 0.5 * rab * (s1 + s2);
     let beta = 0.5 * rab * (s2 - s1);
     fill_aux_a(alpha, 8, a_tab);
@@ -180,7 +174,8 @@ pub fn compute_diatomic_overlap_block(
         set_ab_tables(p_a.zp, p_b.zp, rab, &mut a, &mut b);
         let w_pp = (p_a.zp * p_b.zp).powi(5).sqrt() * rab5;
         let s_sigma = w_pp * (b[2] * (a[4] + a[0]) - a[2] * (b[4] + b[0]));
-        let s_pi = 0.5 * w_pp * (a[4] * (b[0] - b[2]) - b[4] * (a[0] - a[2]) - a[2] * b[0] + b[2] * a[0]);
+        let s_pi =
+            0.5 * w_pp * (a[4] * (b[0] - b[2]) - b[4] * (a[0] - a[2]) - a[2] * b[0] + b[2] * a[0]);
 
         let l = [lx, ly, lz];
         for i in 0..3 {

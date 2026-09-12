@@ -82,7 +82,9 @@ impl ParameterModel for Pm6Model {
         elem_a: &SemiEmpiricalElementParams,
         elem_b: &SemiEmpiricalElementParams,
     ) -> f64 {
-        crate::integrals::core_repulsion::compute_pair_core_repulsion_pm6(r_angstrom, elem_a, elem_b)
+        crate::integrals::core_repulsion::compute_pair_core_repulsion_pm6(
+            r_angstrom, elem_a, elem_b,
+        )
     }
 
     fn get_element(&self, z: u8) -> Option<SemiEmpiricalElementParams> {
@@ -107,10 +109,26 @@ impl ParameterModel for Pm6Model {
                 gp2: 0.0,
                 hsp: 0.0,
                 gaussians: [
-                    GaussianCoreCorrection { a: 0.024184, b: 3.055953, c: 1.786011 },
-                    GaussianCoreCorrection { a: 0.0, b: 0.0, c: 0.0 },
-                    GaussianCoreCorrection { a: 0.0, b: 0.0, c: 0.0 },
-                    GaussianCoreCorrection { a: 0.0, b: 0.0, c: 0.0 },
+                    GaussianCoreCorrection {
+                        a: 0.024184,
+                        b: 3.055953,
+                        c: 1.786011,
+                    },
+                    GaussianCoreCorrection {
+                        a: 0.0,
+                        b: 0.0,
+                        c: 0.0,
+                    },
+                    GaussianCoreCorrection {
+                        a: 0.0,
+                        b: 0.0,
+                        c: 0.0,
+                    },
+                    GaussianCoreCorrection {
+                        a: 0.0,
+                        b: 0.0,
+                        c: 0.0,
+                    },
                 ],
                 num_gaussians: 1,
             }),
@@ -135,10 +153,26 @@ impl ParameterModel for Pm6Model {
                 gp2: 9.486212,
                 hsp: 0.717322,
                 gaussians: [
-                    GaussianCoreCorrection { a: 0.046302, b: 2.100206, c: 1.333959 },
-                    GaussianCoreCorrection { a: 0.0, b: 0.0, c: 0.0 },
-                    GaussianCoreCorrection { a: 0.0, b: 0.0, c: 0.0 },
-                    GaussianCoreCorrection { a: 0.0, b: 0.0, c: 0.0 },
+                    GaussianCoreCorrection {
+                        a: 0.046302,
+                        b: 2.100206,
+                        c: 1.333959,
+                    },
+                    GaussianCoreCorrection {
+                        a: 0.0,
+                        b: 0.0,
+                        c: 0.0,
+                    },
+                    GaussianCoreCorrection {
+                        a: 0.0,
+                        b: 0.0,
+                        c: 0.0,
+                    },
+                    GaussianCoreCorrection {
+                        a: 0.0,
+                        b: 0.0,
+                        c: 0.0,
+                    },
                 ],
                 num_gaussians: 1,
             }),
@@ -163,10 +197,26 @@ impl ParameterModel for Pm6Model {
                 gp2: 10.576425,
                 hsp: 2.871545,
                 gaussians: [
-                    GaussianCoreCorrection { a: -0.001436, b: 0.495196, c: 1.704857 },
-                    GaussianCoreCorrection { a: 0.0, b: 0.0, c: 0.0 },
-                    GaussianCoreCorrection { a: 0.0, b: 0.0, c: 0.0 },
-                    GaussianCoreCorrection { a: 0.0, b: 0.0, c: 0.0 },
+                    GaussianCoreCorrection {
+                        a: -0.001436,
+                        b: 0.495196,
+                        c: 1.704857,
+                    },
+                    GaussianCoreCorrection {
+                        a: 0.0,
+                        b: 0.0,
+                        c: 0.0,
+                    },
+                    GaussianCoreCorrection {
+                        a: 0.0,
+                        b: 0.0,
+                        c: 0.0,
+                    },
+                    GaussianCoreCorrection {
+                        a: 0.0,
+                        b: 0.0,
+                        c: 0.0,
+                    },
                 ],
                 num_gaussians: 1,
             }),
@@ -191,10 +241,26 @@ impl ParameterModel for Pm6Model {
                 gp2: 10.332765,
                 hsp: 5.010801,
                 gaussians: [
-                    GaussianCoreCorrection { a: -0.017771, b: 3.058310, c: 1.896435 },
-                    GaussianCoreCorrection { a: 0.0, b: 0.0, c: 0.0 },
-                    GaussianCoreCorrection { a: 0.0, b: 0.0, c: 0.0 },
-                    GaussianCoreCorrection { a: 0.0, b: 0.0, c: 0.0 },
+                    GaussianCoreCorrection {
+                        a: -0.017771,
+                        b: 3.058310,
+                        c: 1.896435,
+                    },
+                    GaussianCoreCorrection {
+                        a: 0.0,
+                        b: 0.0,
+                        c: 0.0,
+                    },
+                    GaussianCoreCorrection {
+                        a: 0.0,
+                        b: 0.0,
+                        c: 0.0,
+                    },
+                    GaussianCoreCorrection {
+                        a: 0.0,
+                        b: 0.0,
+                        c: 0.0,
+                    },
                 ],
                 num_gaussians: 1,
             }),
@@ -219,10 +285,26 @@ impl ParameterModel for Pm6Model {
                 gp2: 12.179816,
                 hsp: 2.604382,
                 gaussians: [
-                    GaussianCoreCorrection { a: -0.010792, b: 6.004648, c: 1.847724 },
-                    GaussianCoreCorrection { a: 0.0, b: 0.0, c: 0.0 },
-                    GaussianCoreCorrection { a: 0.0, b: 0.0, c: 0.0 },
-                    GaussianCoreCorrection { a: 0.0, b: 0.0, c: 0.0 },
+                    GaussianCoreCorrection {
+                        a: -0.010792,
+                        b: 6.004648,
+                        c: 1.847724,
+                    },
+                    GaussianCoreCorrection {
+                        a: 0.0,
+                        b: 0.0,
+                        c: 0.0,
+                    },
+                    GaussianCoreCorrection {
+                        a: 0.0,
+                        b: 0.0,
+                        c: 0.0,
+                    },
+                    GaussianCoreCorrection {
+                        a: 0.0,
+                        b: 0.0,
+                        c: 0.0,
+                    },
                 ],
                 num_gaussians: 1,
             }),
@@ -247,10 +329,26 @@ impl ParameterModel for Pm6Model {
                 gp2: 7.734264,
                 hsp: 0.871681,
                 gaussians: [
-                    GaussianCoreCorrection { a: -0.034320, b: 6.001394, c: 2.296737 },
-                    GaussianCoreCorrection { a: 0.0, b: 0.0, c: 0.0 },
-                    GaussianCoreCorrection { a: 0.0, b: 0.0, c: 0.0 },
-                    GaussianCoreCorrection { a: 0.0, b: 0.0, c: 0.0 },
+                    GaussianCoreCorrection {
+                        a: -0.034320,
+                        b: 6.001394,
+                        c: 2.296737,
+                    },
+                    GaussianCoreCorrection {
+                        a: 0.0,
+                        b: 0.0,
+                        c: 0.0,
+                    },
+                    GaussianCoreCorrection {
+                        a: 0.0,
+                        b: 0.0,
+                        c: 0.0,
+                    },
+                    GaussianCoreCorrection {
+                        a: 0.0,
+                        b: 0.0,
+                        c: 0.0,
+                    },
                 ],
                 num_gaussians: 1,
             }),
@@ -275,10 +373,26 @@ impl ParameterModel for Pm6Model {
                 gp2: 7.301878,
                 hsp: 5.005404,
                 gaussians: [
-                    GaussianCoreCorrection { a: -0.036928, b: 1.795067, c: 2.082618 },
-                    GaussianCoreCorrection { a: 0.0, b: 0.0, c: 0.0 },
-                    GaussianCoreCorrection { a: 0.0, b: 0.0, c: 0.0 },
-                    GaussianCoreCorrection { a: 0.0, b: 0.0, c: 0.0 },
+                    GaussianCoreCorrection {
+                        a: -0.036928,
+                        b: 1.795067,
+                        c: 2.082618,
+                    },
+                    GaussianCoreCorrection {
+                        a: 0.0,
+                        b: 0.0,
+                        c: 0.0,
+                    },
+                    GaussianCoreCorrection {
+                        a: 0.0,
+                        b: 0.0,
+                        c: 0.0,
+                    },
+                    GaussianCoreCorrection {
+                        a: 0.0,
+                        b: 0.0,
+                        c: 0.0,
+                    },
                 ],
                 num_gaussians: 1,
             }),
@@ -303,10 +417,26 @@ impl ParameterModel for Pm6Model {
                 gp2: 8.128436,
                 hsp: 5.004267,
                 gaussians: [
-                    GaussianCoreCorrection { a: -0.013213, b: 3.687022, c: 2.544635 },
-                    GaussianCoreCorrection { a: 0.0, b: 0.0, c: 0.0 },
-                    GaussianCoreCorrection { a: 0.0, b: 0.0, c: 0.0 },
-                    GaussianCoreCorrection { a: 0.0, b: 0.0, c: 0.0 },
+                    GaussianCoreCorrection {
+                        a: -0.013213,
+                        b: 3.687022,
+                        c: 2.544635,
+                    },
+                    GaussianCoreCorrection {
+                        a: 0.0,
+                        b: 0.0,
+                        c: 0.0,
+                    },
+                    GaussianCoreCorrection {
+                        a: 0.0,
+                        b: 0.0,
+                        c: 0.0,
+                    },
+                    GaussianCoreCorrection {
+                        a: 0.0,
+                        b: 0.0,
+                        c: 0.0,
+                    },
                 ],
                 num_gaussians: 1,
             }),

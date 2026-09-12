@@ -3,12 +3,12 @@
 //! Licensed under the Apache License, Version 2.0 (the "License").
 //! Evaluates the NxN pairwise Coulomb repulsion matrix on Vulkan compute shader cores.
 
-use ash::vk;
-use std::sync::Arc;
 use crate::context::{VulkanContext, VulkanError};
+use ash::vk;
 use mopac_core::constants::codata2018::EV_ANGSTROM_FACTOR;
-use mopac_core::types::{AlignedMatrix, MolecularBatch};
 use mopac_core::parameters::ParameterModel;
+use mopac_core::types::{AlignedMatrix, MolecularBatch};
+use std::sync::Arc;
 
 /// GPU representation of an atom center for Coulomb repulsion shaders.
 #[repr(C)]
@@ -53,7 +53,10 @@ impl GpuCoulombCalculator {
         ];
 
         let layout_info = vk::DescriptorSetLayoutCreateInfo::default().bindings(&bindings);
-        let descriptor_set_layout = unsafe { ctx.device.create_descriptor_set_layout(&layout_info, None)? };
+        let descriptor_set_layout = unsafe {
+            ctx.device
+                .create_descriptor_set_layout(&layout_info, None)?
+        };
 
         let push_constant_range = vk::PushConstantRange::default()
             .stage_flags(vk::ShaderStageFlags::COMPUTE)
@@ -91,7 +94,10 @@ impl GpuCoulombCalculator {
     }
 
     /// Computes the complete NxN pairwise two-electron repulsion matrix on GPU.
-    pub fn compute_pairwise_coulomb(&self, atoms: &[AtomGpu]) -> Result<AlignedMatrix<f64>, VulkanError> {
+    pub fn compute_pairwise_coulomb(
+        &self,
+        atoms: &[AtomGpu],
+    ) -> Result<AlignedMatrix<f64>, VulkanError> {
         let n = atoms.len();
         if n == 0 {
             return Ok(AlignedMatrix::zeroed(0, 0));
@@ -121,7 +127,8 @@ impl GpuCoulombCalculator {
         };
         unsafe {
             device.bind_buffer_memory(buf_in, mem_in, 0)?;
-            let ptr = device.map_memory(mem_in, 0, atom_buf_size, vk::MemoryMapFlags::empty())? as *mut AtomGpu;
+            let ptr = device.map_memory(mem_in, 0, atom_buf_size, vk::MemoryMapFlags::empty())?
+                as *mut AtomGpu;
             std::ptr::copy_nonoverlapping(atoms.as_ptr(), ptr, n);
             device.unmap_memory(mem_in);
         }
@@ -160,8 +167,14 @@ impl GpuCoulombCalculator {
             .set_layouts(std::slice::from_ref(&self.descriptor_set_layout));
         let desc_set = unsafe { device.allocate_descriptor_sets(&alloc_info)?[0] };
 
-        let d_buf0 = vk::DescriptorBufferInfo::default().buffer(buf_in).offset(0).range(atom_buf_size);
-        let d_buf1 = vk::DescriptorBufferInfo::default().buffer(buf_out).offset(0).range(out_buf_size);
+        let d_buf0 = vk::DescriptorBufferInfo::default()
+            .buffer(buf_in)
+            .offset(0)
+            .range(atom_buf_size);
+        let d_buf1 = vk::DescriptorBufferInfo::default()
+            .buffer(buf_out)
+            .offset(0)
+            .range(out_buf_size);
         let writes = [
             vk::WriteDescriptorSet::default()
                 .dst_set(desc_set)
@@ -190,7 +203,8 @@ impl GpuCoulombCalculator {
         unsafe {
             device.begin_command_buffer(
                 cmd,
-                &vk::CommandBufferBeginInfo::default().flags(vk::CommandBufferUsageFlags::ONE_TIME_SUBMIT),
+                &vk::CommandBufferBeginInfo::default()
+                    .flags(vk::CommandBufferUsageFlags::ONE_TIME_SUBMIT),
             )?;
             device.cmd_bind_pipeline(cmd, vk::PipelineBindPoint::COMPUTE, self.pipeline);
             device.cmd_bind_descriptor_sets(
@@ -224,7 +238,8 @@ impl GpuCoulombCalculator {
         // 5. Read back results into AlignedMatrix
         let mut result_matrix = AlignedMatrix::zeroed(n, n);
         unsafe {
-            let ptr = device.map_memory(mem_out, 0, out_buf_size, vk::MemoryMapFlags::empty())? as *const f64;
+            let ptr = device.map_memory(mem_out, 0, out_buf_size, vk::MemoryMapFlags::empty())?
+                as *const f64;
             std::ptr::copy_nonoverlapping(ptr, result_matrix.data.as_mut_ptr(), n * n);
             device.unmap_memory(mem_out);
 
@@ -240,12 +255,18 @@ impl GpuCoulombCalculator {
     }
 
     /// Evaluates the pairwise Coulomb matrix directly from a MolecularBatch.
-    pub fn compute_batch(&self, batch: &MolecularBatch, model: &dyn ParameterModel) -> Result<AlignedMatrix<f64>, VulkanError> {
+    pub fn compute_batch(
+        &self,
+        batch: &MolecularBatch,
+        model: &dyn ParameterModel,
+    ) -> Result<AlignedMatrix<f64>, VulkanError> {
         let n = batch.natoms;
         let mut atoms = Vec::with_capacity(n);
         for i in 0..n {
             let z = batch.atomic_numbers[i];
-            let param = model.get_element(z).expect("Unsupported atomic element in batch");
+            let param = model
+                .get_element(z)
+                .expect("Unsupported atomic element in batch");
             atoms.push(AtomGpu {
                 x: batch.x[i],
                 y: batch.y[i],
@@ -283,7 +304,8 @@ impl GpuCoulombCalculator {
         };
         let mapped_in = unsafe {
             device.bind_buffer_memory(buf_in, mem_in, 0)?;
-            device.map_memory(mem_in, 0, atom_buf_size, vk::MemoryMapFlags::empty())? as *mut AtomGpu
+            device.map_memory(mem_in, 0, atom_buf_size, vk::MemoryMapFlags::empty())?
+                as *mut AtomGpu
         };
 
         // 2. Out buffer
@@ -323,8 +345,14 @@ impl GpuCoulombCalculator {
             .set_layouts(std::slice::from_ref(&self.descriptor_set_layout));
         let descriptor_set = unsafe { device.allocate_descriptor_sets(&alloc_info)?[0] };
 
-        let d_buf0 = vk::DescriptorBufferInfo::default().buffer(buf_in).offset(0).range(atom_buf_size);
-        let d_buf1 = vk::DescriptorBufferInfo::default().buffer(buf_out).offset(0).range(out_buf_size);
+        let d_buf0 = vk::DescriptorBufferInfo::default()
+            .buffer(buf_in)
+            .offset(0)
+            .range(atom_buf_size);
+        let d_buf1 = vk::DescriptorBufferInfo::default()
+            .buffer(buf_out)
+            .offset(0)
+            .range(out_buf_size);
         let writes = [
             vk::WriteDescriptorSet::default()
                 .dst_set(descriptor_set)
@@ -371,7 +399,12 @@ impl GpuCoulombCalculator {
         out: &mut AlignedMatrix<f64>,
     ) -> Result<(), VulkanError> {
         let n = atoms.len();
-        assert!(n <= ws.max_atoms, "System atom count {} exceeds pre-allocated GPU workspace {}", n, ws.max_atoms);
+        assert!(
+            n <= ws.max_atoms,
+            "System atom count {} exceeds pre-allocated GPU workspace {}",
+            n,
+            ws.max_atoms
+        );
         assert_eq!(out.rows, n);
         assert_eq!(out.cols, n);
 
@@ -391,9 +424,14 @@ impl GpuCoulombCalculator {
             device.reset_fences(&[ws.fence])?;
             device.begin_command_buffer(
                 ws.command_buffer,
-                &vk::CommandBufferBeginInfo::default().flags(vk::CommandBufferUsageFlags::ONE_TIME_SUBMIT),
+                &vk::CommandBufferBeginInfo::default()
+                    .flags(vk::CommandBufferUsageFlags::ONE_TIME_SUBMIT),
             )?;
-            device.cmd_bind_pipeline(ws.command_buffer, vk::PipelineBindPoint::COMPUTE, self.pipeline);
+            device.cmd_bind_pipeline(
+                ws.command_buffer,
+                vk::PipelineBindPoint::COMPUTE,
+                self.pipeline,
+            );
             device.cmd_bind_descriptor_sets(
                 ws.command_buffer,
                 vk::PipelineBindPoint::COMPUTE,
@@ -415,7 +453,8 @@ impl GpuCoulombCalculator {
             device.cmd_dispatch(ws.command_buffer, group_x, group_y, 1);
             device.end_command_buffer(ws.command_buffer)?;
 
-            let submit_info = vk::SubmitInfo::default().command_buffers(std::slice::from_ref(&ws.command_buffer));
+            let submit_info =
+                vk::SubmitInfo::default().command_buffers(std::slice::from_ref(&ws.command_buffer));
             device.queue_submit(self.ctx.compute_queue, &[submit_info], ws.fence)?;
             device.wait_for_fences(&[ws.fence], true, u64::MAX)?;
 

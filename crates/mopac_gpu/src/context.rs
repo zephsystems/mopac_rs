@@ -98,7 +98,11 @@ impl VulkanContext {
             let props = unsafe { instance.get_physical_device_properties(pdev) };
             let qf_props = unsafe { instance.get_physical_device_queue_family_properties(pdev) };
 
-            if let Some((qf_idx, _)) = qf_props.iter().enumerate().find(|(_, q)| q.queue_flags.contains(vk::QueueFlags::COMPUTE)) {
+            if let Some((qf_idx, _)) = qf_props
+                .iter()
+                .enumerate()
+                .find(|(_, q)| q.queue_flags.contains(vk::QueueFlags::COMPUTE))
+            {
                 let is_discrete = props.device_type == vk::PhysicalDeviceType::DISCRETE_GPU;
                 if is_discrete {
                     selected_device = Some((pdev, props, is_discrete));
@@ -169,7 +173,11 @@ impl VulkanContext {
     }
 
     /// Finds a compatible memory type index matching the required filter and flags.
-    pub fn find_memory_type(&self, type_filter: u32, flags: vk::MemoryPropertyFlags) -> Result<u32, VulkanError> {
+    pub fn find_memory_type(
+        &self,
+        type_filter: u32,
+        flags: vk::MemoryPropertyFlags,
+    ) -> Result<u32, VulkanError> {
         for i in 0..self.memory_properties.memory_type_count {
             if (type_filter & (1 << i)) != 0
                 && (self.memory_properties.memory_types[i as usize].property_flags & flags) == flags

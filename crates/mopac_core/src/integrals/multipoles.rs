@@ -353,22 +353,28 @@ pub fn compute_22_multipoles(
         let dzdz = ev2 / sqr[16] + ev2 / sqr[17] - ev2 / sqr[18] - ev2 / sqr[19];
         let dzqxx = ev2 / sqr[20] - ev2 / sqr[21] - ev2 / sqr[22] + ev2 / sqr[23];
         let qxxdz = ev2 / sqr[24] - ev2 / sqr[25] - ev2 / sqr[26] + ev2 / sqr[27];
-        let dzqzz = -ev3 / sqr[28] + ev3 / sqr[29] - ev3 / sqr[30] + ev3 / sqr[31]
-            - ev2 / sqr[22] + ev2 / sqr[20];
-        let qzzdz = -ev3 / sqr[32] + ev3 / sqr[33] - ev3 / sqr[34] + ev3 / sqr[35]
-            + ev2 / sqr[24] - ev2 / sqr[26];
+        let dzqzz = -ev3 / sqr[28] + ev3 / sqr[29] - ev3 / sqr[30] + ev3 / sqr[31] - ev2 / sqr[22]
+            + ev2 / sqr[20];
+        let qzzdz = -ev3 / sqr[32] + ev3 / sqr[33] - ev3 / sqr[34] + ev3 / sqr[35] + ev2 / sqr[24]
+            - ev2 / sqr[26];
         let qxxqxx = ev3 / sqr[37] + ev3 / sqr[38] - ev2 / sqr[39] - ev2 / sqr[40] + ev2 / sqr[36];
         let qxxqyy = ev2 / sqr[41] - ev2 / sqr[39] - ev2 / sqr[40] + ev2 / sqr[36];
-        let qxxqzz = ev3 / sqr[43] + ev3 / sqr[45] - ev3 / sqr[42] - ev3 / sqr[44]
-            - ev2 / sqr[39] + ev2 / sqr[36];
-        let qzzqxx = ev3 / sqr[47] + ev3 / sqr[49] - ev3 / sqr[46] - ev3 / sqr[48]
-            - ev2 / sqr[40] + ev2 / sqr[36];
+        let qxxqzz = ev3 / sqr[43] + ev3 / sqr[45] - ev3 / sqr[42] - ev3 / sqr[44] - ev2 / sqr[39]
+            + ev2 / sqr[36];
+        let qzzqxx = ev3 / sqr[47] + ev3 / sqr[49] - ev3 / sqr[46] - ev3 / sqr[48] - ev2 / sqr[40]
+            + ev2 / sqr[36];
         let qzzqzz = ev4 / sqr[50] + ev4 / sqr[51] + ev4 / sqr[52] + ev4 / sqr[53]
-            - ev3 / sqr[48] - ev3 / sqr[46] - ev3 / sqr[42] - ev3 / sqr[44] + ev2 / sqr[36];
+            - ev3 / sqr[48]
+            - ev3 / sqr[46]
+            - ev3 / sqr[42]
+            - ev3 / sqr[44]
+            + ev2 / sqr[36];
         let dxqxz = -ev2 / sqr[54] + ev2 / sqr[55] + ev2 / sqr[56] - ev2 / sqr[57];
         let qxzdx = -ev2 / sqr[58] + ev2 / sqr[59] + ev2 / sqr[60] - ev2 / sqr[61];
-        let qxzqxz = ev3 / sqr[65] - ev3 / sqr[67] - ev3 / sqr[69] + ev3 / sqr[71]
-            - ev3 / sqr[66] + ev3 / sqr[68] + ev3 / sqr[70] - ev3 / sqr[72];
+        let qxzqxz = ev3 / sqr[65] - ev3 / sqr[67] - ev3 / sqr[69] + ev3 / sqr[71] - ev3 / sqr[66]
+            + ev3 / sqr[68]
+            + ev3 / sqr[70]
+            - ev3 / sqr[72];
 
         ri[0] = ee;
         ri[1] = -dze;
@@ -803,7 +809,9 @@ pub fn contract_jab(
     let mut sumb = [0.0f64; 10];
 
     // Offsets in w corresponding to Fortran 1-based columns: 1, 11, 31, 61, 11, 21, 41, 71, 31, 41, 51, 81, 61, 71, 81, 91
-    const W_OFFSETS_A: [usize; 16] = [0, 10, 30, 60, 10, 20, 40, 70, 30, 40, 50, 80, 60, 70, 80, 90];
+    const W_OFFSETS_A: [usize; 16] = [
+        0, 10, 30, 60, 10, 20, 40, 70, 30, 40, 50, 80, 60, 70, 80, 90,
+    ];
 
     for i in 0..10 {
         let mut sa = 0.0;
@@ -815,15 +823,33 @@ pub fn contract_jab(
 
     const W_OFFSETS_B: [[usize; 16]; 10] = [
         [0, 1, 3, 6, 1, 2, 4, 7, 3, 4, 5, 8, 6, 7, 8, 9],
-        [10, 11, 13, 16, 11, 12, 14, 17, 13, 14, 15, 18, 16, 17, 18, 19],
-        [20, 21, 23, 26, 21, 22, 24, 27, 23, 24, 25, 28, 26, 27, 28, 29],
-        [30, 31, 33, 36, 31, 32, 34, 37, 33, 34, 35, 38, 36, 37, 38, 39],
-        [40, 41, 43, 46, 41, 42, 44, 47, 43, 44, 45, 48, 46, 47, 48, 49],
-        [50, 51, 53, 56, 51, 52, 54, 57, 53, 54, 55, 58, 56, 57, 58, 59],
-        [60, 61, 63, 66, 61, 62, 64, 67, 63, 64, 65, 68, 66, 67, 68, 69],
-        [70, 71, 73, 76, 71, 72, 74, 77, 73, 74, 75, 78, 76, 77, 78, 79],
-        [80, 81, 83, 86, 81, 82, 84, 87, 83, 84, 85, 88, 86, 87, 88, 89],
-        [90, 91, 93, 96, 91, 92, 94, 97, 93, 94, 95, 98, 96, 97, 98, 99],
+        [
+            10, 11, 13, 16, 11, 12, 14, 17, 13, 14, 15, 18, 16, 17, 18, 19,
+        ],
+        [
+            20, 21, 23, 26, 21, 22, 24, 27, 23, 24, 25, 28, 26, 27, 28, 29,
+        ],
+        [
+            30, 31, 33, 36, 31, 32, 34, 37, 33, 34, 35, 38, 36, 37, 38, 39,
+        ],
+        [
+            40, 41, 43, 46, 41, 42, 44, 47, 43, 44, 45, 48, 46, 47, 48, 49,
+        ],
+        [
+            50, 51, 53, 56, 51, 52, 54, 57, 53, 54, 55, 58, 56, 57, 58, 59,
+        ],
+        [
+            60, 61, 63, 66, 61, 62, 64, 67, 63, 64, 65, 68, 66, 67, 68, 69,
+        ],
+        [
+            70, 71, 73, 76, 71, 72, 74, 77, 73, 74, 75, 78, 76, 77, 78, 79,
+        ],
+        [
+            80, 81, 83, 86, 81, 82, 84, 87, 83, 84, 85, 88, 86, 87, 88, 89,
+        ],
+        [
+            90, 91, 93, 96, 91, 92, 94, 97, 93, 94, 95, 98, 96, 97, 98, 99,
+        ],
     ];
 
     for i in 0..10 {
@@ -843,28 +869,48 @@ pub fn contract_jab(
 /// Contract two-center two-electron exchange block $W$ with diatomic density block $P_{AB}$ (`KAB`).
 ///
 /// Direct port of OpenMOPAC `kab.F90`. Subtracts exchange from off-diagonal block $F_{AB}$.
-pub fn contract_kab(
-    pk: &[f64; 16],
-    w: &[f64; 100],
-    f_ab: &mut [f64; 16],
-) {
+pub fn contract_kab(pk: &[f64; 16], w: &[f64; 100], f_ab: &mut [f64; 16]) {
     const K_COLS: [[usize; 16]; 16] = [
         [0, 1, 3, 6, 10, 11, 13, 16, 30, 31, 33, 36, 60, 61, 63, 66],
         [1, 2, 4, 7, 11, 12, 14, 17, 31, 32, 34, 37, 61, 62, 64, 67],
         [3, 4, 5, 8, 13, 14, 15, 18, 33, 34, 35, 38, 63, 64, 65, 68],
         [6, 7, 8, 9, 16, 17, 18, 19, 36, 37, 38, 39, 66, 67, 68, 69],
-        [10, 11, 13, 16, 20, 21, 23, 26, 40, 41, 43, 46, 70, 71, 73, 76],
-        [11, 12, 14, 17, 21, 22, 24, 27, 41, 42, 44, 47, 71, 72, 74, 77],
-        [13, 14, 15, 18, 23, 24, 25, 28, 43, 44, 45, 48, 73, 74, 75, 78],
-        [16, 17, 18, 19, 26, 27, 28, 29, 46, 47, 48, 49, 76, 77, 78, 79],
-        [30, 31, 33, 36, 40, 41, 43, 46, 50, 51, 53, 56, 80, 81, 83, 86],
-        [31, 32, 34, 37, 41, 42, 44, 47, 51, 52, 54, 57, 81, 82, 84, 87],
-        [33, 34, 35, 38, 43, 44, 45, 48, 53, 54, 55, 58, 83, 84, 85, 88],
-        [36, 37, 38, 39, 46, 47, 48, 49, 56, 57, 58, 59, 86, 87, 88, 89],
-        [60, 61, 63, 66, 70, 71, 73, 76, 80, 81, 83, 86, 90, 91, 93, 96],
-        [61, 62, 64, 67, 71, 72, 74, 77, 81, 82, 84, 87, 91, 92, 94, 97],
-        [63, 64, 65, 68, 73, 74, 75, 78, 83, 84, 85, 88, 93, 94, 95, 98],
-        [66, 67, 68, 69, 76, 77, 78, 79, 86, 87, 88, 89, 96, 97, 98, 99],
+        [
+            10, 11, 13, 16, 20, 21, 23, 26, 40, 41, 43, 46, 70, 71, 73, 76,
+        ],
+        [
+            11, 12, 14, 17, 21, 22, 24, 27, 41, 42, 44, 47, 71, 72, 74, 77,
+        ],
+        [
+            13, 14, 15, 18, 23, 24, 25, 28, 43, 44, 45, 48, 73, 74, 75, 78,
+        ],
+        [
+            16, 17, 18, 19, 26, 27, 28, 29, 46, 47, 48, 49, 76, 77, 78, 79,
+        ],
+        [
+            30, 31, 33, 36, 40, 41, 43, 46, 50, 51, 53, 56, 80, 81, 83, 86,
+        ],
+        [
+            31, 32, 34, 37, 41, 42, 44, 47, 51, 52, 54, 57, 81, 82, 84, 87,
+        ],
+        [
+            33, 34, 35, 38, 43, 44, 45, 48, 53, 54, 55, 58, 83, 84, 85, 88,
+        ],
+        [
+            36, 37, 38, 39, 46, 47, 48, 49, 56, 57, 58, 59, 86, 87, 88, 89,
+        ],
+        [
+            60, 61, 63, 66, 70, 71, 73, 76, 80, 81, 83, 86, 90, 91, 93, 96,
+        ],
+        [
+            61, 62, 64, 67, 71, 72, 74, 77, 81, 82, 84, 87, 91, 92, 94, 97,
+        ],
+        [
+            63, 64, 65, 68, 73, 74, 75, 78, 83, 84, 85, 88, 93, 94, 95, 98,
+        ],
+        [
+            66, 67, 68, 69, 76, 77, 78, 79, 86, 87, 88, 89, 96, 97, 98, 99,
+        ],
     ];
 
     for m in 0..16 {
@@ -1058,7 +1104,11 @@ pub fn assemble_nddo_two_center_fock(
             for r in 0..4 {
                 let mut s = 0.0;
                 for c in 0..4 {
-                    let idx = if r >= c { (r * (r + 1)) / 2 + c } else { (c * (c + 1)) / 2 + r };
+                    let idx = if r >= c {
+                        (r * (r + 1)) / 2 + c
+                    } else {
+                        (c * (c + 1)) / 2 + r
+                    };
                     s += density.get(ia + c, ja) * w[idx];
                 }
                 let cur = fock.get(ia + r, ja);
@@ -1095,7 +1145,11 @@ pub fn assemble_nddo_two_center_fock(
             for r in 0..4 {
                 let mut s = 0.0;
                 for c in 0..4 {
-                    let idx = if r >= c { (r * (r + 1)) / 2 + c } else { (c * (c + 1)) / 2 + r };
+                    let idx = if r >= c {
+                        (r * (r + 1)) / 2 + c
+                    } else {
+                        (c * (c + 1)) / 2 + r
+                    };
                     s += density.get(ia, ja + c) * w[idx];
                 }
                 let cur = fock.get(ia, ja + r);
@@ -1187,8 +1241,14 @@ mod tests {
         assert!((h_derived.am - h_param.gss / EV_HARTREE).abs() < 1e-12);
 
         let c_derived = DerivedMultipoleParams::from_element(&c_param);
-        assert!(c_derived.dd > 0.0, "Carbon dipole separation must be positive");
-        assert!(c_derived.qq > 0.0, "Carbon quadrupole separation must be positive");
+        assert!(
+            c_derived.dd > 0.0,
+            "Carbon dipole separation must be positive"
+        );
+        assert!(
+            c_derived.qq > 0.0,
+            "Carbon quadrupole separation must be positive"
+        );
         assert!(c_derived.ad > 0.0, "Carbon Ad parameter must be positive");
         assert!(c_derived.aq > 0.0, "Carbon Aq parameter must be positive");
     }
@@ -1223,7 +1283,12 @@ mod tests {
 
     #[test]
     fn test_rotation_matrix_orthonormality() {
-        let rot = DiatomicRotation3D::new(0.5, 0.7, 0.9, (0.5f64.powi(2) + 0.7f64.powi(2) + 0.9f64.powi(2)).sqrt());
+        let rot = DiatomicRotation3D::new(
+            0.5,
+            0.7,
+            0.9,
+            (0.5f64.powi(2) + 0.7f64.powi(2) + 0.9f64.powi(2)).sqrt(),
+        );
         for i in 0..3 {
             for j in 0..3 {
                 let mut dot = 0.0;
@@ -1231,7 +1296,12 @@ mod tests {
                     dot += rot.p[i][k] * rot.p[j][k];
                 }
                 let expected = if i == j { 1.0 } else { 0.0 };
-                assert!((dot - expected).abs() < 1e-12, "Row dot product failed for {} {}", i, j);
+                assert!(
+                    (dot - expected).abs() < 1e-12,
+                    "Row dot product failed for {} {}",
+                    i,
+                    j
+                );
             }
         }
     }
@@ -1255,7 +1325,9 @@ mod tests {
             for j in 0..batch.norbs {
                 assert!(
                     (h_core.get(i, j) - h_core.get(j, i)).abs() < 1e-14,
-                    "H_core symmetry violated at ({}, {})", i, j
+                    "H_core symmetry violated at ({}, {})",
+                    i,
+                    j
                 );
             }
         }
@@ -1273,7 +1345,9 @@ mod tests {
             for j in 0..batch.norbs {
                 assert!(
                     (fock.get(i, j) - fock.get(j, i)).abs() < 1e-14,
-                    "Fock symmetry violated at ({}, {})", i, j
+                    "Fock symmetry violated at ({}, {})",
+                    i,
+                    j
                 );
             }
         }

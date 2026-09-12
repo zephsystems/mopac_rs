@@ -15,4 +15,3 @@ pub use h_bonds4::{
     compute_h4_energy, compute_hh_repulsion_energy_and_gradients, cvalence_contribution,
     hh_repulsion_potential, H4Parameters, COVALENT_RADII,
 };
-

@@ -60,7 +60,6 @@ impl Default for ScfOptions {
     }
 }
 
-
 /// Apply virtual orbital level shift to the Fock matrix:
 /// $$\tilde{F} = F + \sigma \left( I - \frac{1}{2} P \right)$$
 ///
@@ -112,7 +111,10 @@ pub fn run_rhf_scf_with_options(
     }
 
     let nocc = (total_valence_elecs.round() as usize) / 2;
-    assert!(nocc > 0, "System must have at least one electron pair for closed-shell RHF");
+    assert!(
+        nocc > 0,
+        "System must have at least one electron pair for closed-shell RHF"
+    );
 
     // 2. Nuclear-nuclear core repulsion energy
     let mut enuc = compute_total_core_repulsion(batch, model);
@@ -131,7 +133,12 @@ pub fn run_rhf_scf_with_options(
     // 3. Build one-electron core Hamiltonian H_core
     if options.use_nddo {
         ws.diatomic_pairs = crate::integrals::multipoles::precompute_diatomic_pairs(batch, model);
-        crate::hamiltonian::hcore::build_hcore_nddo(batch, model, &ws.diatomic_pairs, &mut ws.h_core);
+        crate::hamiltonian::hcore::build_hcore_nddo(
+            batch,
+            model,
+            &ws.diatomic_pairs,
+            &mut ws.h_core,
+        );
     } else {
         build_hcore(batch, model, &mut ws.h_core);
     }
@@ -178,9 +185,10 @@ pub fn run_rhf_scf_with_options(
         let e_elec = compute_electronic_energy(&ws.density, &ws.h_core, &ws.fock);
         let e_total = e_elec + enuc;
 
-
         // Apply Pulay DIIS acceleration (modifies ws.fock in-place if m >= 2)
-        let diis_res = ws.diis.push_and_extrapolate(&mut ws.fock, &ws.density, &mut ws.tmp2);
+        let diis_res = ws
+            .diis
+            .push_and_extrapolate(&mut ws.fock, &ws.density, &mut ws.tmp2);
 
         // Apply Saunders-Hillier level shifting if enabled (MOPAC iter.F90 lines 450-456)
         if options.level_shift_ev > 0.0 && iter > 2 {
@@ -197,7 +205,10 @@ pub fn run_rhf_scf_with_options(
         let delta_e = (e_total - prev_energy).abs();
         let delta_p = max_density_diff(&ws.tmp1, &ws.density);
 
-        if iter > 1 && delta_e < options.energy_tol_ev && (delta_p < options.density_tol || diis_res.max_error < options.density_tol) {
+        if iter > 1
+            && delta_e < options.energy_tol_ev
+            && (delta_p < options.density_tol || diis_res.max_error < options.density_tol)
+        {
             converged = true;
             ws.density.data.copy_from_slice(&ws.tmp1.data);
             break;
@@ -337,10 +348,42 @@ pub fn run_rhf_scf_adaptive_with_nddo_and_cosmo(
     cosmo: Option<crate::solvation::CosmoParams>,
 ) -> ScfResult {
     let stages = [
-        ScfOptions { max_iter: max_iter_per_stage, energy_tol_ev, density_tol, level_shift_ev: 0.0, damping: 0.5, use_nddo, cosmo },
-        ScfOptions { max_iter: max_iter_per_stage * 2, energy_tol_ev, density_tol, level_shift_ev: 8.0, damping: 0.5, use_nddo, cosmo },
-        ScfOptions { max_iter: max_iter_per_stage * 2, energy_tol_ev, density_tol, level_shift_ev: 4.44, damping: 0.7, use_nddo, cosmo },
-        ScfOptions { max_iter: max_iter_per_stage * 2, energy_tol_ev, density_tol, level_shift_ev: 8.0, damping: 0.7, use_nddo, cosmo },
+        ScfOptions {
+            max_iter: max_iter_per_stage,
+            energy_tol_ev,
+            density_tol,
+            level_shift_ev: 0.0,
+            damping: 0.5,
+            use_nddo,
+            cosmo,
+        },
+        ScfOptions {
+            max_iter: max_iter_per_stage * 2,
+            energy_tol_ev,
+            density_tol,
+            level_shift_ev: 8.0,
+            damping: 0.5,
+            use_nddo,
+            cosmo,
+        },
+        ScfOptions {
+            max_iter: max_iter_per_stage * 2,
+            energy_tol_ev,
+            density_tol,
+            level_shift_ev: 4.44,
+            damping: 0.7,
+            use_nddo,
+            cosmo,
+        },
+        ScfOptions {
+            max_iter: max_iter_per_stage * 2,
+            energy_tol_ev,
+            density_tol,
+            level_shift_ev: 8.0,
+            damping: 0.7,
+            use_nddo,
+            cosmo,
+        },
     ];
 
     let mut last_res = ScfResult {
@@ -367,4 +410,3 @@ pub fn run_rhf_scf_adaptive_with_nddo_and_cosmo(
 
     last_res
 }
-

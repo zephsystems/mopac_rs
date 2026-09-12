@@ -56,12 +56,7 @@ impl CosmoParams {
 ///
 /// Uses preallocated scratch slice `tmp` (length >= n) to avoid heap allocation.
 #[allow(clippy::needless_range_loop)]
-pub fn solve_cholesky_system(
-    l: &AlignedMatrix<f64>,
-    y: &[f64],
-    x: &mut [f64],
-    tmp: &mut [f64],
-) {
+pub fn solve_cholesky_system(l: &AlignedMatrix<f64>, y: &[f64], x: &mut [f64], tmp: &mut [f64]) {
     let n = l.rows;
     assert_eq!(l.cols, n);
     assert_eq!(y.len(), n);
@@ -182,7 +177,8 @@ impl CosmoState {
 
                 // Dipole and quadrupole coupling for sp hybridization terms
                 if num_ao >= 4 {
-                    let mp = crate::integrals::multipoles::DerivedMultipoleParams::from_element(&elem);
+                    let mp =
+                        crate::integrals::multipoles::DerivedMultipoleParams::from_element(&elem);
                     let d1 = mp.dd * crate::constants::codata2018::BOHR_RADIUS_ANGSTROMS;
                     let q2 = (mp.qq * crate::constants::codata2018::BOHR_RADIUS_ANGSTROMS).powi(2);
                     let inv_r5 = inv_r3 * inv_r * inv_r;
@@ -391,15 +387,18 @@ mod tests {
         let batch = MolecularBatch::new(z, &coords);
         let am1 = Am1Model;
 
-
         let params = CosmoParams {
             epsilon: 78.4,
             rsolv: 1.30005,
         };
 
-        let state = CosmoState::initialize(&batch, &am1, params).expect("COSMO initialization failed");
+        let state =
+            CosmoState::initialize(&batch, &am1, params).expect("COSMO initialization failed");
         assert!(state.cavity.num_segments() > 0);
-        assert!(state.e_nuc_diel_ev < 0.0, "Nuclear screening energy must be negative/stabilizing");
+        assert!(
+            state.e_nuc_diel_ev < 0.0,
+            "Nuclear screening energy must be negative/stabilizing"
+        );
         println!(
             "⚡ Water COSMO Segments: {}, Area: {:.2} A^2, Vol: {:.2} A^3, E_nuc_diel: {:.4} eV",
             state.cavity.num_segments(),

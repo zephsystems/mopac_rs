@@ -13,7 +13,6 @@
 use crate::types::MolecularBatch;
 use std::f64::consts::PI;
 
-
 /// Authentic covalent radii table for elements Z=1..118 from OpenMOPAC `radii_C` in `H_bonds4.F90`.
 pub const COVALENT_RADII: [f64; 118] = [
     0.37, 0.32, 1.34, 0.90, 0.82, 0.77, 0.75, 0.73, 0.71, 0.69, // 1-10
@@ -27,7 +26,7 @@ pub const COVALENT_RADII: [f64; 118] = [
     0.00, 0.00, 1.46, 0.00, 0.00, 1.45, 0.00, 0.00, 0.00, 0.00, // 81-90
     0.00, 0.00, 0.00, 0.00, 0.00, 0.00, 0.00, 0.00, 0.00, 0.00, // 91-100
     0.00, 0.00, 0.00, 0.00, 0.00, 0.00, 0.00, 0.00, 0.00, 0.00, // 101-110
-    0.00, 0.00, 0.00, 0.00, 0.00, 0.00, 0.00, 0.00,             // 111-118
+    0.00, 0.00, 0.00, 0.00, 0.00, 0.00, 0.00, 0.00, // 111-118
 ];
 
 /// Get covalent radius for element Z in Angstroms.
@@ -95,8 +94,7 @@ pub fn h4_radial(rda: f64) -> f64 {
     if rda > 5.5 {
         return 0.0;
     }
-    -0.00303407407407313510 * rda.powi(7)
-        + 0.07357629629627092382 * rda.powi(6)
+    -0.00303407407407313510 * rda.powi(7) + 0.07357629629627092382 * rda.powi(6)
         - 0.70087111111082800452 * rda.powi(5)
         + 3.25309629629461749545 * rda.powi(4)
         - 7.20687407406838786983 * rda.powi(3)
@@ -348,15 +346,13 @@ pub fn hh_repulsion_potential(r: f64) -> (f64, f64) {
         let r4 = r2 * r2;
         let r5 = r4 * r;
 
-        let energy = -2714.952351603469651 * r5
-            + 17103.650110591705015 * r4
+        let energy = -2714.952351603469651 * r5 + 17103.650110591705015 * r4
             - 42511.857982217959943 * r3
             + 52063.196799138342612 * r2
             - 31430.658335972289933 * r
             + 7516.084696095140316;
 
-        let d_energy = -2714.952351603469651 * 5.0 * r4
-            + 17103.650110591705015 * 4.0 * r3
+        let d_energy = -2714.952351603469651 * 5.0 * r4 + 17103.650110591705015 * 4.0 * r3
             - 42511.857982217959943 * 3.0 * r2
             + 52063.196799138342612 * 2.0 * r
             - 31430.658335972289933;
@@ -374,9 +370,7 @@ pub fn hh_repulsion_potential(r: f64) -> (f64, f64) {
 /// Compute total Hydrogen-Hydrogen short-range repulsion energy and analytical Cartesian gradients.
 ///
 /// Gradients are returned in kcal/(mol * Angstrom).
-pub fn compute_hh_repulsion_energy_and_gradients(
-    batch: &MolecularBatch,
-) -> (f64, Vec<[f64; 3]>) {
+pub fn compute_hh_repulsion_energy_and_gradients(batch: &MolecularBatch) -> (f64, Vec<[f64; 3]>) {
     let natoms = batch.natoms;
     let z = &batch.atomic_numbers;
 
@@ -494,7 +488,6 @@ mod tests {
                 );
             }
         }
-
     }
 
     #[test]

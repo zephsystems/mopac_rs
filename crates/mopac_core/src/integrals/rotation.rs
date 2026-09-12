@@ -35,11 +35,7 @@ impl DiatomicRotationFrame {
                 l: 0.0,
                 m: 0.0,
                 n: 1.0,
-                d1: [
-                    [1.0, 0.0, 0.0],
-                    [0.0, 1.0, 0.0],
-                    [0.0, 0.0, 1.0],
-                ],
+                d1: [[1.0, 0.0, 0.0], [0.0, 1.0, 0.0], [0.0, 0.0, 1.0]],
             };
         }
 
@@ -66,11 +62,7 @@ impl DiatomicRotationFrame {
         } else {
             // Collinear with global z-axis
             let sign = if dz >= 0.0 { 1.0 } else { -1.0 };
-            (
-                [1.0, 0.0, 0.0],
-                [0.0, sign, 0.0],
-                [0.0, 0.0, sign],
-            )
+            ([1.0, 0.0, 0.0], [0.0, sign, 0.0], [0.0, 0.0, sign])
         };
 
         Self {

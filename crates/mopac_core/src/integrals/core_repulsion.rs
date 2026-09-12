@@ -3,8 +3,8 @@
 //! Licensed under the Apache License, Version 2.0 (the "License").
 //! Calculates pairwise nuclear repulsion $E_{AB}^{\text{core-core}}$ with Klopman screening and Gaussian expansions.
 
-use crate::parameters::SemiEmpiricalElementParams;
 use super::two_electron::dewar_klopman_monopole;
+use crate::parameters::SemiEmpiricalElementParams;
 
 /// Compute pairwise core-core nuclear repulsion energy between atom A and atom B in eV.
 ///

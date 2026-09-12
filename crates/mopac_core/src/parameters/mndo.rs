@@ -37,7 +37,11 @@ impl ParameterModel for MndoModel {
                 gpp: 0.0,
                 gp2: 0.0,
                 hsp: 0.0,
-                gaussians: [GaussianCoreCorrection { a: 0.0, b: 0.0, c: 0.0 }; 4],
+                gaussians: [GaussianCoreCorrection {
+                    a: 0.0,
+                    b: 0.0,
+                    c: 0.0,
+                }; 4],
                 num_gaussians: 0,
             }),
 
@@ -60,7 +64,11 @@ impl ParameterModel for MndoModel {
                 gpp: 11.080000,
                 gp2: 9.840000,
                 hsp: 2.430000,
-                gaussians: [GaussianCoreCorrection { a: 0.0, b: 0.0, c: 0.0 }; 4],
+                gaussians: [GaussianCoreCorrection {
+                    a: 0.0,
+                    b: 0.0,
+                    c: 0.0,
+                }; 4],
                 num_gaussians: 0,
             }),
 
@@ -83,7 +91,11 @@ impl ParameterModel for MndoModel {
                 gpp: 12.980000,
                 gp2: 11.590000,
                 hsp: 3.140000,
-                gaussians: [GaussianCoreCorrection { a: 0.0, b: 0.0, c: 0.0 }; 4],
+                gaussians: [GaussianCoreCorrection {
+                    a: 0.0,
+                    b: 0.0,
+                    c: 0.0,
+                }; 4],
                 num_gaussians: 0,
             }),
 
@@ -106,7 +118,11 @@ impl ParameterModel for MndoModel {
                 gpp: 14.520000,
                 gp2: 12.980000,
                 hsp: 3.940000,
-                gaussians: [GaussianCoreCorrection { a: 0.0, b: 0.0, c: 0.0 }; 4],
+                gaussians: [GaussianCoreCorrection {
+                    a: 0.0,
+                    b: 0.0,
+                    c: 0.0,
+                }; 4],
                 num_gaussians: 0,
             }),
 
@@ -129,7 +145,11 @@ impl ParameterModel for MndoModel {
                 gpp: 16.710000,
                 gp2: 14.910000,
                 hsp: 4.830000,
-                gaussians: [GaussianCoreCorrection { a: 0.0, b: 0.0, c: 0.0 }; 4],
+                gaussians: [GaussianCoreCorrection {
+                    a: 0.0,
+                    b: 0.0,
+                    c: 0.0,
+                }; 4],
                 num_gaussians: 0,
             }),
 
@@ -152,7 +172,11 @@ impl ParameterModel for MndoModel {
                 gpp: 8.640000,
                 gp2: 7.680000,
                 hsp: 1.920000,
-                gaussians: [GaussianCoreCorrection { a: 0.0, b: 0.0, c: 0.0 }; 4],
+                gaussians: [GaussianCoreCorrection {
+                    a: 0.0,
+                    b: 0.0,
+                    c: 0.0,
+                }; 4],
                 num_gaussians: 0,
             }),
 
@@ -175,7 +199,11 @@ impl ParameterModel for MndoModel {
                 gpp: 9.900000,
                 gp2: 8.830000,
                 hsp: 2.260000,
-                gaussians: [GaussianCoreCorrection { a: 0.0, b: 0.0, c: 0.0 }; 4],
+                gaussians: [GaussianCoreCorrection {
+                    a: 0.0,
+                    b: 0.0,
+                    c: 0.0,
+                }; 4],
                 num_gaussians: 0,
             }),
 
@@ -198,7 +226,11 @@ impl ParameterModel for MndoModel {
                 gpp: 11.300000,
                 gp2: 9.970000,
                 hsp: 2.420000,
-                gaussians: [GaussianCoreCorrection { a: 0.0, b: 0.0, c: 0.0 }; 4],
+                gaussians: [GaussianCoreCorrection {
+                    a: 0.0,
+                    b: 0.0,
+                    c: 0.0,
+                }; 4],
                 num_gaussians: 0,
             }),
 
@@ -221,7 +253,11 @@ impl ParameterModel for MndoModel {
                 gpp: 11.276325,
                 gp2: 9.854425,
                 hsp: 2.455868,
-                gaussians: [GaussianCoreCorrection { a: 0.0, b: 0.0, c: 0.0 }; 4],
+                gaussians: [GaussianCoreCorrection {
+                    a: 0.0,
+                    b: 0.0,
+                    c: 0.0,
+                }; 4],
                 num_gaussians: 0,
             }),
 
@@ -244,7 +280,11 @@ impl ParameterModel for MndoModel {
                 gpp: 11.147784,
                 gp2: 9.914091,
                 hsp: 2.456382,
-                gaussians: [GaussianCoreCorrection { a: 0.0, b: 0.0, c: 0.0 }; 4],
+                gaussians: [GaussianCoreCorrection {
+                    a: 0.0,
+                    b: 0.0,
+                    c: 0.0,
+                }; 4],
                 num_gaussians: 0,
             }),
 

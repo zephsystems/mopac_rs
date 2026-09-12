@@ -55,13 +55,7 @@ impl CampKingWorkspace {
 /// Ported directly from MOPAC Fortran `spline.F90` lines 349-493.
 /// Fits a cubic polynomial to energy and gradient values at sample points,
 /// evaluating analytical extrema to locate the line-search step $x_{\text{min}}$.
-pub fn spline_minimize(
-    x: &[f64],
-    f: &[f64],
-    df: &[f64],
-    x_low: f64,
-    x_high: f64,
-) -> (f64, f64) {
+pub fn spline_minimize(x: &[f64], f: &[f64], df: &[f64], x_low: f64, x_high: f64) -> (f64, f64) {
     let n = x.len();
     assert!(n >= 2, "Spline minimization requires at least 2 points");
 

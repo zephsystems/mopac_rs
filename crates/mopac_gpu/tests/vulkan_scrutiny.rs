@@ -4,11 +4,11 @@
 //! Verifies hardware dispatch, double-precision float64 accuracy,
 //! and bit-level mathematical parity between CPU and GPU.
 
-use mopac_gpu::{GpuCoulombCalculator, VulkanContext};
 use mopac_core::integrals::two_electron::dewar_klopman_monopole;
 use mopac_core::parameters::am1::Am1Model;
 use mopac_core::parameters::ParameterModel;
 use mopac_core::types::MolecularBatch;
+use mopac_gpu::{GpuCoulombCalculator, VulkanContext};
 use std::sync::Arc;
 
 /// Scrutiny Test: Vulkan GPU Device Initialization & IEEE-754 Float64 Parity.
@@ -20,45 +20,51 @@ fn test_scrutiny_vulkan_gpu_coulomb_matrix_parity() {
     let ctx = match VulkanContext::new() {
         Ok(c) => Arc::new(c),
         Err(e) => {
-            eprintln!("Skipping Vulkan test (no Vulkan GPU runtime available): {}", e);
+            eprintln!(
+                "Skipping Vulkan test (no Vulkan GPU runtime available): {}",
+                e
+            );
             return;
         }
     };
 
-    println!("Detected Vulkan GPU: {} (Discrete: {}, Float64: {})",
-        ctx.device_info.device_name,
-        ctx.device_info.is_discrete,
-        ctx.device_info.supports_float64
+    println!(
+        "Detected Vulkan GPU: {} (Discrete: {}, Float64: {})",
+        ctx.device_info.device_name, ctx.device_info.is_discrete, ctx.device_info.supports_float64
     );
 
-    assert!(ctx.device_info.supports_float64, "GPU must support native Float64 precision");
+    assert!(
+        ctx.device_info.supports_float64,
+        "GPU must support native Float64 precision"
+    );
 
-    let calc = GpuCoulombCalculator::new(Arc::clone(&ctx))
-        .expect("Failed to create GpuCoulombCalculator");
+    let calc =
+        GpuCoulombCalculator::new(Arc::clone(&ctx)).expect("Failed to create GpuCoulombCalculator");
 
     let am1 = Am1Model;
 
     // Test system: Benzene ring (C6H6, 12 atoms -> 144 matrix interactions)
     let benzene_coords = [
-        [ 0.000,  1.397, 0.0],
-        [ 1.210,  0.698, 0.0],
-        [ 1.210, -0.698, 0.0],
-        [ 0.000, -1.397, 0.0],
+        [0.000, 1.397, 0.0],
+        [1.210, 0.698, 0.0],
+        [1.210, -0.698, 0.0],
+        [0.000, -1.397, 0.0],
         [-1.210, -0.698, 0.0],
-        [-1.210,  0.698, 0.0],
-        [ 0.000,  2.479, 0.0],
-        [ 2.147,  1.240, 0.0],
-        [ 2.147, -1.240, 0.0],
-        [ 0.000, -2.479, 0.0],
+        [-1.210, 0.698, 0.0],
+        [0.000, 2.479, 0.0],
+        [2.147, 1.240, 0.0],
+        [2.147, -1.240, 0.0],
+        [0.000, -2.479, 0.0],
         [-2.147, -1.240, 0.0],
-        [-2.147,  1.240, 0.0],
+        [-2.147, 1.240, 0.0],
     ];
 
     let atomic_numbers = vec![6, 6, 6, 6, 6, 6, 1, 1, 1, 1, 1, 1];
     let batch = MolecularBatch::new(atomic_numbers, &benzene_coords);
 
     // 1. Dispatch on GPU
-    let gpu_matrix = calc.compute_batch(&batch, &am1)
+    let gpu_matrix = calc
+        .compute_batch(&batch, &am1)
         .expect("GPU computation failed");
 
     // 2. Compute reference on CPU using exact dewar_klopman_monopole
@@ -95,25 +101,29 @@ fn test_scrutiny_vulkan_gpu_coulomb_matrix_parity() {
         }
     }
 
-    println!("✅ Benzene GPU vs CPU 144 interaction pairs bit-exact parity: max diff = {:e} eV", max_diff);
+    println!(
+        "✅ Benzene GPU vs CPU 144 interaction pairs bit-exact parity: max diff = {:e} eV",
+        max_diff
+    );
 }
 
 /// Scrutiny Test: Pre-allocated GpuWorkspace Zero-Allocation Execution Loop & Consistency.
 #[test]
 fn test_scrutiny_vulkan_gpu_zero_allocation_workspace_parity() {
-    use mopac_gpu::AtomGpu;
     use mopac_core::types::AlignedMatrix;
+    use mopac_gpu::AtomGpu;
 
     let ctx = match VulkanContext::new() {
         Ok(c) => Arc::new(c),
         Err(_) => return, // Skip gracefully if Vulkan runtime not present
     };
 
-    let calc = GpuCoulombCalculator::new(Arc::clone(&ctx))
-        .expect("Failed to create GpuCoulombCalculator");
+    let calc =
+        GpuCoulombCalculator::new(Arc::clone(&ctx)).expect("Failed to create GpuCoulombCalculator");
 
     let max_atoms = 64;
-    let mut ws = calc.allocate_workspace(max_atoms)
+    let mut ws = calc
+        .allocate_workspace(max_atoms)
         .expect("Failed to allocate GpuWorkspace");
 
     let mut atoms = Vec::with_capacity(32);
@@ -141,11 +151,15 @@ fn test_scrutiny_vulkan_gpu_zero_allocation_workspace_parity() {
         assert!(
             (diag - expected).abs() < 1e-12,
             "Diagonal one-center self-energy mismatch at atom {}: {} vs expected {}",
-            i, diag, expected
+            i,
+            diag,
+            expected
         );
     }
 
-    println!("✅ Pre-allocated GpuWorkspace executed 5 iterative dispatches with zero heap allocation!");
+    println!(
+        "✅ Pre-allocated GpuWorkspace executed 5 iterative dispatches with zero heap allocation!"
+    );
 }
 
 /// Scrutiny Test: High-Throughput FP32 GPU Coulomb Kernel & Empirical Precision Verification.
@@ -159,7 +173,10 @@ fn test_scrutiny_vulkan_gpu_coulomb_matrix_fp32_parity() {
     let ctx = match VulkanContext::new() {
         Ok(c) => Arc::new(c),
         Err(e) => {
-            eprintln!("Skipping Vulkan FP32 test (no Vulkan GPU runtime available): {}", e);
+            eprintln!(
+                "Skipping Vulkan FP32 test (no Vulkan GPU runtime available): {}",
+                e
+            );
             return;
         }
     };
@@ -169,24 +186,25 @@ fn test_scrutiny_vulkan_gpu_coulomb_matrix_fp32_parity() {
 
     let am1 = Am1Model;
     let benzene_coords = [
-        [ 0.000,  1.397, 0.0],
-        [ 1.210,  0.698, 0.0],
-        [ 1.210, -0.698, 0.0],
-        [ 0.000, -1.397, 0.0],
+        [0.000, 1.397, 0.0],
+        [1.210, 0.698, 0.0],
+        [1.210, -0.698, 0.0],
+        [0.000, -1.397, 0.0],
         [-1.210, -0.698, 0.0],
-        [-1.210,  0.698, 0.0],
-        [ 0.000,  2.479, 0.0],
-        [ 2.147,  1.240, 0.0],
-        [ 2.147, -1.240, 0.0],
-        [ 0.000, -2.479, 0.0],
+        [-1.210, 0.698, 0.0],
+        [0.000, 2.479, 0.0],
+        [2.147, 1.240, 0.0],
+        [2.147, -1.240, 0.0],
+        [0.000, -2.479, 0.0],
         [-2.147, -1.240, 0.0],
-        [-2.147,  1.240, 0.0],
+        [-2.147, 1.240, 0.0],
     ];
 
     let atomic_numbers = vec![6, 6, 6, 6, 6, 6, 1, 1, 1, 1, 1, 1];
     let batch = MolecularBatch::new(atomic_numbers, &benzene_coords);
 
-    let gpu_matrix = calc.compute_batch(&batch, &am1)
+    let gpu_matrix = calc
+        .compute_batch(&batch, &am1)
         .expect("FP32 GPU computation failed");
 
     let n = batch.natoms;
@@ -239,15 +257,34 @@ fn test_scrutiny_vulkan_gpu_gddr6_batch_manager() {
         .expect("Failed to allocate GDDR6 VRAM manager");
 
     let atoms = vec![
-        AtomGpuFP32 { x: 0.0, y: 0.0, z: 0.0, gss: 12.8 },
-        AtomGpuFP32 { x: 1.4, y: 0.0, z: 0.0, gss: 12.8 },
-        AtomGpuFP32 { x: 2.1, y: 1.2, z: 0.0, gss: 14.1 },
+        AtomGpuFP32 {
+            x: 0.0,
+            y: 0.0,
+            z: 0.0,
+            gss: 12.8,
+        },
+        AtomGpuFP32 {
+            x: 1.4,
+            y: 0.0,
+            z: 0.0,
+            gss: 12.8,
+        },
+        AtomGpuFP32 {
+            x: 2.1,
+            y: 1.2,
+            z: 0.0,
+            gss: 14.1,
+        },
     ];
 
-    vram_mgr.upload_batch_to_gddr6(&atoms, 0)
+    vram_mgr
+        .upload_batch_to_gddr6(&atoms, 0)
         .expect("Failed to upload batch to GDDR6 VRAM");
 
-    println!("✅ Uploaded {} atoms to GDDR6 Device-Local VRAM via DMA copy!", atoms.len());
+    println!(
+        "✅ Uploaded {} atoms to GDDR6 Device-Local VRAM via DMA copy!",
+        atoms.len()
+    );
 }
 
 /// Scrutiny Test 5: GDDR6 Dedicated Device-Local VRAM Batch Pipelining & Parity.
@@ -257,7 +294,9 @@ fn test_scrutiny_vulkan_gpu_gddr6_batch_manager() {
 /// between molecules, and verifies mathematical parity against analytical CPU references (< 1e-4 eV).
 #[test]
 fn test_scrutiny_vulkan_gpu_gddr6_batch_pipelining_parity() {
-    use mopac_gpu::{AtomGpuFP32, BatchMoleculeDescriptor, GpuBatchVramManager, GpuCoulombCalculatorFP32};
+    use mopac_gpu::{
+        AtomGpuFP32, BatchMoleculeDescriptor, GpuBatchVramManager, GpuCoulombCalculatorFP32,
+    };
 
     let ctx = match VulkanContext::new() {
         Ok(c) => Arc::new(c),
@@ -272,18 +311,58 @@ fn test_scrutiny_vulkan_gpu_gddr6_batch_pipelining_parity() {
 
     // Molecule 1: Water (H2O, 3 atoms)
     let water_atoms = [
-        AtomGpuFP32 { x: 0.000, y: 0.000, z: 0.000, gss: 15.36 },  // O
-        AtomGpuFP32 { x: 0.000, y: 0.757, z: 0.586, gss: 12.85 },  // H
-        AtomGpuFP32 { x: 0.000, y: -0.757, z: 0.586, gss: 12.85 }, // H
+        AtomGpuFP32 {
+            x: 0.000,
+            y: 0.000,
+            z: 0.000,
+            gss: 15.36,
+        }, // O
+        AtomGpuFP32 {
+            x: 0.000,
+            y: 0.757,
+            z: 0.586,
+            gss: 12.85,
+        }, // H
+        AtomGpuFP32 {
+            x: 0.000,
+            y: -0.757,
+            z: 0.586,
+            gss: 12.85,
+        }, // H
     ];
 
     // Molecule 2: Methane (CH4, 5 atoms)
     let methane_atoms = [
-        AtomGpuFP32 { x: 0.000, y: 0.000, z: 0.000, gss: 12.80 },   // C
-        AtomGpuFP32 { x: 0.629, y: 0.629, z: 0.629, gss: 12.85 },   // H
-        AtomGpuFP32 { x: -0.629, y: -0.629, z: 0.629, gss: 12.85 }, // H
-        AtomGpuFP32 { x: -0.629, y: 0.629, z: -0.629, gss: 12.85 }, // H
-        AtomGpuFP32 { x: 0.629, y: -0.629, z: -0.629, gss: 12.85 }, // H
+        AtomGpuFP32 {
+            x: 0.000,
+            y: 0.000,
+            z: 0.000,
+            gss: 12.80,
+        }, // C
+        AtomGpuFP32 {
+            x: 0.629,
+            y: 0.629,
+            z: 0.629,
+            gss: 12.85,
+        }, // H
+        AtomGpuFP32 {
+            x: -0.629,
+            y: -0.629,
+            z: 0.629,
+            gss: 12.85,
+        }, // H
+        AtomGpuFP32 {
+            x: -0.629,
+            y: 0.629,
+            z: -0.629,
+            gss: 12.85,
+        }, // H
+        AtomGpuFP32 {
+            x: 0.629,
+            y: -0.629,
+            z: -0.629,
+            gss: 12.85,
+        }, // H
     ];
 
     // Pack into a single contiguous host buffer
@@ -292,7 +371,8 @@ fn test_scrutiny_vulkan_gpu_gddr6_batch_pipelining_parity() {
     all_atoms.extend_from_slice(&methane_atoms);
 
     // Upload both geometries to GDDR6 VRAM via DMA copy
-    vram_mgr.upload_batch_to_gddr6(&all_atoms, 0)
+    vram_mgr
+        .upload_batch_to_gddr6(&all_atoms, 0)
         .expect("Failed to upload multi-geometry batch to GDDR6 VRAM");
 
     let mol_descriptors = [
@@ -309,11 +389,13 @@ fn test_scrutiny_vulkan_gpu_gddr6_batch_pipelining_parity() {
     ];
 
     // Dispatch pipelined batch in GDDR6 in a single hardware submission
-    vram_mgr.dispatch_batch(&calc, &mol_descriptors)
+    vram_mgr
+        .dispatch_batch(&calc, &mol_descriptors)
         .expect("Failed to dispatch pipelined batch in GDDR6 VRAM");
 
     // Download and verify Molecule 1 (Water 3x3)
-    let water_mat = vram_mgr.download_matrix_from_gddr6(0, 3)
+    let water_mat = vram_mgr
+        .download_matrix_from_gddr6(0, 3)
         .expect("Failed to download Water Coulomb matrix");
     for i in 0..3 {
         for j in 0..3 {
@@ -321,18 +403,23 @@ fn test_scrutiny_vulkan_gpu_gddr6_batch_pipelining_parity() {
             let dy = (water_atoms[i].y - water_atoms[j].y) as f64;
             let dz = (water_atoms[i].z - water_atoms[j].z) as f64;
             let r = (dx * dx + dy * dy + dz * dz).sqrt();
-            let cpu_ref = dewar_klopman_monopole(r, water_atoms[i].gss as f64, water_atoms[j].gss as f64);
+            let cpu_ref =
+                dewar_klopman_monopole(r, water_atoms[i].gss as f64, water_atoms[j].gss as f64);
             let gpu_val = water_mat.get(i, j) as f64;
             assert!(
                 (gpu_val - cpu_ref).abs() < 1e-4,
                 "Water pair ({},{}) mismatch: GPU={}, CPU={}",
-                i, j, gpu_val, cpu_ref
+                i,
+                j,
+                gpu_val,
+                cpu_ref
             );
         }
     }
 
     // Download and verify Molecule 2 (Methane 5x5)
-    let methane_mat = vram_mgr.download_matrix_from_gddr6(9, 5)
+    let methane_mat = vram_mgr
+        .download_matrix_from_gddr6(9, 5)
         .expect("Failed to download Methane Coulomb matrix");
     for i in 0..5 {
         for j in 0..5 {
@@ -340,17 +427,19 @@ fn test_scrutiny_vulkan_gpu_gddr6_batch_pipelining_parity() {
             let dy = (methane_atoms[i].y - methane_atoms[j].y) as f64;
             let dz = (methane_atoms[i].z - methane_atoms[j].z) as f64;
             let r = (dx * dx + dy * dy + dz * dz).sqrt();
-            let cpu_ref = dewar_klopman_monopole(r, methane_atoms[i].gss as f64, methane_atoms[j].gss as f64);
+            let cpu_ref =
+                dewar_klopman_monopole(r, methane_atoms[i].gss as f64, methane_atoms[j].gss as f64);
             let gpu_val = methane_mat.get(i, j) as f64;
             assert!(
                 (gpu_val - cpu_ref).abs() < 1e-4,
                 "Methane pair ({},{}) mismatch: GPU={}, CPU={}",
-                i, j, gpu_val, cpu_ref
+                i,
+                j,
+                gpu_val,
+                cpu_ref
             );
         }
     }
 
     println!("✅ GDDR6 VRAM batch pipelining verified for 2 concurrent geometries with zero per-molecule CPU sync!");
 }
-
-

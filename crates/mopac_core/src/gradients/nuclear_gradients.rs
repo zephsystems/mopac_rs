@@ -10,10 +10,10 @@
 
 use crate::constants::codata2018::EV_TO_KCAL_MOL;
 use crate::fock::fock_builder::build_fock;
-use crate::scf::density::compute_electronic_energy;
 use crate::hamiltonian::hcore::build_hcore;
 use crate::integrals::core_repulsion::compute_total_core_repulsion;
 use crate::parameters::ParameterModel;
+use crate::scf::density::compute_electronic_energy;
 use crate::types::{AlignedMatrix, MolecularBatch};
 
 /// Pre-allocated workspace for gradient calculations (0 heap allocations).
@@ -45,7 +45,14 @@ fn evaluate_frozen_energy(
     if use_nddo {
         let pairs = crate::integrals::multipoles::precompute_diatomic_pairs(batch, model);
         crate::hamiltonian::hcore::build_hcore_nddo(batch, model, &pairs, &mut ws.h_core);
-        crate::fock::fock_builder::build_fock_nddo(batch, model, &pairs, &ws.h_core, density, &mut ws.fock);
+        crate::fock::fock_builder::build_fock_nddo(
+            batch,
+            model,
+            &pairs,
+            &ws.h_core,
+            density,
+            &mut ws.fock,
+        );
     } else {
         build_hcore(batch, model, &mut ws.h_core);
         build_fock(batch, model, &ws.h_core, density, &mut ws.fock);

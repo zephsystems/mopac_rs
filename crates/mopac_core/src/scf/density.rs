@@ -17,7 +17,10 @@ pub fn compute_density_matrix(
     assert_eq!(eigenvectors.cols, norbs);
     assert_eq!(density.rows, norbs);
     assert_eq!(density.cols, norbs);
-    assert!(nocc <= norbs, "Number of occupied orbitals cannot exceed basis size");
+    assert!(
+        nocc <= norbs,
+        "Number of occupied orbitals cannot exceed basis size"
+    );
 
     density.fill_zero();
 

@@ -16,9 +16,7 @@ use mopac_core::parameters::ParameterModel;
 use mopac_core::properties::{
     compute_bond_orders, compute_dipole_moment, compute_mulliken_population, DipoleResult,
 };
-use mopac_core::scf::scf_loop::{
-    run_rhf_scf_adaptive_with_nddo_and_cosmo, ScfOptions, ScfResult,
-};
+use mopac_core::scf::scf_loop::{run_rhf_scf_adaptive_with_nddo_and_cosmo, ScfOptions, ScfResult};
 use mopac_core::solvation::{CosmoCavity, CosmoParams};
 use mopac_core::types::{MolecularBatch, ScfWorkspace};
 use mopac_core::vibrations::{compute_hessian_and_frequencies, HessianOptions};
@@ -95,7 +93,6 @@ struct Cli {
     arc: Option<PathBuf>,
 }
 
-
 #[derive(Debug, Clone)]
 struct ParsedAtom {
     #[allow(dead_code)]
@@ -127,7 +124,6 @@ struct ParsedInput {
     is_mullik_requested: bool,
     eps: Option<f64>,
 }
-
 
 fn symbol_to_atomic_number(sym: &str) -> Option<u8> {
     match sym.to_uppercase().as_str() {
@@ -229,14 +225,25 @@ fn get_isolated_atom_energy_and_heat(z: u8, model: &dyn ParameterModel) -> (f64,
 fn parse_mopac_input(content: &str) -> io::Result<ParsedInput> {
     let lines: Vec<&str> = content.lines().collect();
     if lines.is_empty() {
-        return Err(io::Error::new(io::ErrorKind::InvalidData, "Empty input file"));
+        return Err(io::Error::new(
+            io::ErrorKind::InvalidData,
+            "Empty input file",
+        ));
     }
 
     let kw_line = lines[0].trim();
     let keywords: Vec<String> = kw_line.split_whitespace().map(|s| s.to_string()).collect();
 
-    let title = if lines.len() > 1 { lines[1].trim().to_string() } else { String::new() };
-    let comment = if lines.len() > 2 { lines[2].trim().to_string() } else { String::new() };
+    let title = if lines.len() > 1 {
+        lines[1].trim().to_string()
+    } else {
+        String::new()
+    };
+    let comment = if lines.len() > 2 {
+        lines[2].trim().to_string()
+    } else {
+        String::new()
+    };
 
     let mut is_opt_requested = false;
     let mut is_force_requested = false;
@@ -286,7 +293,6 @@ fn parse_mopac_input(content: &str) -> io::Result<ParsedInput> {
             }
         }
     }
-
 
     let mut atoms = Vec::new();
     for line in lines.iter().skip(3) {
@@ -367,7 +373,6 @@ fn parse_mopac_input(content: &str) -> io::Result<ParsedInput> {
     })
 }
 
-
 fn build_batch(atoms: &[ParsedAtom]) -> MolecularBatch {
     let natoms = atoms.len();
     let mut atomic_numbers = Vec::with_capacity(natoms);
@@ -422,7 +427,9 @@ fn main() -> Result<(), Box<dyn std::error::Error>> {
     let start_time = Instant::now();
 
     if let Some(nthr) = cli.threads {
-        let _ = rayon::ThreadPoolBuilder::new().num_threads(nthr).build_global();
+        let _ = rayon::ThreadPoolBuilder::new()
+            .num_threads(nthr)
+            .build_global();
     }
 
     let input_path = &cli.input;
@@ -432,14 +439,19 @@ fn main() -> Result<(), Box<dyn std::error::Error>> {
     let input_stem = input_path.file_stem().unwrap().to_str().unwrap();
     let parent_dir = input_path.parent().unwrap_or_else(|| Path::new("."));
 
-    let out_file = cli.output.unwrap_or_else(|| parent_dir.join(format!("{}.out", input_stem)));
-    let arc_file = cli.arc.unwrap_or_else(|| parent_dir.join(format!("{}.arc", input_stem)));
+    let out_file = cli
+        .output
+        .unwrap_or_else(|| parent_dir.join(format!("{}.out", input_stem)));
+    let arc_file = cli
+        .arc
+        .unwrap_or_else(|| parent_dir.join(format!("{}.arc", input_stem)));
 
     let use_gpu = cli.gpu || parsed.is_gpu_requested;
     let use_fp32 = cli.fp32 || parsed.is_fp32_requested;
     let is_opt = (cli.opt || parsed.is_opt_requested) && !cli.one_scf;
 
-    let method_name = cli.method
+    let method_name = cli
+        .method
         .or(parsed.method)
         .unwrap_or_else(|| "AM1".to_string())
         .to_uppercase();
@@ -460,9 +472,33 @@ fn main() -> Result<(), Box<dyn std::error::Error>> {
     println!("===============================================================================");
     println!(" Job Input File        : {}", input_path.display());
     println!(" Method / Hamiltonian   : {}", model.name());
-    println!(" NDDO Multipoles       : {}", if use_nddo { "Enabled (Full 22 Multipoles)" } else { "Monopole Approximation" });
-    println!(" Calculation Mode      : {}", if is_opt { "L-BFGS Geometry Optimization" } else { "1SCF (Single Point)" });
-    println!(" Compute Backend       : {}", if use_gpu { format!("Vulkan GPU ({})", if use_fp32 { "FP32 (18 TFLOPS)" } else { "FP64" }) } else { "CPU SIMD AVX2".to_string() });
+    println!(
+        " NDDO Multipoles       : {}",
+        if use_nddo {
+            "Enabled (Full 22 Multipoles)"
+        } else {
+            "Monopole Approximation"
+        }
+    );
+    println!(
+        " Calculation Mode      : {}",
+        if is_opt {
+            "L-BFGS Geometry Optimization"
+        } else {
+            "1SCF (Single Point)"
+        }
+    );
+    println!(
+        " Compute Backend       : {}",
+        if use_gpu {
+            format!(
+                "Vulkan GPU ({})",
+                if use_fp32 { "FP32 (18 TFLOPS)" } else { "FP64" }
+            )
+        } else {
+            "CPU SIMD AVX2".to_string()
+        }
+    );
     println!(" Number of Atoms       : {}", parsed.atoms.len());
     println!(" Title Line            : \"{}\"", parsed.title);
     println!("-------------------------------------------------------------------------------");
@@ -481,15 +517,22 @@ fn main() -> Result<(), Box<dyn std::error::Error>> {
             }
         };
 
-        println!(" [Vulkan GPU] Device: {} (Discrete: {})", ctx.device_info.device_name, ctx.device_info.is_discrete);
+        println!(
+            " [Vulkan GPU] Device: {} (Discrete: {})",
+            ctx.device_info.device_name, ctx.device_info.is_discrete
+        );
         if use_fp32 {
             let gpu_calc = GpuCoulombCalculatorFP32::new(Arc::clone(&ctx))?;
             let _gpu_matrix = gpu_calc.compute_batch(&batch, model.as_ref())?;
-            println!(" [Vulkan GPU] Evaluated pairwise Coulomb matrix using FP32 hardware pipeline.");
+            println!(
+                " [Vulkan GPU] Evaluated pairwise Coulomb matrix using FP32 hardware pipeline."
+            );
         } else {
             let gpu_calc = GpuCoulombCalculator::new(Arc::clone(&ctx))?;
             let _gpu_matrix = gpu_calc.compute_batch(&batch, model.as_ref())?;
-            println!(" [Vulkan GPU] Evaluated pairwise Coulomb matrix using native Float64 pipeline.");
+            println!(
+                " [Vulkan GPU] Evaluated pairwise Coulomb matrix using native Float64 pipeline."
+            );
         }
     }
 
@@ -514,23 +557,48 @@ fn main() -> Result<(), Box<dyn std::error::Error>> {
         };
 
         let mut grad_ws = GradientWorkspace::allocate(batch.norbs);
-        let opt_res = optimize_geometry_lbfgs(&mut batch, model.as_ref(), &mut ws, &mut grad_ws, &opts);
+        let opt_res =
+            optimize_geometry_lbfgs(&mut batch, model.as_ref(), &mut ws, &mut grad_ws, &opts);
 
-        println!(" [Optimizer] Optimization finished in {} cycles (Converged: {})", opt_res.cycles, opt_res.converged);
-        println!("   Initial Energy: {:12.6} eV | Final Energy: {:12.6} eV", opt_res.initial_energy_ev, opt_res.final_energy_ev);
-        println!("   Initial RMS G : {:12.4} kcal/(mol*A) | Final RMS G: {:12.4} kcal/(mol*A)", opt_res.initial_grad_rms, opt_res.final_grad_rms);
+        println!(
+            " [Optimizer] Optimization finished in {} cycles (Converged: {})",
+            opt_res.cycles, opt_res.converged
+        );
+        println!(
+            "   Initial Energy: {:12.6} eV | Final Energy: {:12.6} eV",
+            opt_res.initial_energy_ev, opt_res.final_energy_ev
+        );
+        println!(
+            "   Initial RMS G : {:12.4} kcal/(mol*A) | Final RMS G: {:12.4} kcal/(mol*A)",
+            opt_res.initial_grad_rms, opt_res.final_grad_rms
+        );
         let niter = opt_res.final_scf.iterations;
         (opt_res.final_scf, niter)
     } else {
-        println!(" [SCF] Running Roothaan-Hall Self-Consistent Field (NDDO: {})...", use_nddo);
+        println!(
+            " [SCF] Running Roothaan-Hall Self-Consistent Field (NDDO: {})...",
+            use_nddo
+        );
         let cosmo_params = cli.eps.or(parsed.eps).map(|epsilon| CosmoParams {
             epsilon,
             rsolv: 1.30005,
         });
         if let Some(cp) = cosmo_params {
-            println!(" [COSMO] Implicit solvation active: EPS = {:.2}, RSOLV = {:.5} A", cp.epsilon, cp.rsolv);
+            println!(
+                " [COSMO] Implicit solvation active: EPS = {:.2}, RSOLV = {:.5} A",
+                cp.epsilon, cp.rsolv
+            );
         }
-        let res = run_rhf_scf_adaptive_with_nddo_and_cosmo(&batch, model.as_ref(), &mut ws, 60, 1e-7, 1e-6, use_nddo, cosmo_params);
+        let res = run_rhf_scf_adaptive_with_nddo_and_cosmo(
+            &batch,
+            model.as_ref(),
+            &mut ws,
+            60,
+            1e-7,
+            1e-6,
+            use_nddo,
+            cosmo_params,
+        );
         let niter = res.iterations;
         (res, niter)
     };
@@ -562,8 +630,18 @@ fn main() -> Result<(), Box<dyn std::error::Error>> {
             pressure_atm: 1.0,
             rotational_symmetry_number: 1.0,
         };
-        let h_res = compute_hessian_and_frequencies(&mut batch, model.as_ref(), &mut ws, &scf_opts, &hess_opts);
-        println!(" [Vibrations] Done: {} vibrational modes, ZPVE = {:.3} kcal/mol", h_res.vibrational_frequencies_cm1.len(), h_res.zpve_kcal_mol);
+        let h_res = compute_hessian_and_frequencies(
+            &mut batch,
+            model.as_ref(),
+            &mut ws,
+            &scf_opts,
+            &hess_opts,
+        );
+        println!(
+            " [Vibrations] Done: {} vibrational modes, ZPVE = {:.3} kcal/mol",
+            h_res.vibrational_frequencies_cm1.len(),
+            h_res.zpve_kcal_mol
+        );
         Some(h_res)
     } else {
         None
@@ -576,26 +654,67 @@ fn main() -> Result<(), Box<dyn std::error::Error>> {
     println!("-------------------------------------------------------------------------------");
     println!("                             FINAL SCF RESULTS                                 ");
     println!("-------------------------------------------------------------------------------");
-    println!(" Final Heat of Formation : {:15.5} kcal/mol ({:12.5} kJ/mol)", hof_kcal, hof_kcal * 4.184);
-    println!(" Total SCF Energy        : {:15.6} eV", scf_final.total_energy_ev);
-    println!(" Electronic Energy       : {:15.6} eV", scf_final.electronic_energy_ev);
-    println!(" Nuclear Repulsion       : {:15.6} eV", scf_final.nuclear_repulsion_ev);
+    println!(
+        " Final Heat of Formation : {:15.5} kcal/mol ({:12.5} kJ/mol)",
+        hof_kcal,
+        hof_kcal * 4.184
+    );
+    println!(
+        " Total SCF Energy        : {:15.6} eV",
+        scf_final.total_energy_ev
+    );
+    println!(
+        " Electronic Energy       : {:15.6} eV",
+        scf_final.electronic_energy_ev
+    );
+    println!(
+        " Nuclear Repulsion       : {:15.6} eV",
+        scf_final.nuclear_repulsion_ev
+    );
     if let Some(diel_ev) = scf_final.dielectric_energy_ev {
-        println!(" Dielectric Solv Energy  : {:15.6} eV ({:12.5} kcal/mol)", diel_ev, diel_ev * 23.06054801);
+        println!(
+            " Dielectric Solv Energy  : {:15.6} eV ({:12.5} kcal/mol)",
+            diel_ev,
+            diel_ev * 23.06054801
+        );
     }
     if let Some(cp) = cosmo_params {
         let cav = CosmoCavity::construct(&batch, cp.rsolv);
-        println!(" COSMO Cavity Area       : {:15.2} Square Angstroms", cav.total_area_angstrom2);
-        println!(" COSMO Cavity Volume     : {:15.2} Cubic Angstroms", cav.total_volume_angstrom3);
+        println!(
+            " COSMO Cavity Area       : {:15.2} Square Angstroms",
+            cav.total_area_angstrom2
+        );
+        println!(
+            " COSMO Cavity Volume     : {:15.2} Cubic Angstroms",
+            cav.total_volume_angstrom3
+        );
     }
-    println!(" HOMO Energy (IP)        : {:15.4} eV", scf_final.homo_energy_ev);
-    println!(" LUMO Energy             : {:15.4} eV", scf_final.lumo_energy_ev);
-    println!(" HOMO-LUMO Gap           : {:15.4} eV", scf_final.lumo_energy_ev - scf_final.homo_energy_ev);
+    println!(
+        " HOMO Energy (IP)        : {:15.4} eV",
+        scf_final.homo_energy_ev
+    );
+    println!(
+        " LUMO Energy             : {:15.4} eV",
+        scf_final.lumo_energy_ev
+    );
+    println!(
+        " HOMO-LUMO Gap           : {:15.4} eV",
+        scf_final.lumo_energy_ev - scf_final.homo_energy_ev
+    );
     println!(" Total Dipole Moment     : {:15.4} Debye", dipole.total[3]);
-    println!("   Point-Charge Dipole   : {:15.4} Debye", dipole.point_charge[3]);
-    println!("   Hybridization Dipole  : {:15.4} Debye", dipole.hybridization[3]);
+    println!(
+        "   Point-Charge Dipole   : {:15.4} Debye",
+        dipole.point_charge[3]
+    );
+    println!(
+        "   Hybridization Dipole  : {:15.4} Debye",
+        dipole.hybridization[3]
+    );
     println!(" SCF Iterations Total    : {}", total_scf_cycles);
-    println!(" Total Wall-Clock Time   : {:.4} seconds", elapsed.as_secs_f64());
+    println!(
+        " Total Wall-Clock Time   : {:.4} seconds",
+        elapsed.as_secs_f64()
+    );
 
     if let Some(ref h_res) = force_result {
         println!("-------------------------------------------------------------------------------");
@@ -603,17 +722,42 @@ fn main() -> Result<(), Box<dyn std::error::Error>> {
         println!("-------------------------------------------------------------------------------");
         println!("  MODE        FREQUENCY (CM^-1)      FORCE CONST (MDYNE/A)     REDUCED MASS");
         for (i, &nu) in h_res.vibrational_frequencies_cm1.iter().enumerate() {
-            let mode_idx = h_res.all_frequencies_cm1.len() - h_res.vibrational_frequencies_cm1.len() + i;
+            let mode_idx =
+                h_res.all_frequencies_cm1.len() - h_res.vibrational_frequencies_cm1.len() + i;
             let mode = &h_res.normal_modes[mode_idx];
-            println!("   {:3}             {:10.2}                 {:8.4}              {:8.4} amu", i + 1, nu, mode.force_constant_mdyne_a, mode.reduced_mass_amu);
+            println!(
+                "   {:3}             {:10.2}                 {:8.4}              {:8.4} amu",
+                i + 1,
+                nu,
+                mode.force_constant_mdyne_a,
+                mode.reduced_mass_amu
+            );
         }
-        println!(" Zero-Point Vibrational Energy : {:12.3} kcal/mol", h_res.zpve_kcal_mol);
+        println!(
+            " Zero-Point Vibrational Energy : {:12.3} kcal/mol",
+            h_res.zpve_kcal_mol
+        );
         println!();
-        println!(" CALCULATED THERMODYNAMIC PROPERTIES (T = {:.2} K, P = {:.2} atm):", h_res.thermo.temperature_k, h_res.thermo.pressure_atm);
-        println!("   Enthalpy (Thermal)          : {:12.4} cal/mol", h_res.thermo.enthalpy_thermal_cal_mol);
-        println!("   Heat Capacity (Cp)          : {:12.4} cal/(mol K)", h_res.thermo.cp_total_cal_k_mol);
-        println!("   Standard Entropy (S°)       : {:12.4} cal/(mol K)", h_res.thermo.entropy_total_cal_k_mol);
-        println!("   Gibbs Free Energy Corr.     : {:12.4} kcal/mol", h_res.thermo.gibbs_correction_kcal_mol);
+        println!(
+            " CALCULATED THERMODYNAMIC PROPERTIES (T = {:.2} K, P = {:.2} atm):",
+            h_res.thermo.temperature_k, h_res.thermo.pressure_atm
+        );
+        println!(
+            "   Enthalpy (Thermal)          : {:12.4} cal/mol",
+            h_res.thermo.enthalpy_thermal_cal_mol
+        );
+        println!(
+            "   Heat Capacity (Cp)          : {:12.4} cal/(mol K)",
+            h_res.thermo.cp_total_cal_k_mol
+        );
+        println!(
+            "   Standard Entropy (S°)       : {:12.4} cal/(mol K)",
+            h_res.thermo.entropy_total_cal_k_mol
+        );
+        println!(
+            "   Gibbs Free Energy Corr.     : {:12.4} kcal/mol",
+            h_res.thermo.gibbs_correction_kcal_mol
+        );
     }
 
     let is_bonds = cli.bonds || parsed.is_bonds_requested;
@@ -629,7 +773,12 @@ fn main() -> Result<(), Box<dyn std::error::Error>> {
         println!("-------------------------------------------------------------------------------");
         for i in 0..batch.natoms {
             let sym_i = atomic_number_to_symbol(batch.atomic_numbers[i]);
-            let mut line = format!("   {:3}  {:2}     ({:6.3})", i + 1, sym_i, b_res.valencies[i]);
+            let mut line = format!(
+                "   {:3}  {:2}     ({:6.3})",
+                i + 1,
+                sym_i,
+                b_res.valencies[i]
+            );
             for j in 0..batch.natoms {
                 if i != j {
                     let b_val = b_res.bond_orders.get(i, j);
@@ -645,9 +794,18 @@ fn main() -> Result<(), Box<dyn std::error::Error>> {
 
     let is_mullik = cli.mulliken || parsed.is_mullik_requested;
     let mullik_result = if is_mullik {
-        let n_electrons: usize = batch.atomic_numbers.iter().map(|&z| model.get_element(z).unwrap().core_charge as usize).sum();
+        let n_electrons: usize = batch
+            .atomic_numbers
+            .iter()
+            .map(|&z| model.get_element(z).unwrap().core_charge as usize)
+            .sum();
         let num_occupied = n_electrons / 2;
-        Some(compute_mulliken_population(&batch, model.as_ref(), &ws.eigenvectors, num_occupied))
+        Some(compute_mulliken_population(
+            &batch,
+            model.as_ref(),
+            &ws.eigenvectors,
+            num_occupied,
+        ))
     } else {
         None
     };
@@ -659,19 +817,43 @@ fn main() -> Result<(), Box<dyn std::error::Error>> {
         println!("      NO.  ATOM   POPULATION      CHARGE");
         for i in 0..batch.natoms {
             let sym = atomic_number_to_symbol(batch.atomic_numbers[i]);
-            println!("    {:4}    {:2}     {:10.6}     {:10.6}", i + 1, sym, m_res.atomic_populations[i], m_res.net_charges[i]);
+            println!(
+                "    {:4}    {:2}     {:10.6}     {:10.6}",
+                i + 1,
+                sym,
+                m_res.atomic_populations[i],
+                m_res.net_charges[i]
+            );
         }
     }
     println!("===============================================================================");
 
     // Write .out file matching standard MOPAC format
     let mut out = File::create(&out_file)?;
-    writeln!(out, " *******************************************************************************")?;
-    writeln!(out, " **                                                                           **")?;
-    writeln!(out, " **                              MOPAC_RS v0.1.0                              **")?;
-    writeln!(out, " **                Canonical Semi-Empirical Quantum Chemistry Engine          **")?;
-    writeln!(out, " **                                                                           **")?;
-    writeln!(out, " *******************************************************************************")?;
+    writeln!(
+        out,
+        " *******************************************************************************"
+    )?;
+    writeln!(
+        out,
+        " **                                                                           **"
+    )?;
+    writeln!(
+        out,
+        " **                              MOPAC_RS v0.1.0                              **"
+    )?;
+    writeln!(
+        out,
+        " **                Canonical Semi-Empirical Quantum Chemistry Engine          **"
+    )?;
+    writeln!(
+        out,
+        " **                                                                           **"
+    )?;
+    writeln!(
+        out,
+        " *******************************************************************************"
+    )?;
     writeln!(out)?;
     writeln!(out, " KEYWORDS: {}", parsed.keywords.join(" "))?;
     writeln!(out, " TITLE:    {}", parsed.title)?;
@@ -679,40 +861,134 @@ fn main() -> Result<(), Box<dyn std::error::Error>> {
     writeln!(out)?;
     writeln!(out, " CALCULATION PARAMETERS:")?;
     writeln!(out, "   Method:    {}", model.name())?;
-    writeln!(out, "   NDDO:      {}", if use_nddo { "Enabled (Full 22 Multipoles)" } else { "Monopole Approximation" })?;
-    writeln!(out, "   Mode:      {}", if is_opt { "L-BFGS Geometry Optimization" } else { "1SCF" })?;
-    writeln!(out, "   Backend:   {}", if use_gpu { "Vulkan GPU" } else { "CPU SIMD AVX2" })?;
+    writeln!(
+        out,
+        "   NDDO:      {}",
+        if use_nddo {
+            "Enabled (Full 22 Multipoles)"
+        } else {
+            "Monopole Approximation"
+        }
+    )?;
+    writeln!(
+        out,
+        "   Mode:      {}",
+        if is_opt {
+            "L-BFGS Geometry Optimization"
+        } else {
+            "1SCF"
+        }
+    )?;
+    writeln!(
+        out,
+        "   Backend:   {}",
+        if use_gpu {
+            "Vulkan GPU"
+        } else {
+            "CPU SIMD AVX2"
+        }
+    )?;
     writeln!(out)?;
-    writeln!(out, " FINAL HEAT OF FORMATION = {:17.5} KCAL/MOL = {:14.5} KJ/MOL", hof_kcal, hof_kcal * 4.184)?;
-    writeln!(out, " TOTAL ENERGY            = {:17.6} EV", scf_final.total_energy_ev)?;
-    writeln!(out, " ELECTRONIC ENERGY       = {:17.6} EV", scf_final.electronic_energy_ev)?;
-    writeln!(out, " NUCLEAR REPULSION       = {:17.6} EV", scf_final.nuclear_repulsion_ev)?;
+    writeln!(
+        out,
+        " FINAL HEAT OF FORMATION = {:17.5} KCAL/MOL = {:14.5} KJ/MOL",
+        hof_kcal,
+        hof_kcal * 4.184
+    )?;
+    writeln!(
+        out,
+        " TOTAL ENERGY            = {:17.6} EV",
+        scf_final.total_energy_ev
+    )?;
+    writeln!(
+        out,
+        " ELECTRONIC ENERGY       = {:17.6} EV",
+        scf_final.electronic_energy_ev
+    )?;
+    writeln!(
+        out,
+        " NUCLEAR REPULSION       = {:17.6} EV",
+        scf_final.nuclear_repulsion_ev
+    )?;
     if let Some(diel_ev) = scf_final.dielectric_energy_ev {
         writeln!(out, " DIELECTRIC ENERGY       = {:17.5} EV", diel_ev)?;
     }
     if let Some(cp) = cosmo_params {
         let cav = CosmoCavity::construct(&batch, cp.rsolv);
-        writeln!(out, " COSMO AREA              = {:17.2} SQUARE ANGSTROMS", cav.total_area_angstrom2)?;
-        writeln!(out, " COSMO VOLUME            = {:17.2} CUBIC ANGSTROMS", cav.total_volume_angstrom3)?;
+        writeln!(
+            out,
+            " COSMO AREA              = {:17.2} SQUARE ANGSTROMS",
+            cav.total_area_angstrom2
+        )?;
+        writeln!(
+            out,
+            " COSMO VOLUME            = {:17.2} CUBIC ANGSTROMS",
+            cav.total_volume_angstrom3
+        )?;
     }
-    writeln!(out, " IONIZATION POTENTIAL    = {:17.5} EV", -scf_final.homo_energy_ev)?;
-    writeln!(out, " HOMO LUMO ENERGIES (EV) = {:12.4} {:12.4}", scf_final.homo_energy_ev, scf_final.lumo_energy_ev)?;
-    writeln!(out, " DIPOLE MOMENT           = {:17.4} DEBYE", dipole.total[3])?;
-    writeln!(out, " WALL-CLOCK TIME         = {:17.4} SECONDS", elapsed.as_secs_f64())?;
+    writeln!(
+        out,
+        " IONIZATION POTENTIAL    = {:17.5} EV",
+        -scf_final.homo_energy_ev
+    )?;
+    writeln!(
+        out,
+        " HOMO LUMO ENERGIES (EV) = {:12.4} {:12.4}",
+        scf_final.homo_energy_ev, scf_final.lumo_energy_ev
+    )?;
+    writeln!(
+        out,
+        " DIPOLE MOMENT           = {:17.4} DEBYE",
+        dipole.total[3]
+    )?;
+    writeln!(
+        out,
+        " WALL-CLOCK TIME         = {:17.4} SECONDS",
+        elapsed.as_secs_f64()
+    )?;
     writeln!(out)?;
     writeln!(out, " DIPOLE           X         Y         Z       TOTAL")?;
-    writeln!(out, " POINT-CHG.   {:9.3} {:9.3} {:9.3} {:10.3}", dipole.point_charge[0], dipole.point_charge[1], dipole.point_charge[2], dipole.point_charge[3])?;
-    writeln!(out, " HYBRID       {:9.3} {:9.3} {:9.3} {:10.3}", dipole.hybridization[0], dipole.hybridization[1], dipole.hybridization[2], dipole.hybridization[3])?;
-    writeln!(out, " SUM          {:9.3} {:9.3} {:9.3} {:10.3}", dipole.total[0], dipole.total[1], dipole.total[2], dipole.total[3])?;
+    writeln!(
+        out,
+        " POINT-CHG.   {:9.3} {:9.3} {:9.3} {:10.3}",
+        dipole.point_charge[0],
+        dipole.point_charge[1],
+        dipole.point_charge[2],
+        dipole.point_charge[3]
+    )?;
+    writeln!(
+        out,
+        " HYBRID       {:9.3} {:9.3} {:9.3} {:10.3}",
+        dipole.hybridization[0],
+        dipole.hybridization[1],
+        dipole.hybridization[2],
+        dipole.hybridization[3]
+    )?;
+    writeln!(
+        out,
+        " SUM          {:9.3} {:9.3} {:9.3} {:10.3}",
+        dipole.total[0], dipole.total[1], dipole.total[2], dipole.total[3]
+    )?;
     writeln!(out)?;
-    writeln!(out, "              NET ATOMIC CHARGES AND DIPOLE CONTRIBUTIONS")?;
-    writeln!(out, "  ATOM NO.   TYPE          CHARGE      No. of ELECS.   s-Pop       p-Pop")?;
+    writeln!(
+        out,
+        "              NET ATOMIC CHARGES AND DIPOLE CONTRIBUTIONS"
+    )?;
+    writeln!(
+        out,
+        "  ATOM NO.   TYPE          CHARGE      No. of ELECS.   s-Pop       p-Pop"
+    )?;
     for i in 0..batch.natoms {
         let sym = atomic_number_to_symbol(batch.atomic_numbers[i]);
         writeln!(
             out,
             "   {:4}       {:2}         {:10.6}        {:8.4}     {:8.4}    {:8.4}",
-            i + 1, sym, charges[i], pops[i][2], pops[i][0], pops[i][1]
+            i + 1,
+            sym,
+            charges[i],
+            pops[i][2],
+            pops[i][0],
+            pops[i][1]
         )?;
     }
     writeln!(out)?;
@@ -720,7 +996,15 @@ fn main() -> Result<(), Box<dyn std::error::Error>> {
     for i in 0..batch.natoms {
         let sym = atomic_number_to_symbol(batch.atomic_numbers[i]);
         let (x, y, z) = (batch.x[i], batch.y[i], batch.z[i]);
-        writeln!(out, "  {:4}    {:2}       {:16.9}  {:16.9}  {:16.9}", i + 1, sym, x, y, z)?;
+        writeln!(
+            out,
+            "  {:4}    {:2}       {:16.9}  {:16.9}  {:16.9}",
+            i + 1,
+            sym,
+            x,
+            y,
+            z
+        )?;
     }
     writeln!(out)?;
 
@@ -729,7 +1013,12 @@ fn main() -> Result<(), Box<dyn std::error::Error>> {
         writeln!(out)?;
         for i in 0..batch.natoms {
             let sym_i = atomic_number_to_symbol(batch.atomic_numbers[i]);
-            let mut line = format!("   {:3}  {:2}     ({:6.3})", i + 1, sym_i, b_res.valencies[i]);
+            let mut line = format!(
+                "   {:3}  {:2}     ({:6.3})",
+                i + 1,
+                sym_i,
+                b_res.valencies[i]
+            );
             for j in 0..batch.natoms {
                 if i != j {
                     let b_val = b_res.bond_orders.get(i, j);
@@ -752,27 +1041,72 @@ fn main() -> Result<(), Box<dyn std::error::Error>> {
         writeln!(out, "      NO.  ATOM   POPULATION      CHARGE")?;
         for i in 0..batch.natoms {
             let sym = atomic_number_to_symbol(batch.atomic_numbers[i]);
-            writeln!(out, "    {:4}    {:2}     {:10.6}     {:10.6}", i + 1, sym, m_res.atomic_populations[i], m_res.net_charges[i])?;
+            writeln!(
+                out,
+                "    {:4}    {:2}     {:10.6}     {:10.6}",
+                i + 1,
+                sym,
+                m_res.atomic_populations[i],
+                m_res.net_charges[i]
+            )?;
         }
         writeln!(out)?;
     }
 
     if let Some(ref h_res) = force_result {
-        writeln!(out, "           NORMAL COORDINATE ANALYSIS & VIBRATIONAL FREQUENCIES")?;
-        writeln!(out, "  ROOT NO.     FREQUENCY (CM^-1)      FORCE CONST (MDYNE/A)     REDUCED MASS")?;
+        writeln!(
+            out,
+            "           NORMAL COORDINATE ANALYSIS & VIBRATIONAL FREQUENCIES"
+        )?;
+        writeln!(
+            out,
+            "  ROOT NO.     FREQUENCY (CM^-1)      FORCE CONST (MDYNE/A)     REDUCED MASS"
+        )?;
         for (i, &nu) in h_res.vibrational_frequencies_cm1.iter().enumerate() {
-            let mode_idx = h_res.all_frequencies_cm1.len() - h_res.vibrational_frequencies_cm1.len() + i;
+            let mode_idx =
+                h_res.all_frequencies_cm1.len() - h_res.vibrational_frequencies_cm1.len() + i;
             let mode = &h_res.normal_modes[mode_idx];
-            writeln!(out, "   {:3}             {:10.2}                 {:8.4}              {:8.4} amu", i + 1, nu, mode.force_constant_mdyne_a, mode.reduced_mass_amu)?;
+            writeln!(
+                out,
+                "   {:3}             {:10.2}                 {:8.4}              {:8.4} amu",
+                i + 1,
+                nu,
+                mode.force_constant_mdyne_a,
+                mode.reduced_mass_amu
+            )?;
         }
         writeln!(out)?;
-        writeln!(out, " ZERO POINT VIBRATIONAL ENERGY = {:12.3} KCAL/MOL", h_res.zpve_kcal_mol)?;
+        writeln!(
+            out,
+            " ZERO POINT VIBRATIONAL ENERGY = {:12.3} KCAL/MOL",
+            h_res.zpve_kcal_mol
+        )?;
         writeln!(out)?;
-        writeln!(out, " CALCULATED THERMODYNAMIC PROPERTIES (T = {:.2} K, P = {:.2} ATM):", h_res.thermo.temperature_k, h_res.thermo.pressure_atm)?;
-        writeln!(out, "   ENTHALPY (THERMAL)          = {:12.4} CAL/MOL", h_res.thermo.enthalpy_thermal_cal_mol)?;
-        writeln!(out, "   HEAT CAPACITY (CP)          = {:12.4} CAL/(MOL K)", h_res.thermo.cp_total_cal_k_mol)?;
-        writeln!(out, "   STANDARD ENTROPY (S°)       = {:12.4} CAL/(MOL K)", h_res.thermo.entropy_total_cal_k_mol)?;
-        writeln!(out, "   GIBBS FREE ENERGY CORR.     = {:12.4} KCAL/MOL", h_res.thermo.gibbs_correction_kcal_mol)?;
+        writeln!(
+            out,
+            " CALCULATED THERMODYNAMIC PROPERTIES (T = {:.2} K, P = {:.2} ATM):",
+            h_res.thermo.temperature_k, h_res.thermo.pressure_atm
+        )?;
+        writeln!(
+            out,
+            "   ENTHALPY (THERMAL)          = {:12.4} CAL/MOL",
+            h_res.thermo.enthalpy_thermal_cal_mol
+        )?;
+        writeln!(
+            out,
+            "   HEAT CAPACITY (CP)          = {:12.4} CAL/(MOL K)",
+            h_res.thermo.cp_total_cal_k_mol
+        )?;
+        writeln!(
+            out,
+            "   STANDARD ENTROPY (S°)       = {:12.4} CAL/(MOL K)",
+            h_res.thermo.entropy_total_cal_k_mol
+        )?;
+        writeln!(
+            out,
+            "   GIBBS FREE ENERGY CORR.     = {:12.4} KCAL/MOL",
+            h_res.thermo.gibbs_correction_kcal_mol
+        )?;
         writeln!(out)?;
     }
 
@@ -780,7 +1114,12 @@ fn main() -> Result<(), Box<dyn std::error::Error>> {
 
     // Write .arc file with optimized geometry
     let mut arc = File::create(&arc_file)?;
-    writeln!(arc, "{} {}", model.name(), if is_opt { "OPT" } else { "1SCF" })?;
+    writeln!(
+        arc,
+        "{} {}",
+        model.name(),
+        if is_opt { "OPT" } else { "1SCF" }
+    )?;
     writeln!(arc, "{}", parsed.title)?;
     writeln!(arc, "Final Heat of Formation: {:12.5} kcal/mol", hof_kcal)?;
     for i in 0..batch.natoms {

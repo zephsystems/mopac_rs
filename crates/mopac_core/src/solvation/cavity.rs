@@ -7,7 +7,6 @@ use crate::solvation::radii::cosmo_atomic_radius;
 use crate::solvation::tessellation::generate_sphere_tessellation;
 use crate::types::MolecularBatch;
 
-
 /// A discrete boundary segment on the solvent-accessible cavity surface.
 #[derive(Debug, Clone, PartialEq)]
 pub struct CavitySegment {
@@ -53,11 +52,7 @@ impl CosmoCavity {
             let ri2 = ri * ri;
             let xi = [batch.x[i], batch.y[i], batch.z[i]];
 
-            let basic_grid = if zi == 1 {
-                &basic_hydro
-            } else {
-                &basic_heavy
-            };
+            let basic_grid = if zi == 1 { &basic_hydro } else { &basic_heavy };
             let num_basic = basic_grid.len();
 
             // Group fine grid points into basic segment clusters
@@ -98,7 +93,8 @@ impl CosmoCavity {
                 let mut max_dot = -2.0f64;
                 let mut best_seg = 0;
                 for (seg_idx, bpt) in basic_grid.iter().enumerate() {
-                    let dot = pt.dir[0] * bpt.dir[0] + pt.dir[1] * bpt.dir[1] + pt.dir[2] * bpt.dir[2];
+                    let dot =
+                        pt.dir[0] * bpt.dir[0] + pt.dir[1] * bpt.dir[1] + pt.dir[2] * bpt.dir[2];
                     if dot > max_dot {
                         max_dot = dot;
                         best_seg = seg_idx;
@@ -125,7 +121,8 @@ impl CosmoCavity {
                     avg_dir[2] += fine_grid[k].dir[2] * w;
                 }
 
-                let dir_norm = (avg_dir[0].powi(2) + avg_dir[1].powi(2) + avg_dir[2].powi(2)).sqrt();
+                let dir_norm =
+                    (avg_dir[0].powi(2) + avg_dir[1].powi(2) + avg_dir[2].powi(2)).sqrt();
                 let normal = if dir_norm > 1e-12 {
                     [
                         avg_dir[0] / dir_norm,

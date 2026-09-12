@@ -34,7 +34,10 @@ impl<T: Copy + Default> AlignedVec64<T> {
             .expect("Invalid layout for AlignedVec64");
         let ptr = unsafe { alloc_zeroed(layout) as *mut T };
         if ptr.is_null() {
-            panic!("Memory allocation of size {} failed", len * std::mem::size_of::<T>());
+            panic!(
+                "Memory allocation of size {} failed",
+                len * std::mem::size_of::<T>()
+            );
         }
         Self {
             ptr,
@@ -226,7 +229,11 @@ impl MolecularBatch {
     /// Construct a new MolecularBatch from vectors of atomic numbers and coordinates.
     pub fn new(atomic_numbers: Vec<u8>, coords_angstrom: &[[f64; 3]]) -> Self {
         let natoms = atomic_numbers.len();
-        assert_eq!(natoms, coords_angstrom.len(), "Atomic numbers and coordinates length mismatch");
+        assert_eq!(
+            natoms,
+            coords_angstrom.len(),
+            "Atomic numbers and coordinates length mismatch"
+        );
 
         let mut x = AlignedVec64::zeroed(natoms);
         let mut y = AlignedVec64::zeroed(natoms);
@@ -317,7 +324,10 @@ impl ScfWorkspace {
             diis_error: AlignedMatrix::zeroed(norbs, norbs),
             tmp1: AlignedMatrix::zeroed(norbs, norbs),
             tmp2: AlignedMatrix::zeroed(norbs, norbs),
-            diis: crate::scf::diis::DiisWorkspace::allocate(norbs, crate::scf::diis::DEFAULT_MAX_DIIS),
+            diis: crate::scf::diis::DiisWorkspace::allocate(
+                norbs,
+                crate::scf::diis::DEFAULT_MAX_DIIS,
+            ),
             diatomic_pairs: Vec::new(),
         }
     }

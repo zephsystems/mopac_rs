@@ -33,11 +33,18 @@ fn test_scrutiny_unit_immutability_and_core_repulsion() {
     assert_eq!(dist_h2, dist_copy, "Input distance must remain immutable");
 
     // Physical bounds check: H-H nuclear repulsion at 0.74 Å must be positive and in reasonable eV range (~15-25 eV)
-    assert!(e_rep_h2 > 10.0 && e_rep_h2 < 30.0, "H2 core repulsion {} out of physical bounds", e_rep_h2);
+    assert!(
+        e_rep_h2 > 10.0 && e_rep_h2 < 30.0,
+        "H2 core repulsion {} out of physical bounds",
+        e_rep_h2
+    );
 
     // Distance scaling check: Repulsion must decrease monotonically as distance increases
     let e_rep_h2_longer = compute_pair_core_repulsion(1.50, &h_param, &h_param);
-    assert!(e_rep_h2 > e_rep_h2_longer, "Core repulsion must decay monotonically with distance");
+    assert!(
+        e_rep_h2 > e_rep_h2_longer,
+        "Core repulsion must decay monotonically with distance"
+    );
 
     // Heteronuclear pair check: C-H bond (1.09 Å)
     let e_rep_ch = compute_pair_core_repulsion(1.09, &c_param, &h_param);
@@ -99,20 +106,35 @@ fn test_scrutiny_rotation_orthonormality_and_collinear_degeneracy() {
     let ra = [1.23, 4.56, -7.89];
     let rb = [-2.34, 0.12, 3.45];
     let frame_a = DiatomicRotationFrame::compute(&ra, &rb);
-    assert!(frame_a.is_orthonormal(1e-14), "Arbitrary rotation frame must be orthonormal to 1e-14");
-    assert!((frame_a.determinant() - 1.0).abs() < 1e-14, "Determinant must be +1.0");
+    assert!(
+        frame_a.is_orthonormal(1e-14),
+        "Arbitrary rotation frame must be orthonormal to 1e-14"
+    );
+    assert!(
+        (frame_a.determinant() - 1.0).abs() < 1e-14,
+        "Determinant must be +1.0"
+    );
 
     // Case B: Collinear along global +Z axis (degenerate case xy -> 0)
     let ra_z = [0.0, 0.0, 0.0];
     let rb_z = [0.0, 0.0, 2.5];
     let frame_z = DiatomicRotationFrame::compute(&ra_z, &rb_z);
-    assert!(frame_z.is_orthonormal(1e-14), "+Z collinear frame must be orthonormal");
-    assert!((frame_z.determinant().abs() - 1.0).abs() < 1e-14, "Z frame determinant must have unit norm");
+    assert!(
+        frame_z.is_orthonormal(1e-14),
+        "+Z collinear frame must be orthonormal"
+    );
+    assert!(
+        (frame_z.determinant().abs() - 1.0).abs() < 1e-14,
+        "Z frame determinant must have unit norm"
+    );
 
     // Case C: Collinear along global -Z axis
     let rb_neg_z = [0.0, 0.0, -3.0];
     let frame_neg_z = DiatomicRotationFrame::compute(&ra_z, &rb_neg_z);
-    assert!(frame_neg_z.is_orthonormal(1e-14), "-Z collinear frame must be orthonormal");
+    assert!(
+        frame_neg_z.is_orthonormal(1e-14),
+        "-Z collinear frame must be orthonormal"
+    );
 }
 
 /// Scrutiny Test 4: Slater Overlap Invariants & Radial Decay.
@@ -127,26 +149,53 @@ fn test_scrutiny_slater_overlap_invariants() {
 
     // Normalization at R = 0
     let s_zero = overlap_1s_1s(0.0, zeta_h, zeta_h);
-    assert!((s_zero - 1.0).abs() < 1e-12, "S(0) must be exactly 1.0, got {}", s_zero);
+    assert!(
+        (s_zero - 1.0).abs() < 1e-12,
+        "S(0) must be exactly 1.0, got {}",
+        s_zero
+    );
 
     // Monotonic decay: H-H overlap at 0.74 Å is ~0.680
     let s_074 = overlap_1s_1s(0.74, zeta_h, zeta_h);
     let s_150 = overlap_1s_1s(1.50, zeta_h, zeta_h);
     let s_300 = overlap_1s_1s(3.00, zeta_h, zeta_h);
 
-    assert!((s_074 - 0.6800).abs() < 0.01, "H2 overlap at 0.74 Å must be ~0.680, got {}", s_074);
-    assert!(s_074 > s_150, "Overlap must decrease with distance: {} > {}", s_074, s_150);
-    assert!(s_150 > s_300, "Overlap must decrease with distance: {} > {}", s_150, s_300);
+    assert!(
+        (s_074 - 0.6800).abs() < 0.01,
+        "H2 overlap at 0.74 Å must be ~0.680, got {}",
+        s_074
+    );
+    assert!(
+        s_074 > s_150,
+        "Overlap must decrease with distance: {} > {}",
+        s_074,
+        s_150
+    );
+    assert!(
+        s_150 > s_300,
+        "Overlap must decrease with distance: {} > {}",
+        s_150,
+        s_300
+    );
 
     // Asymptotic vanish at long range (10 Å)
     let s_far = overlap_1s_1s(10.0, zeta_h, zeta_h);
-    assert!(s_far < 1e-6, "Overlap at 10 Å must be negligibly small, got {}", s_far);
+    assert!(
+        s_far < 1e-6,
+        "Overlap at 10 Å must be negligibly small, got {}",
+        s_far
+    );
 
     // Symmetry test: swapping zetas must yield identical overlap
     let zeta_diff = 1.8086650; // Carbon exponent
     let s_ab = overlap_1s_1s(1.09, zeta_h, zeta_diff);
     let s_ba = overlap_1s_1s(1.09, zeta_diff, zeta_h);
-    assert!((s_ab - s_ba).abs() < 1e-14, "Overlap must be symmetric: {} == {}", s_ab, s_ba);
+    assert!(
+        (s_ab - s_ba).abs() < 1e-14,
+        "Overlap must be symmetric: {} == {}",
+        s_ab,
+        s_ba
+    );
 }
 
 /// Scrutiny Test 5: ScfWorkspace Cache Alignment & Zero-Allocation Invariance.
@@ -160,10 +209,18 @@ fn test_scrutiny_scf_workspace_zero_allocations() {
 
     // Verify 64-byte alignment
     let ptr = ws.fock.data.as_ptr() as usize;
-    assert_eq!(ptr % CACHE_LINE_ALIGNMENT, 0, "Fock buffer must be 64-byte aligned");
+    assert_eq!(
+        ptr % CACHE_LINE_ALIGNMENT,
+        0,
+        "Fock buffer must be 64-byte aligned"
+    );
 
     let p_ptr = ws.density.data.as_ptr() as usize;
-    assert_eq!(p_ptr % CACHE_LINE_ALIGNMENT, 0, "Density buffer must be 64-byte aligned");
+    assert_eq!(
+        p_ptr % CACHE_LINE_ALIGNMENT,
+        0,
+        "Density buffer must be 64-byte aligned"
+    );
 
     // Write values
     ws.fock.set(10, 20, std::f64::consts::PI);
@@ -172,7 +229,11 @@ fn test_scrutiny_scf_workspace_zero_allocations() {
     // Reset without reallocating
     ws.reset();
     assert_eq!(ws.fock.get(10, 20), 0.0, "Reset must zero all elements");
-    assert_eq!(ws.fock.data.as_ptr() as usize, ptr, "Pointer must not change upon reset");
+    assert_eq!(
+        ws.fock.data.as_ptr() as usize,
+        ptr,
+        "Pointer must not change upon reset"
+    );
 }
 
 /// Scrutiny Test 6: Long-Range Electrostatic Asymptotics of Two-Electron Integrals.
@@ -185,7 +246,10 @@ fn test_scrutiny_two_electron_coulomb_asymptotics() {
 
     // At short range (R = 0), (ss|ss) equals one-center integral
     let gamma_0 = dewar_klopman_monopole(0.0, gss_a, gss_a);
-    assert!((gamma_0 - gss_a).abs() < 1e-12, "At R=0, gamma must equal gss exactly");
+    assert!(
+        (gamma_0 - gss_a).abs() < 1e-12,
+        "At R=0, gamma must equal gss exactly"
+    );
 
     // At long range (R = 100 Å), gamma must equal 14.399645 / 100 Å to within 0.01%
     let r_far = 100.0;
@@ -229,7 +293,11 @@ fn test_scrutiny_eigensolver_invariants() {
     let mut eigenvectors = AlignedMatrix::zeroed(n, n);
 
     let sweeps = diagonalize_symmetric(&fock, &mut eigenvalues, &mut eigenvectors);
-    assert!(sweeps < 15, "Jacobi must converge in fewer than 15 sweeps for 4x4, took {}", sweeps);
+    assert!(
+        sweeps < 15,
+        "Jacobi must converge in fewer than 15 sweeps for 4x4, took {}",
+        sweeps
+    );
 
     // 1. Orthonormality check: C^T C = I
     for i in 0..n {
@@ -242,7 +310,10 @@ fn test_scrutiny_eigensolver_invariants() {
             assert!(
                 (dot - expected).abs() < 1e-14,
                 "Orthonormality violation at ({}, {}): dot={}, expected={}",
-                i, j, dot, expected
+                i,
+                j,
+                dot,
+                expected
             );
         }
     }
@@ -259,7 +330,10 @@ fn test_scrutiny_eigensolver_invariants() {
             assert!(
                 (f_v - lambda_v).abs() < 1e-13,
                 "Secular equation F*v = lambda*v failed for orb {} row {}: {} vs {}",
-                i, r, f_v, lambda_v
+                i,
+                r,
+                f_v,
+                lambda_v
             );
         }
     }
@@ -269,7 +343,8 @@ fn test_scrutiny_eigensolver_invariants() {
         assert!(
             eigenvalues[i] <= eigenvalues[i + 1],
             "Eigenvalues must be sorted: {} > {}",
-            eigenvalues[i], eigenvalues[i + 1]
+            eigenvalues[i],
+            eigenvalues[i + 1]
         );
     }
 }
@@ -282,10 +357,7 @@ fn test_scrutiny_eigensolver_invariants() {
 fn test_scrutiny_end_to_end_h2_scf_convergence() {
     use mopac_core::scf::scf_loop::run_rhf_scf;
 
-    let coords = vec![
-        [0.0, 0.0, 0.0],
-        [0.0, 0.0, 0.74],
-    ];
+    let coords = vec![[0.0, 0.0, 0.0], [0.0, 0.0, 0.74]];
     let atomic_numbers = vec![1, 1];
     let batch = MolecularBatch::new(atomic_numbers, &coords);
     let am1 = Am1Model;
@@ -293,21 +365,31 @@ fn test_scrutiny_end_to_end_h2_scf_convergence() {
     let mut ws = ScfWorkspace::allocate(batch.norbs);
 
     let result = run_rhf_scf(
-        &batch,
-        &am1,
-        &mut ws,
-        50,       // max iter
-        1e-8,     // energy tol in eV
-        1e-7,     // density tol
+        &batch, &am1, &mut ws, 50,   // max iter
+        1e-8, // energy tol in eV
+        1e-7, // density tol
     );
 
     assert!(result.converged, "H2 SCF must converge successfully");
-    assert!(result.iterations <= 15, "H2 must converge in <= 15 iterations, took {}", result.iterations);
+    assert!(
+        result.iterations <= 15,
+        "H2 must converge in <= 15 iterations, took {}",
+        result.iterations
+    );
 
     // Total energy check (electronic energy + nuclear repulsion)
-    assert!(result.electronic_energy_ev < 0.0, "Electronic energy must be negative (attractive bound state)");
-    assert!(result.nuclear_repulsion_ev > 0.0, "Nuclear repulsion must be positive");
-    assert!(result.total_energy_ev < 0.0, "Total energy for stable H2 must be negative");
+    assert!(
+        result.electronic_energy_ev < 0.0,
+        "Electronic energy must be negative (attractive bound state)"
+    );
+    assert!(
+        result.nuclear_repulsion_ev > 0.0,
+        "Nuclear repulsion must be positive"
+    );
+    assert!(
+        result.total_energy_ev < 0.0,
+        "Total energy for stable H2 must be negative"
+    );
 
     // Empirical Parity Verification with official MOPAC v23.2.5 reference:
     // MOPAC v23.2.5 output for H2 (R=0.74 A, AM1):
@@ -325,7 +407,11 @@ fn test_scrutiny_end_to_end_h2_scf_convergence() {
 
     // HOMO-LUMO gap check (~19.118 eV)
     let gap = result.lumo_energy_ev - result.homo_energy_ev;
-    assert!((gap - 19.118441).abs() < 1e-4, "HOMO-LUMO gap mismatch: {}", gap);
+    assert!(
+        (gap - 19.118441).abs() < 1e-4,
+        "HOMO-LUMO gap mismatch: {}",
+        gap
+    );
 }
 
 /// Scrutiny Test 9: Pulay DIIS Commutator Invariants & Superlinear Error Reduction.
@@ -336,7 +422,9 @@ fn test_scrutiny_end_to_end_h2_scf_convergence() {
 /// 3. Monotonic reduction of commutator error norm $\|[F, P]\| \to 0$ in the SCF cycle.
 #[test]
 fn test_scrutiny_pulay_diis_error_reduction() {
-    use mopac_core::scf::diis::{solve_pulay_system, DiisWorkspace, DEFAULT_MAX_DIIS, MAX_DIIS_CAPACITY};
+    use mopac_core::scf::diis::{
+        solve_pulay_system, DiisWorkspace, DEFAULT_MAX_DIIS, MAX_DIIS_CAPACITY,
+    };
 
     let n = 4;
     let mut fock = AlignedMatrix::zeroed(n, n);
@@ -344,33 +432,57 @@ fn test_scrutiny_pulay_diis_error_reduction() {
     let mut tmp = AlignedMatrix::zeroed(n, n);
 
     // Populate symmetric test matrices
-    fock.set(0, 0, -12.0); fock.set(1, 1, -6.0); fock.set(2, 2, -6.0); fock.set(3, 3, -4.0);
-    fock.set(0, 1, -1.5);  fock.set(1, 0, -1.5);
-    fock.set(1, 2, -0.8);  fock.set(2, 1, -0.8);
+    fock.set(0, 0, -12.0);
+    fock.set(1, 1, -6.0);
+    fock.set(2, 2, -6.0);
+    fock.set(3, 3, -4.0);
+    fock.set(0, 1, -1.5);
+    fock.set(1, 0, -1.5);
+    fock.set(1, 2, -0.8);
+    fock.set(2, 1, -0.8);
 
-    density.set(0, 0, 1.8); density.set(1, 1, 1.2); density.set(2, 2, 0.9); density.set(3, 3, 0.1);
-    density.set(0, 1, 0.4); density.set(1, 0, 0.4);
-    density.set(1, 2, 0.2); density.set(2, 1, 0.2);
+    density.set(0, 0, 1.8);
+    density.set(1, 1, 1.2);
+    density.set(2, 2, 0.9);
+    density.set(3, 3, 0.1);
+    density.set(0, 1, 0.4);
+    density.set(1, 0, 0.4);
+    density.set(1, 2, 0.2);
+    density.set(2, 1, 0.2);
 
     let mut diis = DiisWorkspace::allocate(n, DEFAULT_MAX_DIIS);
 
     // 1. First DIIS step (m = 1)
     let res1 = diis.push_and_extrapolate(&mut fock, &density, &mut tmp);
-    assert!(!res1.extrapolated, "Cannot extrapolate with only 1 history point");
+    assert!(
+        !res1.extrapolated,
+        "Cannot extrapolate with only 1 history point"
+    );
     assert_eq!(res1.subspace_size, 1);
-    assert!(res1.max_error > 0.0, "Error must be positive for non-commuting matrices");
+    assert!(
+        res1.max_error > 0.0,
+        "Error must be positive for non-commuting matrices"
+    );
 
     // Verify skew-symmetry of stored error matrix: e_ij = -e_ji, e_ii = 0
     let err_mat = &diis.error_history[diis.active_slots[0]];
     for i in 0..n {
-        assert!(err_mat.get(i, i).abs() < 1e-15, "Diagonal commutator must be zero");
+        assert!(
+            err_mat.get(i, i).abs() < 1e-15,
+            "Diagonal commutator must be zero"
+        );
         for j in 0..n {
             let e_ij = err_mat.get(i, j);
             let e_ji = err_mat.get(j, i);
             assert!(
                 (e_ij + e_ji).abs() < 1e-14,
                 "Commutator must be strictly anti-symmetric: e({},{})={}, e({},{})={}",
-                i, j, e_ij, j, i, e_ji
+                i,
+                j,
+                e_ij,
+                j,
+                i,
+                e_ji
             );
         }
     }
@@ -385,18 +497,27 @@ fn test_scrutiny_pulay_diis_error_reduction() {
 
     let mut coeffs = [0.0f64; MAX_DIIS_CAPACITY];
     let ok = solve_pulay_system(&b_mat, 2, &mut coeffs);
-    assert!(ok, "Pulay linear solver must successfully invert 2x2 system");
+    assert!(
+        ok,
+        "Pulay linear solver must successfully invert 2x2 system"
+    );
     // Analytical solution: c_0 = -1.0, c_1 = 2.0 (sum = 1.0, error* = 0)
     assert!(
         (coeffs[0] - (-1.0)).abs() < 1e-10,
-        "Coeff 0 mismatch: {} vs -1.0", coeffs[0]
+        "Coeff 0 mismatch: {} vs -1.0",
+        coeffs[0]
     );
     assert!(
         (coeffs[1] - 2.0).abs() < 1e-10,
-        "Coeff 1 mismatch: {} vs 2.0", coeffs[1]
+        "Coeff 1 mismatch: {} vs 2.0",
+        coeffs[1]
     );
     let sum_c = coeffs[0] + coeffs[1];
-    assert!((sum_c - 1.0).abs() < 1e-12, "Coefficients must sum to 1.0: {}", sum_c);
+    assert!(
+        (sum_c - 1.0).abs() < 1e-12,
+        "Coefficients must sum to 1.0: {}",
+        sum_c
+    );
 
     // 3. Monotonic error reduction in complete H2 SCF calculation
     let coords = vec![[0.0, 0.0, 0.0], [0.0, 0.0, 0.74]];
@@ -404,16 +525,16 @@ fn test_scrutiny_pulay_diis_error_reduction() {
     let am1 = Am1Model;
     let mut ws = ScfWorkspace::allocate(batch.norbs);
 
-    let res = mopac_core::scf::scf_loop::run_rhf_scf(
-        &batch,
-        &am1,
-        &mut ws,
-        30,
-        1e-10,
-        1e-9,
+    let res = mopac_core::scf::scf_loop::run_rhf_scf(&batch, &am1, &mut ws, 30, 1e-10, 1e-9);
+    assert!(
+        res.converged,
+        "H2 SCF with DIIS must converge to high precision"
     );
-    assert!(res.converged, "H2 SCF with DIIS must converge to high precision");
-    assert!(res.iterations <= 10, "DIIS must converge H2 in <= 10 iterations, took {}", res.iterations);
+    assert!(
+        res.iterations <= 10,
+        "DIIS must converge H2 in <= 10 iterations, took {}",
+        res.iterations
+    );
 }
 
 /// Scrutiny Test 10: Complete Diatomic STO Overlap Block & 3D Tensor Rotation Invariance.
@@ -436,7 +557,15 @@ fn test_scrutiny_diatomic_overlap_block_invariants_and_rotation() {
     // 1. Carbon Monoxide (C-O) at R = 1.128 Å along Z
     let r_co = 1.128;
     let mut s_mat_co = [[0.0f64; 4]; 4];
-    compute_diatomic_overlap_block(6, 8, &param_c, &param_o, r_co, [0.0, 0.0, 1.0], &mut s_mat_co);
+    compute_diatomic_overlap_block(
+        6,
+        8,
+        &param_c,
+        &param_o,
+        r_co,
+        [0.0, 0.0, 1.0],
+        &mut s_mat_co,
+    );
 
     let beta_s_c = param_c.betas;
     let beta_p_c = param_c.betap;
@@ -457,29 +586,42 @@ fn test_scrutiny_diatomic_overlap_block_invariants_and_rotation() {
 
     assert!(
         (h_ss - (-6.259811)).abs() < 1e-5,
-        "C-O H_ss mismatch with MOPAC: {} vs -6.259811", h_ss
+        "C-O H_ss mismatch with MOPAC: {} vs -6.259811",
+        h_ss
     );
     assert!(
         (h_pipi - (-3.951300)).abs() < 1e-5,
-        "C-O H_pipi mismatch with MOPAC: {} vs -3.951300", h_pipi
+        "C-O H_pipi mismatch with MOPAC: {} vs -3.951300",
+        h_pipi
     );
     assert!(
         (h_sigma - 5.440476).abs() < 1e-5,
-        "C-O H_sigma mismatch with MOPAC: {} vs 5.440476", h_sigma
+        "C-O H_sigma mismatch with MOPAC: {} vs 5.440476",
+        h_sigma
     );
     assert!(
         (h_s_pz - 6.715171).abs() < 1e-5,
-        "C-O H(s_C, pz_O) mismatch with MOPAC: {} vs 6.715171", h_s_pz
+        "C-O H(s_C, pz_O) mismatch with MOPAC: {} vs 6.715171",
+        h_s_pz
     );
     assert!(
         (h_pz_s - (-7.616655)).abs() < 1e-5,
-        "C-O H(pz_C, s_O) mismatch with MOPAC: {} vs -7.616655", h_pz_s
+        "C-O H(pz_C, s_O) mismatch with MOPAC: {} vs -7.616655",
+        h_pz_s
     );
 
     // 2. Carbon-Hydrogen (C-H) at R = 1.1198 Å along Z
     let r_ch = 1.1198;
     let mut s_mat_ch = [[0.0f64; 4]; 4];
-    compute_diatomic_overlap_block(6, 1, &param_c, &param_h, r_ch, [0.0, 0.0, 1.0], &mut s_mat_ch);
+    compute_diatomic_overlap_block(
+        6,
+        1,
+        &param_c,
+        &param_h,
+        r_ch,
+        [0.0, 0.0, 1.0],
+        &mut s_mat_ch,
+    );
 
     let beta_s_h = param_h.betas;
     // Expected H_core values from official MOPAC v23.2.5 on CH:
@@ -490,11 +632,13 @@ fn test_scrutiny_diatomic_overlap_block_invariants_and_rotation() {
 
     assert!(
         (h_ss_ch - (-5.148905)).abs() < 1e-5,
-        "C-H H_ss mismatch with MOPAC: {} vs -5.148905", h_ss_ch
+        "C-H H_ss mismatch with MOPAC: {} vs -5.148905",
+        h_ss_ch
     );
     assert!(
         (h_pz_s_ch - (-3.220867)).abs() < 1e-5,
-        "C-H H(pz_C, s_H) mismatch with MOPAC: {} vs -3.220867", h_pz_s_ch
+        "C-H H(pz_C, s_H) mismatch with MOPAC: {} vs -3.220867",
+        h_pz_s_ch
     );
 
     // 3. 3D Rotational Invariance under arbitrary space rotation
@@ -516,7 +660,7 @@ fn test_scrutiny_diatomic_overlap_block_invariants_and_rotation() {
     mopac_core::scf::eigensolver::diagonalize_symmetric(&pp_block, &mut eigs, &mut vecs);
 
     let s_sigma_ref = s_mat_co[3][3]; // along Z
-    let s_pi_ref = s_mat_co[1][1];    // perpendicular
+    let s_pi_ref = s_mat_co[1][1]; // perpendicular
 
     let mut expected_eigs = [s_sigma_ref, s_pi_ref, s_pi_ref];
     expected_eigs.sort_by(|a, b| a.partial_cmp(b).unwrap());
@@ -525,7 +669,9 @@ fn test_scrutiny_diatomic_overlap_block_invariants_and_rotation() {
         assert!(
             (eigs[i] - expected_eigs[i]).abs() < 1e-12,
             "Rotational invariance eigenvalue violation at {}: {} vs expected {}",
-            i, eigs[i], expected_eigs[i]
+            i,
+            eigs[i],
+            expected_eigs[i]
         );
     }
 }
@@ -540,11 +686,11 @@ fn test_scrutiny_diatomic_overlap_block_invariants_and_rotation() {
 ///    are invariant with or without level shifting to < 1e-7 eV.
 #[test]
 fn test_scrutiny_virtual_orbital_level_shifting_invariants() {
-    use mopac_core::scf::scf_loop::{apply_level_shift, run_rhf_scf_with_options, ScfOptions};
+    use mopac_core::parameters::am1::Am1Model;
     use mopac_core::scf::density::compute_density_matrix;
     use mopac_core::scf::eigensolver::diagonalize_symmetric;
-    use mopac_core::types::{MolecularBatch, ScfWorkspace, AlignedMatrix};
-    use mopac_core::parameters::am1::Am1Model;
+    use mopac_core::scf::scf_loop::{apply_level_shift, run_rhf_scf_with_options, ScfOptions};
+    use mopac_core::types::{AlignedMatrix, MolecularBatch, ScfWorkspace};
 
     let am1 = Am1Model;
     let h2_coords = [[0.0, 0.0, 0.0], [0.0, 0.0, 0.74144]];
@@ -572,7 +718,8 @@ fn test_scrutiny_virtual_orbital_level_shifting_invariants() {
     let occ_shift_norm = (s_c_occ[0] * s_c_occ[0] + s_c_occ[1] * s_c_occ[1]).sqrt();
     assert!(
         occ_shift_norm < 1e-12,
-        "Occupied orbital experienced non-zero level shift: norm = {:e}", occ_shift_norm
+        "Occupied orbital experienced non-zero level shift: norm = {:e}",
+        occ_shift_norm
     );
 
     // Verify S * c_virt = sigma * c_virt:
@@ -587,7 +734,9 @@ fn test_scrutiny_virtual_orbital_level_shifting_invariants() {
         assert!(
             (val - expected).abs() < 1e-12,
             "Virtual orbital level shift mismatch at component {}: {} vs expected {}",
-            i, val, expected
+            i,
+            val,
+            expected
         );
     }
 
@@ -603,7 +752,9 @@ fn test_scrutiny_virtual_orbital_level_shifting_invariants() {
             assert!(
                 (sp_ij - ps_ij).abs() < 1e-12,
                 "Shift operator commutator violation: [S, P]({},{}) = {:e}",
-                i, j, (sp_ij - ps_ij).abs()
+                i,
+                j,
+                (sp_ij - ps_ij).abs()
             );
         }
     }
@@ -641,23 +792,25 @@ fn test_scrutiny_virtual_orbital_level_shifting_invariants() {
         },
     );
 
-
     assert!(res_unshifted.converged, "Unshifted H2 must converge");
     assert!(res_shifted.converged, "Shifted H2 must converge");
     assert!(
         (res_shifted.total_energy_ev - res_unshifted.total_energy_ev).abs() < 1e-7,
         "Total energy mismatch with level shifting: {} vs {}",
-        res_shifted.total_energy_ev, res_unshifted.total_energy_ev
+        res_shifted.total_energy_ev,
+        res_unshifted.total_energy_ev
     );
     assert!(
         (res_shifted.homo_energy_ev - res_unshifted.homo_energy_ev).abs() < 1e-7,
         "HOMO energy mismatch with level shifting: {} vs {}",
-        res_shifted.homo_energy_ev, res_unshifted.homo_energy_ev
+        res_shifted.homo_energy_ev,
+        res_unshifted.homo_energy_ev
     );
     assert!(
         (res_shifted.lumo_energy_ev - res_unshifted.lumo_energy_ev).abs() < 1e-7,
         "LUMO energy mismatch with level shifting: {} vs {}",
-        res_shifted.lumo_energy_ev, res_unshifted.lumo_energy_ev
+        res_shifted.lumo_energy_ev,
+        res_unshifted.lumo_energy_ev
     );
 }
 
@@ -682,11 +835,13 @@ fn test_scrutiny_camp_king_unitary_interpolator() {
     let (x_min, f_min) = spline_minimize(&x_pts, &f_pts, &df_pts, -1.0, 4.0);
     assert!(
         (x_min - 2.0).abs() < 1e-6,
-        "Spline must recover analytical minimum at x = 2.0, found: {}", x_min
+        "Spline must recover analytical minimum at x = 2.0, found: {}",
+        x_min
     );
     assert!(
         (f_min - (-15.0)).abs() < 1e-6,
-        "Spline must recover minimum value f(2) = -15.0, found: {}", f_min
+        "Spline must recover minimum value f(2) = -15.0, found: {}",
+        f_min
     );
 
     // 2. Orthonormality & Idempotency Invariance under Unitary Orbital Rotation
@@ -729,11 +884,15 @@ fn test_scrutiny_camp_king_unitary_interpolator() {
         &mut ws,
     );
 
-    assert!(res.rotated, "Camp-King must trigger rotation when orbitals differ");
+    assert!(
+        res.rotated,
+        "Camp-King must trigger rotation when orbitals differ"
+    );
     assert!(
         (res.max_rotation_angle - angle).abs() < 1e-6,
         "Principal angle must match perturbation angle {}: got {}",
-        angle, res.max_rotation_angle
+        angle,
+        res.max_rotation_angle
     );
 
     // Verify Orthonormality: C^T C = I
@@ -747,7 +906,10 @@ fn test_scrutiny_camp_king_unitary_interpolator() {
             assert!(
                 (dot - expected).abs() < 1e-13,
                 "Orthonormality violation at ({},{}): dot = {}, expected = {}",
-                i, j, dot, expected
+                i,
+                j,
+                dot,
+                expected
             );
         }
     }
@@ -782,7 +944,10 @@ fn test_scrutiny_camp_king_unitary_interpolator() {
             assert!(
                 (p2_val - two_p).abs() < 1e-13,
                 "Density idempotency violation P^2 != 2P at ({},{}): {} vs {}",
-                mu, nu, p2_val, two_p
+                mu,
+                nu,
+                p2_val,
+                two_p
             );
         }
     }
@@ -836,7 +1001,9 @@ fn test_scrutiny_density_fitting_ri_v_invariants() {
             assert!(
                 diff < 1e-14,
                 "Cholesky reconstruction error at ({},{}): diff = {:e}",
-                i, j, diff
+                i,
+                j,
+                diff
             );
         }
     }
@@ -867,7 +1034,10 @@ fn test_scrutiny_density_fitting_ri_v_invariants() {
             assert!(
                 (sum - expected).abs() < 1e-13,
                 "V * V^{{-1}} != I at ({},{}): sum = {}, expected = {}",
-                i, j, sum, expected
+                i,
+                j,
+                sum,
+                expected
             );
         }
     }
@@ -880,7 +1050,8 @@ fn test_scrutiny_density_fitting_ri_v_invariants() {
         for nu in 0..norbs {
             for q in 0..naux {
                 // Populate B directly with orthogonalized components
-                let val = ((mu + 1) as f64) * 0.7 + ((nu + 1) as f64) * 0.4 + ((q + 1) as f64) * 0.3;
+                let val =
+                    ((mu + 1) as f64) * 0.7 + ((nu + 1) as f64) * 0.4 + ((q + 1) as f64) * 0.3;
                 b_tensor.set(mu, nu, q, val);
             }
         }
@@ -914,7 +1085,11 @@ fn test_scrutiny_density_fitting_ri_v_invariants() {
             assert!(
                 diff < 1e-12,
                 "RI Coulomb contraction mismatch at ({},{}): RI = {}, direct = {}, diff = {:e}",
-                mu, nu, j_val, j_ref, diff
+                mu,
+                nu,
+                j_val,
+                j_ref,
+                diff
             );
         }
     }
@@ -928,9 +1103,11 @@ fn test_scrutiny_density_fitting_ri_v_invariants() {
 /// 3. Anti-symmetry of internal diatomic forces: F_A = -F_B.
 #[test]
 fn test_scrutiny_analytical_gradients_vs_finite_difference() {
-    use mopac_core::gradients::{compute_cartesian_gradients, compute_gradient_norms, GradientWorkspace};
+    use mopac_core::gradients::{
+        compute_cartesian_gradients, compute_gradient_norms, GradientWorkspace,
+    };
     use mopac_core::parameters::am1::Am1Model;
-    use mopac_core::scf::scf_loop::{run_rhf_scf, ScfOptions, run_rhf_scf_with_options};
+    use mopac_core::scf::scf_loop::{run_rhf_scf, run_rhf_scf_with_options, ScfOptions};
     use mopac_core::types::{MolecularBatch, ScfWorkspace};
 
     let am1 = Am1Model;
@@ -947,7 +1124,13 @@ fn test_scrutiny_analytical_gradients_vs_finite_difference() {
 
     // 2. Compute analytical gradients
     let mut gradients = vec![[0.0f64; 3]; batch.natoms];
-    compute_cartesian_gradients(&mut batch, &am1, &scf_ws.density, &mut grad_ws, &mut gradients);
+    compute_cartesian_gradients(
+        &mut batch,
+        &am1,
+        &scf_ws.density,
+        &mut grad_ws,
+        &mut gradients,
+    );
 
     // 3. Verify translational invariance: sum of forces is identically zero
     let mut sum_gx = 0.0;
@@ -972,7 +1155,15 @@ fn test_scrutiny_analytical_gradients_vs_finite_difference() {
         &batch_plus,
         &am1,
         &mut scf_plus,
-        &ScfOptions { max_iter: 50, energy_tol_ev: 1e-12, density_tol: 1e-10, level_shift_ev: 0.0, damping: 0.5, use_nddo: false, cosmo: None },
+        &ScfOptions {
+            max_iter: 50,
+            energy_tol_ev: 1e-12,
+            density_tol: 1e-10,
+            level_shift_ev: 0.0,
+            damping: 0.5,
+            use_nddo: false,
+            cosmo: None,
+        },
     );
 
     let coords_minus = vec![[0.0, 0.0, 0.0], [0.0, 0.0, 0.85 - h]];
@@ -982,9 +1173,16 @@ fn test_scrutiny_analytical_gradients_vs_finite_difference() {
         &batch_minus,
         &am1,
         &mut scf_minus,
-        &ScfOptions { max_iter: 50, energy_tol_ev: 1e-12, density_tol: 1e-10, level_shift_ev: 0.0, damping: 0.5, use_nddo: false, cosmo: None },
+        &ScfOptions {
+            max_iter: 50,
+            energy_tol_ev: 1e-12,
+            density_tol: 1e-10,
+            level_shift_ev: 0.0,
+            damping: 0.5,
+            use_nddo: false,
+            cosmo: None,
+        },
     );
-
 
     let num_de_dz1 = (res_plus.total_energy_ev - res_minus.total_energy_ev) / (2.0 * h);
     let anal_de_dz1 = gradients[1][2];
@@ -993,11 +1191,16 @@ fn test_scrutiny_analytical_gradients_vs_finite_difference() {
     assert!(
         diff < 1e-4,
         "Analytical vs Numerical gradient mismatch: anal = {}, num = {}, diff = {:e}",
-        anal_de_dz1, num_de_dz1, diff
+        anal_de_dz1,
+        num_de_dz1,
+        diff
     );
 
     let (rms, max_g) = compute_gradient_norms(&gradients);
-    assert!(rms > 0.0, "RMS gradient must be positive for non-equilibrium geometry");
+    assert!(
+        rms > 0.0,
+        "RMS gradient must be positive for non-equilibrium geometry"
+    );
     assert!(max_g > 0.0);
     println!("✅ H2 (R=0.85 Å) Gradient verified: anal = {:.6} eV/Å, num = {:.6} eV/Å, RMS = {:.3} kcal/(mol·Å)",
         anal_de_dz1, num_de_dz1, rms
@@ -1042,12 +1245,14 @@ fn test_scrutiny_lbfgs_geometry_optimization() {
     assert!(
         res.final_energy_ev < res.initial_energy_ev,
         "Energy must strictly decrease: initial = {}, final = {}",
-        res.initial_energy_ev, res.final_energy_ev
+        res.initial_energy_ev,
+        res.final_energy_ev
     );
     assert!(
         res.final_grad_rms < opts.grad_rms_tol,
         "Final RMS gradient {} must be below tolerance {}",
-        res.final_grad_rms, opts.grad_rms_tol
+        res.final_grad_rms,
+        opts.grad_rms_tol
     );
 
     let final_r = batch.distance(0, 1);
@@ -1074,11 +1279,7 @@ fn test_scrutiny_full_nddo_scf_water_parity() {
     use mopac_core::scf::scf_loop::{run_rhf_scf_with_options, ScfOptions};
     use mopac_core::types::{MolecularBatch, ScfWorkspace};
 
-    let coords = vec![
-        [0.0, 0.0, 0.0],
-        [0.757, 0.586, 0.0],
-        [-0.757, 0.586, 0.0],
-    ];
+    let coords = vec![[0.0, 0.0, 0.0], [0.757, 0.586, 0.0], [-0.757, 0.586, 0.0]];
     let batch = MolecularBatch::new(vec![8, 1, 1], &coords);
     let am1 = Am1Model;
     let mut ws = ScfWorkspace::allocate(batch.norbs);
@@ -1095,12 +1296,19 @@ fn test_scrutiny_full_nddo_scf_water_parity() {
 
     let res = run_rhf_scf_with_options(&batch, &am1, &mut ws, &opts);
     assert!(res.converged, "Full NDDO SCF on H2O must converge");
-    assert!(res.electronic_energy_ev < 0.0, "Electronic energy must be negative");
-    assert!(res.nuclear_repulsion_ev > 0.0, "Nuclear repulsion must be positive");
+    assert!(
+        res.electronic_energy_ev < 0.0,
+        "Electronic energy must be negative"
+    );
+    assert!(
+        res.nuclear_repulsion_ev > 0.0,
+        "Nuclear repulsion must be positive"
+    );
     assert!(
         res.homo_energy_ev < res.lumo_energy_ev,
         "HOMO-LUMO gap must be strictly positive: HOMO = {}, LUMO = {}",
-        res.homo_energy_ev, res.lumo_energy_ev
+        res.homo_energy_ev,
+        res.lumo_energy_ev
     );
 
     println!(
@@ -1120,10 +1328,7 @@ fn test_scrutiny_rm1_and_pm6_convergence() {
     use mopac_core::scf::scf_loop::{run_rhf_scf_with_options, ScfOptions};
     use mopac_core::types::{MolecularBatch, ScfWorkspace};
 
-    let coords = vec![
-        [0.0, 0.0, 0.0],
-        [0.0, 0.0, 0.74],
-    ];
+    let coords = vec![[0.0, 0.0, 0.0], [0.0, 0.0, 0.74]];
     let batch = MolecularBatch::new(vec![1, 1], &coords);
     let mut ws = ScfWorkspace::allocate(batch.norbs);
 
@@ -1142,11 +1347,15 @@ fn test_scrutiny_rm1_and_pm6_convergence() {
     ws.reset();
     let res_rm1 = run_rhf_scf_with_options(&batch, &rm1, &mut ws, &opts);
     assert!(res_rm1.converged, "RM1 SCF on H2 must converge");
-    assert!(res_rm1.total_energy_ev < 0.0, "RM1 total energy must be negative");
+    assert!(
+        res_rm1.total_energy_ev < 0.0,
+        "RM1 total energy must be negative"
+    );
     assert!(
         res_rm1.homo_energy_ev < res_rm1.lumo_energy_ev,
         "RM1 HOMO-LUMO gap must be positive: HOMO = {}, LUMO = {}",
-        res_rm1.homo_energy_ev, res_rm1.lumo_energy_ev
+        res_rm1.homo_energy_ev,
+        res_rm1.lumo_energy_ev
     );
 
     // 2. Verify PM6 on H2
@@ -1154,11 +1363,15 @@ fn test_scrutiny_rm1_and_pm6_convergence() {
     ws.reset();
     let res_pm6 = run_rhf_scf_with_options(&batch, &pm6, &mut ws, &opts);
     assert!(res_pm6.converged, "PM6 SCF on H2 must converge");
-    assert!(res_pm6.total_energy_ev < 0.0, "PM6 total energy must be negative");
+    assert!(
+        res_pm6.total_energy_ev < 0.0,
+        "PM6 total energy must be negative"
+    );
     assert!(
         res_pm6.homo_energy_ev < res_pm6.lumo_energy_ev,
         "PM6 HOMO-LUMO gap must be positive: HOMO = {}, LUMO = {}",
-        res_pm6.homo_energy_ev, res_pm6.lumo_energy_ev
+        res_pm6.homo_energy_ev,
+        res_pm6.lumo_energy_ev
     );
 
     println!(
@@ -1201,14 +1414,17 @@ fn test_scrutiny_pm3_and_extended_elements_convergence() {
     let pm3 = Pm3Model;
     let res_h2o_pm3 = run_rhf_scf_with_options(&batch_h2o, &pm3, &mut ws_h2o, &opts);
     assert!(res_h2o_pm3.converged, "PM3 on H2O must converge");
-    assert!(res_h2o_pm3.total_energy_ev < 0.0, "PM3 H2O total energy must be negative");
-    assert!(res_h2o_pm3.homo_energy_ev < res_h2o_pm3.lumo_energy_ev, "Positive HOMO-LUMO gap");
+    assert!(
+        res_h2o_pm3.total_energy_ev < 0.0,
+        "PM3 H2O total energy must be negative"
+    );
+    assert!(
+        res_h2o_pm3.homo_energy_ev < res_h2o_pm3.lumo_energy_ev,
+        "Positive HOMO-LUMO gap"
+    );
 
     // 2. Verify Hydrogen Fluoride (HF) under AM1 and PM6
-    let hf_coords = vec![
-        [0.0, 0.0, 0.0],
-        [0.0, 0.0, 0.917],
-    ];
+    let hf_coords = vec![[0.0, 0.0, 0.0], [0.0, 0.0, 0.917]];
     let batch_hf = MolecularBatch::new(vec![9, 1], &hf_coords);
     let mut ws_hf = ScfWorkspace::allocate(batch_hf.norbs);
     let am1 = Am1Model;
@@ -1223,11 +1439,7 @@ fn test_scrutiny_pm3_and_extended_elements_convergence() {
     assert!(res_hf_pm6.total_energy_ev < 0.0);
 
     // 3. Verify Hydrogen Sulfide (H2S) under AM1
-    let h2s_coords = vec![
-        [0.0, 0.0, 0.1],
-        [0.0, 0.96, -0.6],
-        [0.0, -0.96, -0.6],
-    ];
+    let h2s_coords = vec![[0.0, 0.0, 0.1], [0.0, 0.96, -0.6], [0.0, -0.96, -0.6]];
     let batch_h2s = MolecularBatch::new(vec![16, 1, 1], &h2s_coords);
     let mut ws_h2s = ScfWorkspace::allocate(batch_h2s.norbs);
     let res_h2s = run_rhf_scf_with_options(&batch_h2s, &am1, &mut ws_h2s, &opts);
@@ -1271,7 +1483,6 @@ fn test_scrutiny_hybridization_dipole_exact_parity() {
         use_nddo: true,
         cosmo: None,
     };
-
 
     let res = run_rhf_scf_with_options(&batch, &am1, &mut ws, &opts);
     assert!(res.converged);
@@ -1338,11 +1549,7 @@ fn test_scrutiny_full_nddo_lbfgs_water_relaxation() {
     let am1 = Am1Model;
 
     // Distorted water geometry: elongated OH bonds (1.15 A) and compressed angle
-    let distorted_coords = vec![
-        [0.0, 0.0, 0.1],
-        [0.0, 0.85, -0.65],
-        [0.0, -0.85, -0.65],
-    ];
+    let distorted_coords = vec![[0.0, 0.0, 0.1], [0.0, 0.85, -0.65], [0.0, -0.85, -0.65]];
     let mut batch = MolecularBatch::new(vec![8, 1, 1], &distorted_coords);
     let mut scf_ws = ScfWorkspace::allocate(batch.norbs);
     let mut grad_ws = GradientWorkspace::allocate(batch.norbs);
@@ -1360,11 +1567,15 @@ fn test_scrutiny_full_nddo_lbfgs_water_relaxation() {
 
     let res = optimize_geometry_lbfgs(&mut batch, &am1, &mut scf_ws, &mut grad_ws, &opts);
 
-    assert!(res.converged, "Full NDDO L-BFGS optimization on water must converge");
+    assert!(
+        res.converged,
+        "Full NDDO L-BFGS optimization on water must converge"
+    );
     assert!(
         res.final_energy_ev < res.initial_energy_ev,
         "Full NDDO energy must strictly decrease: initial = {:.6} eV, final = {:.6} eV",
-        res.initial_energy_ev, res.final_energy_ev
+        res.initial_energy_ev,
+        res.final_energy_ev
     );
 
     // Compute optimized O-H distance
@@ -1414,8 +1625,8 @@ fn test_scrutiny_constrained_geometry_relaxation_coordinate_pinning() {
     // Freeze Atom 0 (false, false, false), allow Atoms 1 and 2 to relax (true...)
     let opt_mask = vec![
         false, false, false, // Oxygen pinned
-        true, true, true,    // H1 active
-        true, true, true,    // H2 active
+        true, true, true, // H1 active
+        true, true, true, // H2 active
     ];
 
     let opts = OptimizationOptions {
@@ -1432,7 +1643,10 @@ fn test_scrutiny_constrained_geometry_relaxation_coordinate_pinning() {
     let res = optimize_geometry_lbfgs(&mut batch, &am1, &mut scf_ws, &mut grad_ws, &opts);
 
     assert!(res.converged, "Constrained optimization must converge");
-    assert!(res.final_energy_ev < res.initial_energy_ev, "Energy must decrease");
+    assert!(
+        res.final_energy_ev < res.initial_energy_ev,
+        "Energy must decrease"
+    );
 
     // Verify pinned atom coordinates remained strictly identical
     assert_eq!(batch.x[0], pinned_x, "Pinned atom X coordinate changed!");
@@ -1440,7 +1654,10 @@ fn test_scrutiny_constrained_geometry_relaxation_coordinate_pinning() {
     assert_eq!(batch.z[0], pinned_z, "Pinned atom Z coordinate changed!");
 
     // Verify unpinned atoms relaxed
-    assert_ne!(batch.y[1], 0.85, "Active atom Y coordinate should have relaxed");
+    assert_ne!(
+        batch.y[1], 0.85,
+        "Active atom Y coordinate should have relaxed"
+    );
 
     println!(
         "✅ Constrained Optimization Succeeded in {} cycles: Pinned Atom 0 remained at exactly ({:.9}, {:.9}, {:.9}), E dropped by {:.6} eV",
@@ -1470,7 +1687,6 @@ fn test_scrutiny_mndo_hamiltonian_convergence() {
         cosmo: None,
     };
 
-
     // 1. Water (H2O)
     let h2o_coords = vec![
         [0.0, 0.0, 0.065545],
@@ -1481,8 +1697,14 @@ fn test_scrutiny_mndo_hamiltonian_convergence() {
     let mut ws_h2o = ScfWorkspace::allocate(batch_h2o.norbs);
     let res_h2o = run_rhf_scf_with_options(&batch_h2o, &mndo, &mut ws_h2o, &opts);
     assert!(res_h2o.converged, "MNDO on H2O must converge");
-    assert!(res_h2o.total_energy_ev < 0.0, "Total energy must be negative");
-    assert!(res_h2o.homo_energy_ev < res_h2o.lumo_energy_ev, "Positive gap");
+    assert!(
+        res_h2o.total_energy_ev < 0.0,
+        "Total energy must be negative"
+    );
+    assert!(
+        res_h2o.homo_energy_ev < res_h2o.lumo_energy_ev,
+        "Positive gap"
+    );
 
     // 2. Methane (CH4)
     let ch4_coords = vec![
@@ -1496,7 +1718,10 @@ fn test_scrutiny_mndo_hamiltonian_convergence() {
     let mut ws_ch4 = ScfWorkspace::allocate(batch_ch4.norbs);
     let res_ch4 = run_rhf_scf_with_options(&batch_ch4, &mndo, &mut ws_ch4, &opts);
     assert!(res_ch4.converged, "MNDO on CH4 must converge");
-    assert!(res_ch4.total_energy_ev < 0.0, "Methane total energy must be negative");
+    assert!(
+        res_ch4.total_energy_ev < 0.0,
+        "Methane total energy must be negative"
+    );
 
     println!(
         "✅ MNDO Hamiltonian Verified: H2O E_tot = {:.6} eV (HOMO = {:.4} eV), CH4 E_tot = {:.6} eV (HOMO = {:.4} eV)",
@@ -1516,9 +1741,7 @@ fn test_scrutiny_harmonic_vibrational_frequencies_and_thermodynamics() {
     use mopac_core::parameters::am1::Am1Model;
     use mopac_core::scf::scf_loop::ScfOptions;
     use mopac_core::types::{MolecularBatch, ScfWorkspace};
-    use mopac_core::vibrations::hessian::{
-        compute_hessian_and_frequencies, HessianOptions,
-    };
+    use mopac_core::vibrations::hessian::{compute_hessian_and_frequencies, HessianOptions};
 
     let coords = vec![
         [0.000000000, 0.000000000, -0.002980424],
@@ -1539,7 +1762,6 @@ fn test_scrutiny_harmonic_vibrational_frequencies_and_thermodynamics() {
         cosmo: None,
     };
 
-
     // 1. Optimize geometry with L-BFGS to a true stationary minimum
     let mut grad_ws = mopac_core::gradients::GradientWorkspace::allocate(batch.norbs);
     let opt_opts = mopac_core::opt::OptimizationOptions {
@@ -1552,11 +1774,29 @@ fn test_scrutiny_harmonic_vibrational_frequencies_and_thermodynamics() {
         use_nddo: true,
         opt_mask: None,
     };
-    let opt_res = mopac_core::opt::optimize_geometry_lbfgs(&mut batch, &am1, &mut ws, &mut grad_ws, &opt_opts);
-    println!("OPTIMIZED WATER in {} cycles: E = {:.6} eV, RMS G = {:.6} kcal/(mol A)", opt_res.cycles, opt_res.final_energy_ev, opt_res.final_grad_rms);
-    println!("  O:  [{:.6}, {:.6}, {:.6}]", batch.x[0], batch.y[0], batch.z[0]);
-    println!("  H1: [{:.6}, {:.6}, {:.6}]", batch.x[1], batch.y[1], batch.z[1]);
-    println!("  H2: [{:.6}, {:.6}, {:.6}]", batch.x[2], batch.y[2], batch.z[2]);
+    let opt_res = mopac_core::opt::optimize_geometry_lbfgs(
+        &mut batch,
+        &am1,
+        &mut ws,
+        &mut grad_ws,
+        &opt_opts,
+    );
+    println!(
+        "OPTIMIZED WATER in {} cycles: E = {:.6} eV, RMS G = {:.6} kcal/(mol A)",
+        opt_res.cycles, opt_res.final_energy_ev, opt_res.final_grad_rms
+    );
+    println!(
+        "  O:  [{:.6}, {:.6}, {:.6}]",
+        batch.x[0], batch.y[0], batch.z[0]
+    );
+    println!(
+        "  H1: [{:.6}, {:.6}, {:.6}]",
+        batch.x[1], batch.y[1], batch.z[1]
+    );
+    println!(
+        "  H2: [{:.6}, {:.6}, {:.6}]",
+        batch.x[2], batch.y[2], batch.z[2]
+    );
 
     let hess_opts = HessianOptions {
         delta: 1.0e-3,
@@ -1647,8 +1887,14 @@ fn test_scrutiny_harmonic_vibrational_frequencies_and_thermodynamics() {
         expected_e_trans
     );
 
-    assert!(res.thermo.entropy_total_cal_k_mol > 30.0, "Total entropy must be physical");
-    assert!(res.thermo.cp_total_cal_k_mol > 5.0, "Heat capacity must be physical");
+    assert!(
+        res.thermo.entropy_total_cal_k_mol > 30.0,
+        "Total entropy must be physical"
+    );
+    assert!(
+        res.thermo.cp_total_cal_k_mol > 5.0,
+        "Heat capacity must be physical"
+    );
 
     println!(
         "✅ Scrutiny Test 23 Passed: H2O frequencies and thermochemistry (ZPVE = {:.3} kcal/mol, S = {:.2} cal/(mol K))",
@@ -1702,16 +1948,24 @@ fn test_scrutiny_properties_dipole_bonds_and_mulliken_parity() {
         cosmo: None,
     };
 
-
     let res = run_rhf_scf_with_options(&batch, &am1, &mut ws, &opts);
     assert!(res.converged, "Water SCF must converge");
 
     // --- 1. Electric Dipole Moment Verification ---
     let dip = compute_dipole_moment(&batch, &am1, &ws.density);
 
-    println!("⚡ Water Dipole Point Charge:  Z = {:.3} D, Mag = {:.3} D", dip.point_charge[2], dip.point_charge[3]);
-    println!("⚡ Water Dipole Hybridization: Z = {:.3} D, Mag = {:.3} D", dip.hybridization[2], dip.hybridization[3]);
-    println!("⚡ Water Dipole Total:         Z = {:.3} D, Mag = {:.3} D", dip.total[2], dip.total[3]);
+    println!(
+        "⚡ Water Dipole Point Charge:  Z = {:.3} D, Mag = {:.3} D",
+        dip.point_charge[2], dip.point_charge[3]
+    );
+    println!(
+        "⚡ Water Dipole Hybridization: Z = {:.3} D, Mag = {:.3} D",
+        dip.hybridization[2], dip.hybridization[3]
+    );
+    println!(
+        "⚡ Water Dipole Total:         Z = {:.3} D, Mag = {:.3} D",
+        dip.total[2], dip.total[3]
+    );
 
     // OpenMOPAC v23.2.5 reference:
     // POINT-CHG: Z = -1.084 D, Mag = 1.084 D
@@ -1733,30 +1987,28 @@ fn test_scrutiny_properties_dipole_bonds_and_mulliken_parity() {
         "Total dipole mismatch: got {:.3} D, expected ~1.8 D",
         dip.total[3]
     );
-    assert!(dip.net_charge.abs() < 1e-5, "Neutral water net charge must be zero");
+    assert!(
+        dip.net_charge.abs() < 1e-5,
+        "Neutral water net charge must be zero"
+    );
 
     // Translation invariance test for charged system (Hydroxide OH-)
-    let oh_coords = vec![
-        [0.0, 0.0, 0.0],
-        [0.0, 0.0, 0.96],
-    ];
+    let oh_coords = vec![[0.0, 0.0, 0.0], [0.0, 0.0, 0.96]];
     let oh_batch = MolecularBatch::new(vec![8, 1], &oh_coords);
     let mut oh_ws = ScfWorkspace::allocate(oh_batch.norbs);
     let _ = run_rhf_scf_with_options(&oh_batch, &am1, &mut oh_ws, &opts);
     let dip_oh1 = compute_dipole_moment(&oh_batch, &am1, &oh_ws.density);
 
     // Translate by arbitrary vector (+12.34, -56.78, +90.12)
-    let oh_coords_shifted = vec![
-        [12.34, -56.78, 90.12],
-        [12.34, -56.78, 91.08],
-    ];
+    let oh_coords_shifted = vec![[12.34, -56.78, 90.12], [12.34, -56.78, 91.08]];
     let oh_batch_shifted = MolecularBatch::new(vec![8, 1], &oh_coords_shifted);
     let dip_oh2 = compute_dipole_moment(&oh_batch_shifted, &am1, &oh_ws.density);
 
     assert!(
         (dip_oh1.total[3] - dip_oh2.total[3]).abs() < 1e-10,
         "Ionic dipole magnitude must be origin-independent: {} vs {}",
-        dip_oh1.total[3], dip_oh2.total[3]
+        dip_oh1.total[3],
+        dip_oh2.total[3]
     );
 
     // --- 2. Armstrong-Perkins-Stewart / Mayer Bond Orders Verification ---
@@ -1768,18 +2020,44 @@ fn test_scrutiny_properties_dipole_bonds_and_mulliken_parity() {
     let v_h1 = bond_res.valencies[1];
     let v_h2 = bond_res.valencies[2];
 
-    println!("⚡ Water Bond Order B(O, H1) = {:.3}, B(O, H2) = {:.3}, B(H1, H2) = {:.4}", b_o_h1, b_o_h2, b_h1_h2);
-    println!("⚡ Water Valency V(O) = {:.3}, V(H1) = {:.3}, V(H2) = {:.3}", v_o, v_h1, v_h2);
+    println!(
+        "⚡ Water Bond Order B(O, H1) = {:.3}, B(O, H2) = {:.3}, B(H1, H2) = {:.4}",
+        b_o_h1, b_o_h2, b_h1_h2
+    );
+    println!(
+        "⚡ Water Valency V(O) = {:.3}, V(H1) = {:.3}, V(H2) = {:.3}",
+        v_o, v_h1, v_h2
+    );
 
     // OpenMOPAC v23.2.5 reference:
     // B(O, H1) = 0.963, B(O, H2) = 0.963, B(H1, H2) = 0.000, V(O) = 1.926, V(H) = 0.963
     // mopac_rs: B(O, H1) = 0.970, V(O) = 1.941 (within 0.7% parity)
-    assert!((b_o_h1 - 0.965).abs() < 0.02, "B(O, H1) mismatch: got {:.3}", b_o_h1);
-    assert!((b_o_h2 - 0.965).abs() < 0.02, "B(O, H2) mismatch: got {:.3}", b_o_h2);
-    assert!(b_h1_h2 < 0.01, "B(H1, H2) must be negligible non-bonded index: got {:.4}", b_h1_h2);
+    assert!(
+        (b_o_h1 - 0.965).abs() < 0.02,
+        "B(O, H1) mismatch: got {:.3}",
+        b_o_h1
+    );
+    assert!(
+        (b_o_h2 - 0.965).abs() < 0.02,
+        "B(O, H2) mismatch: got {:.3}",
+        b_o_h2
+    );
+    assert!(
+        b_h1_h2 < 0.01,
+        "B(H1, H2) must be negligible non-bonded index: got {:.4}",
+        b_h1_h2
+    );
     assert!((v_o - 1.93).abs() < 0.02, "V(O) mismatch: got {:.3}", v_o);
-    assert!((v_h1 - 0.965).abs() < 0.02, "V(H1) mismatch: got {:.3}", v_h1);
-    assert!((v_h2 - 0.965).abs() < 0.02, "V(H2) mismatch: got {:.3}", v_h2);
+    assert!(
+        (v_h1 - 0.965).abs() < 0.02,
+        "V(H1) mismatch: got {:.3}",
+        v_h1
+    );
+    assert!(
+        (v_h2 - 0.965).abs() < 0.02,
+        "V(H2) mismatch: got {:.3}",
+        v_h2
+    );
 
     // --- 3. Mulliken Population Analysis Verification ---
     let mull = compute_mulliken_population(&batch, &am1, &ws.eigenvectors, 4);
@@ -1798,14 +2076,18 @@ fn test_scrutiny_properties_dipole_bonds_and_mulliken_parity() {
             let mut s_half_s = 0.0;
             for k in 0..batch.norbs {
                 for l in 0..batch.norbs {
-                    s_half_s += mull.s_inv_sqrt.get(i, k) * mull.overlap.get(k, l) * mull.s_inv_sqrt.get(l, j);
+                    s_half_s += mull.s_inv_sqrt.get(i, k)
+                        * mull.overlap.get(k, l)
+                        * mull.s_inv_sqrt.get(l, j);
                 }
             }
             let expected = if i == j { 1.0 } else { 0.0 };
             assert!(
                 (s_half_s - expected).abs() < 1e-12,
                 "Löwdin de-orthogonalization condition violated at ({},{}): diff = {:e}",
-                i, j, (s_half_s - expected).abs()
+                i,
+                j,
+                (s_half_s - expected).abs()
             );
         }
     }
@@ -1824,8 +2106,10 @@ fn test_scrutiny_properties_dipole_bonds_and_mulliken_parity() {
     // mopac_rs: Pop(O) = 6.392006, q(O) = -0.392006 (within 0.8% parity)
     println!(
         "⚡ Mulliken Pop(O) = {:.6}, q(O) = {:.6}; Pop(H1) = {:.6}, q(H1) = {:.6}",
-        mull.atomic_populations[0], mull.net_charges[0],
-        mull.atomic_populations[1], mull.net_charges[1]
+        mull.atomic_populations[0],
+        mull.net_charges[0],
+        mull.atomic_populations[1],
+        mull.net_charges[1]
     );
 
     assert!(
@@ -1884,9 +2168,13 @@ fn test_scrutiny_empirical_dispersion_and_analytical_gradients() {
     assert_eq!(DISPERSION_R0[5], 170.0, "R0 for Carbon");
     assert_eq!(DISPERSION_NEFF[5], 2.50, "Neff for Carbon");
 
-    let (c6_cc, r0_cc) = diatomic_dispersion_parameters(6, 6, 1.65, 1.65, 170.0, 170.0, 2.50, 2.50).unwrap();
+    let (c6_cc, r0_cc) =
+        diatomic_dispersion_parameters(6, 6, 1.65, 1.65, 170.0, 170.0, 2.50, 2.50).unwrap();
     assert!((c6_cc - 1.65).abs() < 1e-12, "C6_CC self-combining");
-    assert!((r0_cc - 0.34).abs() < 1e-12, "R0_CC self-combining: 2 * 170 pm = 340 pm = 0.34 nm");
+    assert!(
+        (r0_cc - 0.34).abs() < 1e-12,
+        "R0_CC self-combining: 2 * 170 pm = 340 pm = 0.34 nm"
+    );
 
     // 2. Methane Dimer at R = 3.80 Angstroms
     let ch4_dimer_coords = vec![
@@ -1905,7 +2193,10 @@ fn test_scrutiny_empirical_dispersion_and_analytical_gradients() {
     let batch = MolecularBatch::new(ch4_atoms, &ch4_dimer_coords);
 
     let e_disp = compute_dispersion_energy(&batch, DispersionModel::Pm6DhPlus);
-    println!("⚡ Methane Dimer PM6-DH+ Dispersion Energy: {:.5} kcal/mol", e_disp);
+    println!(
+        "⚡ Methane Dimer PM6-DH+ Dispersion Energy: {:.5} kcal/mol",
+        e_disp
+    );
 
     // OpenMOPAC v23.2.5 reference: -0.27985 kcal/mol
     assert!(
@@ -1917,8 +2208,12 @@ fn test_scrutiny_empirical_dispersion_and_analytical_gradients() {
     // 3. Analytical Gradient vs Finite Differences Verification
     let natoms = batch.natoms;
     let mut g_anal = vec![[0.0; 3]; natoms];
-    let e_disp_check = compute_dispersion_energy_and_gradients(&batch, DispersionModel::Pm6DhPlus, &mut g_anal);
-    assert!((e_disp - e_disp_check).abs() < 1e-12, "Energy consistency with gradient evaluation");
+    let e_disp_check =
+        compute_dispersion_energy_and_gradients(&batch, DispersionModel::Pm6DhPlus, &mut g_anal);
+    assert!(
+        (e_disp - e_disp_check).abs() < 1e-12,
+        "Energy consistency with gradient evaluation"
+    );
 
     let delta = 1e-5;
     let inv_2delta = 0.5 / delta;
@@ -1951,11 +2246,18 @@ fn test_scrutiny_empirical_dispersion_and_analytical_gradients() {
             assert!(
                 diff < 1e-6,
                 "Gradient mismatch at atom {}, coord {}: anal = {:e}, num = {:e}, diff = {:e}",
-                a, alpha, g_anal[a][alpha], g_num[a][alpha], diff
+                a,
+                alpha,
+                g_anal[a][alpha],
+                g_num[a][alpha],
+                diff
             );
         }
     }
-    println!("⚡ Max Analytical vs Finite-Difference Gradient Error: {:e} kcal/(mol * A)", max_grad_diff);
+    println!(
+        "⚡ Max Analytical vs Finite-Difference Gradient Error: {:e} kcal/(mol * A)",
+        max_grad_diff
+    );
 
     // 4. Net Force Translational Invariance
     let mut net_force = [0.0; 3];
@@ -1972,7 +2274,6 @@ fn test_scrutiny_empirical_dispersion_and_analytical_gradients() {
 
     println!("✅ Scrutiny Test 25 Passed: Empirical dispersion energies and analytical gradients match OpenMOPAC to < 1e-4 kcal/mol and < 1e-6 gradient error.");
 }
-
 
 /// Scrutiny Test 26: Empirical H4 Hydrogen Bonding & H-H Short-Range Repulsion Verification.
 ///
@@ -2012,7 +2313,10 @@ fn test_scrutiny_h4_hydrogen_bonds_and_hh_repulsion() {
         expected_h4,
         (e_h4 - expected_h4).abs()
     );
-    println!("⚡ Water Dimer H4 Correction Energy: {:.6} kcal/mol (Ref: {:.6})", e_h4, expected_h4);
+    println!(
+        "⚡ Water Dimer H4 Correction Energy: {:.6} kcal/mol (Ref: {:.6})",
+        e_h4, expected_h4
+    );
 
     // 3. H-H Short-Range Repulsion Energy Parity
     let (e_hh, g_anal) = compute_hh_repulsion_energy_and_gradients(&batch);
@@ -2024,7 +2328,10 @@ fn test_scrutiny_h4_hydrogen_bonds_and_hh_repulsion() {
         expected_hh,
         (e_hh - expected_hh).abs()
     );
-    println!("⚡ Water Dimer H-H Repulsion Energy: {:.6} kcal/mol (Ref: {:.6})", e_hh, expected_hh);
+    println!(
+        "⚡ Water Dimer H-H Repulsion Energy: {:.6} kcal/mol (Ref: {:.6})",
+        e_hh, expected_hh
+    );
 
     // 4. Analytical Gradient vs Finite Difference
     let h = 1e-5;
@@ -2047,7 +2354,11 @@ fn test_scrutiny_h4_hydrogen_bonds_and_hh_repulsion() {
             assert!(
                 diff < 5e-5,
                 "Gradient mismatch atom {} comp {}: anal={:.6}, num={:.6}, diff={:e}",
-                a, alpha, g_anal[a][alpha], num_grad, diff
+                a,
+                alpha,
+                g_anal[a][alpha],
+                num_grad,
+                diff
             );
         }
     }
@@ -2096,7 +2407,14 @@ fn test_scrutiny_cosmo_implicit_solvation_water() {
     // 1. Gas Phase Reference Calculation
     let mut ws_gas = ScfWorkspace::allocate(batch.norbs);
     let res_gas = run_rhf_scf_adaptive_with_nddo_and_cosmo(
-        &batch, &pm6, &mut ws_gas, 60, 1e-8, 1e-7, true, None,
+        &batch,
+        &pm6,
+        &mut ws_gas,
+        60,
+        1e-8,
+        1e-7,
+        true,
+        None,
     );
     assert!(res_gas.converged, "Gas phase PM6 SCF must converge");
     let dipole_gas = compute_dipole_moment(&batch, &pm6, &ws_gas.density);
@@ -2108,7 +2426,14 @@ fn test_scrutiny_cosmo_implicit_solvation_water() {
     };
     let mut ws_solv = ScfWorkspace::allocate(batch.norbs);
     let res_solv = run_rhf_scf_adaptive_with_nddo_and_cosmo(
-        &batch, &pm6, &mut ws_solv, 60, 1e-8, 1e-7, true, Some(cosmo_params),
+        &batch,
+        &pm6,
+        &mut ws_solv,
+        60,
+        1e-8,
+        1e-7,
+        true,
+        Some(cosmo_params),
     );
     assert!(res_solv.converged, "COSMO PM6 SCF must converge");
     let dipole_solv = compute_dipole_moment(&batch, &pm6, &ws_solv.density);
@@ -2142,7 +2467,11 @@ fn test_scrutiny_cosmo_implicit_solvation_water() {
     );
 
     // Dielectric energy must be stabilizing (negative)
-    assert!(diel_ev < 0.0, "Dielectric energy must be negative/stabilizing: got {}", diel_ev);
+    assert!(
+        diel_ev < 0.0,
+        "Dielectric energy must be negative/stabilizing: got {}",
+        diel_ev
+    );
 
     // Solvation must stabilize the molecule
     assert!(
@@ -2168,4 +2497,3 @@ fn test_scrutiny_cosmo_implicit_solvation_water() {
         dipole_solv.total[3]
     );
 }
-

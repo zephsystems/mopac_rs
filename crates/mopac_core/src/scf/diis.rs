@@ -177,7 +177,9 @@ impl DiisWorkspace {
         let rms_err = (sum_sq_err / (norbs * norbs).max(1) as f64).sqrt();
 
         // 4. Store current unextrapolated Fock matrix into history
-        self.fock_history[target_slot].data.copy_from_slice(&fock.data);
+        self.fock_history[target_slot]
+            .data
+            .copy_from_slice(&fock.data);
 
         // 5. Update row and column new_idx of the B matrix: B_ij = <e_i, e_j>
         let m = self.num_stored;

@@ -4,12 +4,12 @@
 //! unlocking the peak 18 TFLOPS capability of consumer NVIDIA Ada Lovelace / Ampere GPUs
 //! and utilizing dedicated GDDR6 device-local VRAM for molecular batching.
 
-use ash::vk;
-use std::sync::Arc;
 use crate::context::{VulkanContext, VulkanError};
+use ash::vk;
 use mopac_core::constants::codata2018::EV_ANGSTROM_FACTOR;
-use mopac_core::types::{AlignedMatrix, MolecularBatch};
 use mopac_core::parameters::ParameterModel;
+use mopac_core::types::{AlignedMatrix, MolecularBatch};
+use std::sync::Arc;
 
 /// GPU representation of an atom center in 32-bit single precision.
 #[repr(C)]
@@ -63,7 +63,10 @@ impl GpuCoulombCalculatorFP32 {
         ];
 
         let layout_info = vk::DescriptorSetLayoutCreateInfo::default().bindings(&bindings);
-        let descriptor_set_layout = unsafe { ctx.device.create_descriptor_set_layout(&layout_info, None)? };
+        let descriptor_set_layout = unsafe {
+            ctx.device
+                .create_descriptor_set_layout(&layout_info, None)?
+        };
 
         let push_constant_range = vk::PushConstantRange::default()
             .stage_flags(vk::ShaderStageFlags::COMPUTE)
@@ -73,7 +76,10 @@ impl GpuCoulombCalculatorFP32 {
         let pipeline_layout_info = vk::PipelineLayoutCreateInfo::default()
             .set_layouts(std::slice::from_ref(&descriptor_set_layout))
             .push_constant_ranges(std::slice::from_ref(&push_constant_range));
-        let pipeline_layout = unsafe { ctx.device.create_pipeline_layout(&pipeline_layout_info, None)? };
+        let pipeline_layout = unsafe {
+            ctx.device
+                .create_pipeline_layout(&pipeline_layout_info, None)?
+        };
 
         let entry_point = c"main";
         let stage_info = vk::PipelineShaderStageCreateInfo::default()
@@ -101,7 +107,10 @@ impl GpuCoulombCalculatorFP32 {
     }
 
     /// Evaluates pairwise Coulomb repulsion matrix in FP32 from a slice of atom coordinates and parameters.
-    pub fn compute_pairwise(&self, atoms: &[AtomGpuFP32]) -> Result<AlignedMatrix<f32>, VulkanError> {
+    pub fn compute_pairwise(
+        &self,
+        atoms: &[AtomGpuFP32],
+    ) -> Result<AlignedMatrix<f32>, VulkanError> {
         let n = atoms.len();
         let atom_buf_size = std::mem::size_of_val(atoms) as u64;
         let out_buf_size = (n * n * std::mem::size_of::<f32>()) as u64;
@@ -127,7 +136,8 @@ impl GpuCoulombCalculatorFP32 {
         };
         unsafe {
             device.bind_buffer_memory(buf_in, mem_in, 0)?;
-            let ptr = device.map_memory(mem_in, 0, atom_buf_size, vk::MemoryMapFlags::empty())? as *mut AtomGpuFP32;
+            let ptr = device.map_memory(mem_in, 0, atom_buf_size, vk::MemoryMapFlags::empty())?
+                as *mut AtomGpuFP32;
             std::ptr::copy_nonoverlapping(atoms.as_ptr(), ptr, n);
             device.unmap_memory(mem_in);
         }
@@ -166,8 +176,14 @@ impl GpuCoulombCalculatorFP32 {
             .set_layouts(std::slice::from_ref(&self.descriptor_set_layout));
         let desc_set = unsafe { device.allocate_descriptor_sets(&alloc_info)?[0] };
 
-        let d_buf0 = vk::DescriptorBufferInfo::default().buffer(buf_in).offset(0).range(atom_buf_size);
-        let d_buf1 = vk::DescriptorBufferInfo::default().buffer(buf_out).offset(0).range(out_buf_size);
+        let d_buf0 = vk::DescriptorBufferInfo::default()
+            .buffer(buf_in)
+            .offset(0)
+            .range(atom_buf_size);
+        let d_buf1 = vk::DescriptorBufferInfo::default()
+            .buffer(buf_out)
+            .offset(0)
+            .range(out_buf_size);
         let writes = [
             vk::WriteDescriptorSet::default()
                 .dst_set(desc_set)
@@ -199,7 +215,8 @@ impl GpuCoulombCalculatorFP32 {
         unsafe {
             device.begin_command_buffer(
                 cmd,
-                &vk::CommandBufferBeginInfo::default().flags(vk::CommandBufferUsageFlags::ONE_TIME_SUBMIT),
+                &vk::CommandBufferBeginInfo::default()
+                    .flags(vk::CommandBufferUsageFlags::ONE_TIME_SUBMIT),
             )?;
             device.cmd_bind_pipeline(cmd, vk::PipelineBindPoint::COMPUTE, self.pipeline);
             device.cmd_bind_descriptor_sets(
@@ -237,7 +254,8 @@ impl GpuCoulombCalculatorFP32 {
         // 5. Read back results into AlignedMatrix<f32>
         let mut result_matrix = AlignedMatrix::zeroed(n, n);
         unsafe {
-            let ptr = device.map_memory(mem_out, 0, out_buf_size, vk::MemoryMapFlags::empty())? as *const f32;
+            let ptr = device.map_memory(mem_out, 0, out_buf_size, vk::MemoryMapFlags::empty())?
+                as *const f32;
             std::ptr::copy_nonoverlapping(ptr, result_matrix.data.as_mut_ptr(), n * n);
             device.unmap_memory(mem_out);
 
@@ -252,12 +270,18 @@ impl GpuCoulombCalculatorFP32 {
     }
 
     /// Evaluates the pairwise Coulomb matrix directly from a MolecularBatch in FP32.
-    pub fn compute_batch(&self, batch: &MolecularBatch, model: &dyn ParameterModel) -> Result<AlignedMatrix<f32>, VulkanError> {
+    pub fn compute_batch(
+        &self,
+        batch: &MolecularBatch,
+        model: &dyn ParameterModel,
+    ) -> Result<AlignedMatrix<f32>, VulkanError> {
         let n = batch.natoms;
         let mut atoms = Vec::with_capacity(n);
         for i in 0..n {
             let z = batch.atomic_numbers[i];
-            let param = model.get_element(z).expect("Unsupported atomic element in batch");
+            let param = model
+                .get_element(z)
+                .expect("Unsupported atomic element in batch");
             atoms.push(AtomGpuFP32 {
                 x: batch.x[i] as f32,
                 y: batch.y[i] as f32,
@@ -312,7 +336,8 @@ impl GpuCoulombCalculatorFP32 {
         };
         let mapped_in = unsafe {
             device.bind_buffer_memory(buf_in, mem_in, 0)?;
-            device.map_memory(mem_in, 0, atom_buf_size, vk::MemoryMapFlags::empty())? as *mut AtomGpuFP32
+            device.map_memory(mem_in, 0, atom_buf_size, vk::MemoryMapFlags::empty())?
+                as *mut AtomGpuFP32
         };
 
         let buf_info_out = vk::BufferCreateInfo::default()
@@ -350,8 +375,14 @@ impl GpuCoulombCalculatorFP32 {
             .set_layouts(std::slice::from_ref(&self.descriptor_set_layout));
         let descriptor_set = unsafe { device.allocate_descriptor_sets(&alloc_info)?[0] };
 
-        let d_buf0 = vk::DescriptorBufferInfo::default().buffer(buf_in).offset(0).range(atom_buf_size);
-        let d_buf1 = vk::DescriptorBufferInfo::default().buffer(buf_out).offset(0).range(out_buf_size);
+        let d_buf0 = vk::DescriptorBufferInfo::default()
+            .buffer(buf_in)
+            .offset(0)
+            .range(atom_buf_size);
+        let d_buf1 = vk::DescriptorBufferInfo::default()
+            .buffer(buf_out)
+            .offset(0)
+            .range(out_buf_size);
         let writes = [
             vk::WriteDescriptorSet::default()
                 .dst_set(descriptor_set)
@@ -397,7 +428,12 @@ impl GpuCoulombCalculatorFP32 {
         out: &mut AlignedMatrix<f32>,
     ) -> Result<(), VulkanError> {
         let n = atoms.len();
-        assert!(n <= ws.max_atoms, "Atom count {} exceeds max workspace capacity {}", n, ws.max_atoms);
+        assert!(
+            n <= ws.max_atoms,
+            "Atom count {} exceeds max workspace capacity {}",
+            n,
+            ws.max_atoms
+        );
         assert_eq!(out.rows, n);
         assert_eq!(out.cols, n);
 
@@ -411,9 +447,14 @@ impl GpuCoulombCalculatorFP32 {
             device.reset_command_buffer(ws.command_buffer, vk::CommandBufferResetFlags::empty())?;
             device.begin_command_buffer(
                 ws.command_buffer,
-                &vk::CommandBufferBeginInfo::default().flags(vk::CommandBufferUsageFlags::ONE_TIME_SUBMIT),
+                &vk::CommandBufferBeginInfo::default()
+                    .flags(vk::CommandBufferUsageFlags::ONE_TIME_SUBMIT),
             )?;
-            device.cmd_bind_pipeline(ws.command_buffer, vk::PipelineBindPoint::COMPUTE, self.pipeline);
+            device.cmd_bind_pipeline(
+                ws.command_buffer,
+                vk::PipelineBindPoint::COMPUTE,
+                self.pipeline,
+            );
             device.cmd_bind_descriptor_sets(
                 ws.command_buffer,
                 vk::PipelineBindPoint::COMPUTE,
@@ -447,7 +488,8 @@ impl GpuCoulombCalculatorFP32 {
             device.end_command_buffer(ws.command_buffer)?;
 
             device.reset_fences(&[ws.fence])?;
-            let submit_info = vk::SubmitInfo::default().command_buffers(std::slice::from_ref(&ws.command_buffer));
+            let submit_info =
+                vk::SubmitInfo::default().command_buffers(std::slice::from_ref(&ws.command_buffer));
             device.queue_submit(self.ctx.compute_queue, &[submit_info], ws.fence)?;
             device.wait_for_fences(&[ws.fence], true, u64::MAX)?;
 
@@ -540,10 +582,14 @@ pub struct GpuBatchVramManager {
 
 impl GpuBatchVramManager {
     /// Allocate dedicated GDDR6 VRAM buffers for storing up to `vram_capacity_atoms`.
-    pub fn allocate(ctx: Arc<VulkanContext>, vram_capacity_atoms: usize) -> Result<Self, VulkanError> {
+    pub fn allocate(
+        ctx: Arc<VulkanContext>,
+        vram_capacity_atoms: usize,
+    ) -> Result<Self, VulkanError> {
         let device = &ctx.device;
         let atom_size = (vram_capacity_atoms * std::mem::size_of::<AtomGpuFP32>()) as u64;
-        let matrix_size = (vram_capacity_atoms * vram_capacity_atoms * std::mem::size_of::<f32>()) as u64;
+        let matrix_size =
+            (vram_capacity_atoms * vram_capacity_atoms * std::mem::size_of::<f32>()) as u64;
 
         // 1. Device-Local (GDDR6 VRAM) atom buffer
         let vram_atom_info = vk::BufferCreateInfo::default()
@@ -601,7 +647,8 @@ impl GpuBatchVramManager {
         };
         let mapped_staging = unsafe {
             device.bind_buffer_memory(staging_buf, staging_mem, 0)?;
-            device.map_memory(staging_mem, 0, atom_size, vk::MemoryMapFlags::empty())? as *mut AtomGpuFP32
+            device.map_memory(staging_mem, 0, atom_size, vk::MemoryMapFlags::empty())?
+                as *mut AtomGpuFP32
         };
 
         // 4. Host-visible staging buffer for downloading computed matrices
@@ -624,7 +671,12 @@ impl GpuBatchVramManager {
         };
         let mapped_matrix_staging = unsafe {
             device.bind_buffer_memory(matrix_staging_buf, matrix_staging_mem, 0)?;
-            device.map_memory(matrix_staging_mem, 0, matrix_size, vk::MemoryMapFlags::empty())? as *const f32
+            device.map_memory(
+                matrix_staging_mem,
+                0,
+                matrix_size,
+                vk::MemoryMapFlags::empty(),
+            )? as *const f32
         };
 
         Ok(Self {
@@ -644,7 +696,11 @@ impl GpuBatchVramManager {
     }
 
     /// Upload a molecular batch to GDDR6 VRAM via DMA copy.
-    pub fn upload_batch_to_gddr6(&mut self, atoms: &[AtomGpuFP32], vram_offset_atoms: usize) -> Result<(), VulkanError> {
+    pub fn upload_batch_to_gddr6(
+        &mut self,
+        atoms: &[AtomGpuFP32],
+        vram_offset_atoms: usize,
+    ) -> Result<(), VulkanError> {
         let count = atoms.len();
         assert!(vram_offset_atoms + count <= self.vram_capacity_atoms);
         let byte_size = std::mem::size_of_val(atoms) as u64;
@@ -662,8 +718,15 @@ impl GpuBatchVramManager {
                 .command_buffer_count(1);
             let cmd = device.allocate_command_buffers(&cmd_alloc)?[0];
 
-            device.begin_command_buffer(cmd, &vk::CommandBufferBeginInfo::default().flags(vk::CommandBufferUsageFlags::ONE_TIME_SUBMIT))?;
-            let copy_region = vk::BufferCopy::default().src_offset(0).dst_offset(dst_offset).size(byte_size);
+            device.begin_command_buffer(
+                cmd,
+                &vk::CommandBufferBeginInfo::default()
+                    .flags(vk::CommandBufferUsageFlags::ONE_TIME_SUBMIT),
+            )?;
+            let copy_region = vk::BufferCopy::default()
+                .src_offset(0)
+                .dst_offset(dst_offset)
+                .size(byte_size);
             device.cmd_copy_buffer(cmd, self.staging_buf, self.vram_atom_buf, &[copy_region]);
             device.end_command_buffer(cmd)?;
 
@@ -707,10 +770,18 @@ impl GpuBatchVramManager {
         let descriptor_set = unsafe { device.allocate_descriptor_sets(&alloc_info)?[0] };
 
         let atom_size = (self.vram_capacity_atoms * std::mem::size_of::<AtomGpuFP32>()) as u64;
-        let matrix_size = (self.vram_capacity_atoms * self.vram_capacity_atoms * std::mem::size_of::<f32>()) as u64;
+        let matrix_size = (self.vram_capacity_atoms
+            * self.vram_capacity_atoms
+            * std::mem::size_of::<f32>()) as u64;
 
-        let d_buf0 = vk::DescriptorBufferInfo::default().buffer(self.vram_atom_buf).offset(0).range(atom_size);
-        let d_buf1 = vk::DescriptorBufferInfo::default().buffer(self.vram_matrix_buf).offset(0).range(matrix_size);
+        let d_buf0 = vk::DescriptorBufferInfo::default()
+            .buffer(self.vram_atom_buf)
+            .offset(0)
+            .range(atom_size);
+        let d_buf1 = vk::DescriptorBufferInfo::default()
+            .buffer(self.vram_matrix_buf)
+            .offset(0)
+            .range(matrix_size);
 
         let writes = [
             vk::WriteDescriptorSet::default()
@@ -736,7 +807,8 @@ impl GpuBatchVramManager {
         unsafe {
             device.begin_command_buffer(
                 cmd,
-                &vk::CommandBufferBeginInfo::default().flags(vk::CommandBufferUsageFlags::ONE_TIME_SUBMIT),
+                &vk::CommandBufferBeginInfo::default()
+                    .flags(vk::CommandBufferUsageFlags::ONE_TIME_SUBMIT),
             )?;
             device.cmd_bind_pipeline(cmd, vk::PipelineBindPoint::COMPUTE, calculator.pipeline);
             device.cmd_bind_descriptor_sets(
@@ -809,13 +881,19 @@ impl GpuBatchVramManager {
 
             device.begin_command_buffer(
                 cmd,
-                &vk::CommandBufferBeginInfo::default().flags(vk::CommandBufferUsageFlags::ONE_TIME_SUBMIT),
+                &vk::CommandBufferBeginInfo::default()
+                    .flags(vk::CommandBufferUsageFlags::ONE_TIME_SUBMIT),
             )?;
             let copy_region = vk::BufferCopy::default()
                 .src_offset(src_offset)
                 .dst_offset(0)
                 .size(byte_size);
-            device.cmd_copy_buffer(cmd, self.vram_matrix_buf, self.matrix_staging_buf, &[copy_region]);
+            device.cmd_copy_buffer(
+                cmd,
+                self.vram_matrix_buf,
+                self.matrix_staging_buf,
+                &[copy_region],
+            );
             device.end_command_buffer(cmd)?;
 
             let fence = device.create_fence(&vk::FenceCreateInfo::default(), None)?;

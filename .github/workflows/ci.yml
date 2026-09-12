@@ -1,0 +1,57 @@
+name: MOPAC_RS CI
+
+on:
+  push:
+    branches: [ "main" ]
+  pull_request:
+    branches: [ "main" ]
+
+env:
+  CARGO_TERM_COLOR: always
+  RUSTFLAGS: "-D warnings"
+
+jobs:
+  check-and-test:
+    name: Test & Audit Suite
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout Source Code
+        uses: actions/checkout@v4
+
+      - name: Install Rust Toolchain
+        uses: dtolnay/rust-toolchain@stable
+        with:
+          components: clippy, rustfmt
+
+      - name: Install System Dependencies (Vulkan)
+        run: |
+          sudo apt-get update
+          sudo apt-get install -y libvulkan-dev vulkan-tools libvulkan1
+
+      - name: Rustfmt Formatting Check
+        run: cargo fmt --all -- --check
+
+      - name: Workspace Compilation Check
+        run: cargo check --workspace --all-targets
+
+      - name: Clippy Linter Audit (Zero Warnings)
+        run: cargo clippy --workspace --all-targets -- -D warnings
+
+      - name: Full Automated Scrutiny & Unit Tests
+        run: cargo test --workspace --verbose
+
+      - name: Build Optimized Release Binary
+        run: cargo build --release --bin mopac
+
+      - name: Smoke Test CLI Executable
+        run: |
+          cat << "MOP_EOF" > /tmp/water_ci_test.mop
+          PM6 1SCF
+          Water Smoke Test CI
+
+          O  0.000000 0  0.000000 0  0.000000 0
+          H  0.757000 0  0.586000 0  0.000000 0
+          H -0.757000 0  0.586000 0  0.000000 0
+          MOP_EOF
+          ./target/release/mopac /tmp/water_ci_test.mop
+          grep -i "FINAL HEAT OF FORMATION" /tmp/water_ci_test.out

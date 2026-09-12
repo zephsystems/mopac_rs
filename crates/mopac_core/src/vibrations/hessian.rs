@@ -7,11 +7,12 @@
 //! and computes complete statistical thermodynamic partition functions and properties.
 
 use crate::constants::codata2018::{
-    BOLTZMANN_CONSTANT_J_K, EV_TO_KCAL_MOL, GAS_CONSTANT_CAL,
-    PLANCK_CONSTANT_ERG_S,
+    BOLTZMANN_CONSTANT_J_K, EV_TO_KCAL_MOL, GAS_CONSTANT_CAL, PLANCK_CONSTANT_ERG_S,
 };
 use crate::constants::standard_atomic_mass;
-use crate::gradients::nuclear_gradients::{compute_cartesian_gradients_with_options, GradientWorkspace};
+use crate::gradients::nuclear_gradients::{
+    compute_cartesian_gradients_with_options, GradientWorkspace,
+};
 use crate::parameters::ParameterModel;
 use crate::scf::eigensolver::diagonalize_symmetric;
 use crate::scf::scf_loop::{run_rhf_scf_with_options, ScfOptions};
@@ -314,7 +315,11 @@ pub fn compute_hessian_and_frequencies(
 
         // Reduced mass and force constant
         // 1 mdyne/A = 100 N/m. Force constant k = 4 * pi^2 * c^2 * nu^2 * mu
-        let eff_mass = if norm > 1e-12 { 1.0 / (norm * norm) } else { 1.0 };
+        let eff_mass = if norm > 1e-12 {
+            1.0 / (norm * norm)
+        } else {
+            1.0
+        };
         // Force constant in mdyne/Angstrom:
         // k [mdyne/A] = (nu / 1302.7937)^2 * mu [amu]
         let k_mdyne = (freq.abs() / 1302.7937).powi(2) * eff_mass;

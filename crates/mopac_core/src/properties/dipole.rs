@@ -133,14 +133,16 @@ pub fn compute_dipole_moment<M: ?Sized + ParameterModel>(
             hyb_dip[2] -= hyfsp * p_spz;
         }
     }
-    hyb_dip[3] = (hyb_dip[0] * hyb_dip[0] + hyb_dip[1] * hyb_dip[1] + hyb_dip[2] * hyb_dip[2]).sqrt();
+    hyb_dip[3] =
+        (hyb_dip[0] * hyb_dip[0] + hyb_dip[1] * hyb_dip[1] + hyb_dip[2] * hyb_dip[2]).sqrt();
 
     // 5. Total dipole moment vector and magnitude
     let mut tot_dip = [0.0; 4];
     tot_dip[0] = pt_dip[0] + hyb_dip[0];
     tot_dip[1] = pt_dip[1] + hyb_dip[1];
     tot_dip[2] = pt_dip[2] + hyb_dip[2];
-    tot_dip[3] = (tot_dip[0] * tot_dip[0] + tot_dip[1] * tot_dip[1] + tot_dip[2] * tot_dip[2]).sqrt();
+    tot_dip[3] =
+        (tot_dip[0] * tot_dip[0] + tot_dip[1] * tot_dip[1] + tot_dip[2] * tot_dip[2]).sqrt();
 
     DipoleResult {
         point_charge: pt_dip,
