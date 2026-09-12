@@ -12,6 +12,12 @@ version = "0.1.0"
 edition = "2021"
 authors = ["zeph.sys <zeph.systems@gmail.com>"]
 license = "Apache-2.0"
+repository = "https://github.com/zephsystems/mopac_rs"
+homepage = "https://github.com/zephsystems/mopac_rs"
+documentation = "https://github.com/zephsystems/mopac_rs#readme"
+readme = "README.md"
+keywords = ["quantum-chemistry", "semi-empirical", "mopac", "scf", "cosmo"]
+categories = ["science", "algorithms"]
 
 [profile.release]
 opt-level = 3

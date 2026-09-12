@@ -1,0 +1,53 @@
+[build-system]
+requires = ["maturin>=1.0,<2.0"]
+build-backend = "maturin"
+
+[project]
+name = "mopac-py"
+dynamic = ["version"]
+description = "Modern High-Performance Semi-Empirical Quantum Chemistry Engine in Rust (PyO3 Bindings)"
+readme = "README.md"
+license = { text = "Apache-2.0" }
+authors = [{ name = "zeph.sys", email = "zeph.systems@gmail.com" }]
+keywords = [
+    "quantum-chemistry",
+    "semi-empirical",
+    "mopac",
+    "am1",
+    "pm6",
+    "pm3",
+    "mndo",
+    "cosmo",
+    "dispersion",
+    "rdkit",
+    "ase",
+]
+classifiers = [
+    "Development Status :: 3 - Alpha",
+    "Intended Audience :: Science/Research",
+    "License :: OSI Approved :: Apache Software License",
+    "Programming Language :: Rust",
+    "Programming Language :: Python :: 3",
+    "Programming Language :: Python :: 3.8",
+    "Programming Language :: Python :: 3.9",
+    "Programming Language :: Python :: 3.10",
+    "Programming Language :: Python :: 3.11",
+    "Programming Language :: Python :: 3.12",
+    "Programming Language :: Python :: 3.13",
+    "Programming Language :: Python :: 3.14",
+    "Topic :: Scientific/Engineering :: Chemistry",
+    "Topic :: Scientific/Engineering :: Physics",
+]
+requires-python = ">=3.8"
+dependencies = []
+
+[project.urls]
+Homepage = "https://github.com/zephsystems/mopac_rs"
+Repository = "https://github.com/zephsystems/mopac_rs"
+Documentation = "https://github.com/zephsystems/mopac_rs#readme"
+"Bug Tracker" = "https://github.com/zephsystems/mopac_rs/issues"
+
+[tool.maturin]
+manifest-path = "crates/mopac_py/Cargo.toml"
+module-name = "mopac_py"
+features = ["pyo3/extension-module"]

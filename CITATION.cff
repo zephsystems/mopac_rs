@@ -1,0 +1,34 @@
+cff-version: 1.2.0
+message: "If you use MOPAC_RS in your scientific research or software, please cite it as below."
+title: "MOPAC_RS: Modern High-Performance Semi-Empirical Quantum Chemistry Engine in Rust"
+type: software
+authors:
+  - name: "zeph.sys"
+    email: "zeph.systems@gmail.com"
+repository-code: "https://github.com/zephsystems/mopac_rs"
+url: "https://github.com/zephsystems/mopac_rs"
+license: "Apache-2.0"
+version: "0.1.0-alpha"
+date-released: "2026-09-12"
+keywords:
+  - "quantum-chemistry"
+  - "semi-empirical"
+  - "rust"
+  - "computational-chemistry"
+  - "mndo"
+  - "am1"
+  - "pm3"
+  - "pm6"
+  - "rm1"
+  - "cosmo-solvation"
+  - "grimme-d3-bj"
+  - "vulkan-compute"
+  - "rdkit"
+  - "ase"
+abstract: >-
+  MOPAC_RS is a ground-up Data-Oriented Programming (DOP) reimagining and modernization
+  of the classic MOPAC quantum chemistry engine in Rust. It features zero-heap-allocation
+  iterative Roothaan-Hall SCF cycles, full NDDO diatomic 22-multipole integrals with 3D
+  rotational transformations, COSMO implicit solvation, Grimme D3-BJ empirical dispersion,
+  H4 hydrogen bonding, L-BFGS Cartesian geometry optimization, and high-performance PyO3
+  Python bindings natively interoperable with RDKit and the Atomic Simulation Environment (ASE).

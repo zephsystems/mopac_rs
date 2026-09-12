@@ -1,9 +1,13 @@
 [package]
 name = "mopac_cli"
-version = "0.1.0"
+version.workspace = true
 edition.workspace = true
 authors.workspace = true
 license.workspace = true
+repository.workspace = true
+homepage.workspace = true
+documentation.workspace = true
+description = "Canonical Command-Line Interface (CLI) binary for MOPAC_RS"
 
 [[bin]]
 name = "mopac"

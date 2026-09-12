@@ -227,6 +227,25 @@ Detailed mathematical derivations, Fortran audits, and GPU specifications:
 
 ---
 
+## Citation
+
+If you use `mopac_rs` in your academic research, benchmarks, or software, please cite it as:
+
+```bibtex
+@software{mopac_rs_2026,
+  author = {zeph.sys},
+  title = {{MOPAC\_RS: Modern High-Performance Semi-Empirical Quantum Chemistry Engine in Rust}},
+  year = {2026},
+  publisher = {Zenodo},
+  version = {0.1.0-alpha},
+  url = {https://github.com/zephsystems/mopac_rs}
+}
+```
+
+Direct metadata is also available in [`CITATION.cff`](CITATION.cff).
+
+---
+
 ## License
 
 Distributed under the **Apache License Version 2.0 (Apache-2.0)**. See [`LICENSE`](LICENSE) for complete details.
