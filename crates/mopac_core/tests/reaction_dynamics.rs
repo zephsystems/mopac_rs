@@ -20,8 +20,36 @@ use mopac_core::reactions::irc::{
 };
 use mopac_core::types::{MolecularBatch, ScfWorkspace};
 use std::fs;
-use std::path::Path;
+use std::path::{Path, PathBuf};
 use std::process::Command;
+
+fn find_openmopac_binary() -> Option<PathBuf> {
+    if let Ok(p) = std::env::var("OPENMOPAC_BIN") {
+        if p.eq_ignore_ascii_case("skip")
+            || p.eq_ignore_ascii_case("none")
+            || p.eq_ignore_ascii_case("disabled")
+        {
+            return None;
+        }
+        let pb = PathBuf::from(p);
+        if pb.exists() {
+            return Some(pb);
+        }
+    }
+    let local = PathBuf::from("/home/cyclop/.local/bin/mopac");
+    if local.exists() {
+        return Some(local);
+    }
+    if let Ok(path) = std::env::var("PATH") {
+        for dir in std::env::split_paths(&path) {
+            let candidate = dir.join("mopac");
+            if candidate.is_file() {
+                return Some(candidate);
+            }
+        }
+    }
+    None
+}
 
 #[test]
 fn test_irc_forward_reverse_continuity() {
@@ -227,11 +255,13 @@ fn test_drc_energy_conservation() {
 
 #[test]
 fn test_irc_openmopac_parity() {
-    let mopac_bin = "/home/cyclop/.local/bin/mopac";
-    if !Path::new(mopac_bin).exists() {
-        eprintln!("Skipping test_irc_openmopac_parity: OpenMOPAC binary not found");
-        return;
-    }
+    let mopac_bin = match find_openmopac_binary() {
+        Some(b) => b,
+        None => {
+            eprintln!("Skipping test_irc_openmopac_parity: OpenMOPAC binary not found");
+            return;
+        }
+    };
 
     let tmp_dir = Path::new("/tmp/mopac_irc_parity");
     fs::create_dir_all(tmp_dir).expect("Failed to create temporary directory");
@@ -247,7 +277,7 @@ H  -0.489066 0  -0.847703 0  -0.019961 0\n";
 
     fs::write(&mop_file, deck).expect("Failed to write .mop test deck");
 
-    let status = Command::new(mopac_bin)
+    let status = Command::new(&mopac_bin)
         .arg(&mop_file)
         .current_dir(tmp_dir)
         .status()

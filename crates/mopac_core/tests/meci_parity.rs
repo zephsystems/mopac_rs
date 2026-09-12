@@ -19,8 +19,36 @@ use mopac_core::parameters::pm6::Pm6Model;
 use mopac_core::scf::scf_loop::run_rhf_scf_adaptive_with_nddo;
 use mopac_core::types::{MolecularBatch, ScfWorkspace};
 use std::fs;
-use std::path::Path;
+use std::path::PathBuf;
 use std::process::Command;
+
+fn find_openmopac_binary() -> Option<PathBuf> {
+    if let Ok(p) = std::env::var("OPENMOPAC_BIN") {
+        if p.eq_ignore_ascii_case("skip")
+            || p.eq_ignore_ascii_case("none")
+            || p.eq_ignore_ascii_case("disabled")
+        {
+            return None;
+        }
+        let pb = PathBuf::from(p);
+        if pb.exists() {
+            return Some(pb);
+        }
+    }
+    let local = PathBuf::from("/home/cyclop/.local/bin/mopac");
+    if local.exists() {
+        return Some(local);
+    }
+    if let Ok(path) = std::env::var("PATH") {
+        for dir in std::env::split_paths(&path) {
+            let candidate = dir.join("mopac");
+            if candidate.is_file() {
+                return Some(candidate);
+            }
+        }
+    }
+    None
+}
 
 #[test]
 fn test_meci_spin_purity() {
@@ -200,14 +228,13 @@ fn test_formaldehyde_uv_transition() {
 
 #[test]
 fn test_meci_golden_parity() {
-    let mopac_bin = "/home/cyclop/.local/bin/mopac";
-    if !Path::new(mopac_bin).exists() {
-        eprintln!(
-            "Skipping test_meci_golden_parity: MOPAC binary not found at {}",
-            mopac_bin
-        );
-        return;
-    }
+    let mopac_bin = match find_openmopac_binary() {
+        Some(b) => b,
+        None => {
+            eprintln!("Skipping test_meci_golden_parity: MOPAC binary not found");
+            return;
+        }
+    };
 
     let model = Pm6Model;
     let atomic_numbers = vec![6, 6, 1, 1, 1, 1];
@@ -226,7 +253,7 @@ fn test_meci_golden_parity() {
     let input_content = "PM6 1SCF C.I.=2 MECI\nEthylene Golden Oracle\nMECI Test\nC  -0.67  0.00 0.0\nC   0.67  0.00 0.0\nH  -1.23 -0.93 0.0\nH  -1.23  0.93 0.0\nH   1.23 -0.93 0.0\nH   1.23  0.93 0.0\n";
     fs::write(input_path, input_content).expect("Failed to write oracle input");
 
-    let status = Command::new(mopac_bin)
+    let status = Command::new(&mopac_bin)
         .arg(input_path)
         .current_dir("/tmp")
         .status()

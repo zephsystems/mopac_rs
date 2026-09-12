@@ -17,8 +17,36 @@ use mopac_core::parameters::pm6::Pm6Model;
 use mopac_core::types::{MolecularBatch, ScfWorkspace};
 use mopac_core::vibrations::hessian::{compute_hessian_and_frequencies, HessianOptions};
 use std::fs;
-use std::path::Path;
+use std::path::{Path, PathBuf};
 use std::process::Command;
+
+fn find_openmopac_binary() -> Option<PathBuf> {
+    if let Ok(p) = std::env::var("OPENMOPAC_BIN") {
+        if p.eq_ignore_ascii_case("skip")
+            || p.eq_ignore_ascii_case("none")
+            || p.eq_ignore_ascii_case("disabled")
+        {
+            return None;
+        }
+        let pb = PathBuf::from(p);
+        if pb.exists() {
+            return Some(pb);
+        }
+    }
+    let local = PathBuf::from("/home/cyclop/.local/bin/mopac");
+    if local.exists() {
+        return Some(local);
+    }
+    if let Ok(path) = std::env::var("PATH") {
+        for dir in std::env::split_paths(&path) {
+            let candidate = dir.join("mopac");
+            if candidate.is_file() {
+                return Some(candidate);
+            }
+        }
+    }
+    None
+}
 
 /// Test 2.1: Rigorous step-size constraint ||s|| <= R_trust across varied initial conditions.
 #[test]
@@ -298,11 +326,13 @@ fn test_hcn_hnc_isomerization_ts() {
 /// Test 2.4: Golden Parity against OpenMOPAC v23.2.5 with TS keyword.
 #[test]
 fn test_ts_golden_parity() {
-    let mopac_bin = "/home/cyclop/.local/bin/mopac";
-    if !Path::new(mopac_bin).exists() {
-        eprintln!("Skipping test_ts_golden_parity: OpenMOPAC binary not found");
-        return;
-    }
+    let mopac_bin = match find_openmopac_binary() {
+        Some(b) => b,
+        None => {
+            eprintln!("Skipping test_ts_golden_parity: OpenMOPAC binary not found");
+            return;
+        }
+    };
 
     let tmp_dir = Path::new("/tmp/mopac_ts_parity");
     fs::create_dir_all(tmp_dir).expect("Failed to create temporary directory");
@@ -318,7 +348,7 @@ H  -0.490000 1  -0.848705 1  -0.020000 1\n";
 
     fs::write(&mop_file, deck).expect("Failed to write .mop test deck");
 
-    let status = Command::new(mopac_bin)
+    let status = Command::new(&mopac_bin)
         .arg(&mop_file)
         .current_dir(tmp_dir)
         .status()

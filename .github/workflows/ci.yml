@@ -9,6 +9,7 @@ on:
 env:
   CARGO_TERM_COLOR: always
   RUSTFLAGS: "-D warnings"
+  LD_LIBRARY_PATH: "/usr/local/lib"
 
 jobs:
   check-and-test:
@@ -27,6 +28,13 @@ jobs:
         run: |
           sudo apt-get update
           sudo apt-get install -y libvulkan-dev vulkan-tools libvulkan1 python3-numpy
+
+      - name: Install OpenMOPAC Reference Oracle (v23.2.5)
+        run: |
+          curl -L -s https://github.com/openmopac/mopac/releases/download/v23.2.5/mopac-23.2.5-linux.tar.gz | sudo tar -xzf - -C /usr/local --strip-components=1
+          sudo ldconfig
+          which mopac
+          mopac --version
 
       - name: Rustfmt Formatting Check
         run: cargo fmt --all -- --check

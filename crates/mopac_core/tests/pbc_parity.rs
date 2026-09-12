@@ -17,8 +17,36 @@ use mopac_core::pbc::unit_cell::{PeriodicDimension, UnitCell};
 use mopac_core::types::MolecularBatch;
 use std::f64::consts::PI;
 use std::fs;
-use std::path::Path;
+use std::path::PathBuf;
 use std::process::Command;
+
+fn find_openmopac_binary() -> Option<PathBuf> {
+    if let Ok(p) = std::env::var("OPENMOPAC_BIN") {
+        if p.eq_ignore_ascii_case("skip")
+            || p.eq_ignore_ascii_case("none")
+            || p.eq_ignore_ascii_case("disabled")
+        {
+            return None;
+        }
+        let pb = PathBuf::from(p);
+        if pb.exists() {
+            return Some(pb);
+        }
+    }
+    let local = PathBuf::from("/home/cyclop/.local/bin/mopac");
+    if local.exists() {
+        return Some(local);
+    }
+    if let Ok(path) = std::env::var("PATH") {
+        for dir in std::env::split_paths(&path) {
+            let candidate = dir.join("mopac");
+            if candidate.is_file() {
+                return Some(candidate);
+            }
+        }
+    }
+    None
+}
 
 #[test]
 fn test_pbc_reciprocal_lattice_invariants() {
@@ -160,14 +188,13 @@ fn test_polyacetylene_1d_bandgap() {
 
 #[test]
 fn test_pbc_golden_parity() {
-    let mopac_bin = "/home/cyclop/.local/bin/mopac";
-    if !Path::new(mopac_bin).exists() {
-        eprintln!(
-            "Skipping test_pbc_golden_parity: MOPAC binary not found at {}",
-            mopac_bin
-        );
-        return;
-    }
+    let mopac_bin = match find_openmopac_binary() {
+        Some(b) => b,
+        None => {
+            eprintln!("Skipping test_pbc_golden_parity: MOPAC binary not found");
+            return;
+        }
+    };
 
     let tmp_dir = "/tmp/mopac_pbc_parity";
     fs::create_dir_all(tmp_dir).expect("Failed to create temporary directory");
@@ -187,7 +214,7 @@ Tv 2.450000 0.000000 0.000000
 ";
     fs::write(&mop_path, mop_content).expect("Failed to write .mop file");
 
-    let status = Command::new(mopac_bin)
+    let status = Command::new(&mopac_bin)
         .arg(&mop_path)
         .status()
         .expect("Failed to execute OpenMOPAC oracle binary");
