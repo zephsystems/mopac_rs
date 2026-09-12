@@ -607,7 +607,8 @@ fn run_calculation_internal(
         )));
     }
 
-    let mut batch = MolecularBatch::new(atomic_numbers.to_vec(), coordinates);
+    let mut batch =
+        MolecularBatch::new_for_model(atomic_numbers.to_vec(), coordinates, model.as_ref());
     let mut scf_ws = ScfWorkspace::allocate(batch.norbs);
 
     let cosmo = cosmo_eps.map(|eps| CosmoParams {
@@ -847,7 +848,8 @@ pub fn optimize(
         )));
     }
 
-    let mut batch = MolecularBatch::new(atomic_numbers.clone(), &coordinates);
+    let mut batch =
+        MolecularBatch::new_for_model(atomic_numbers.clone(), &coordinates, model.as_ref());
     let mut scf_ws = ScfWorkspace::allocate(batch.norbs);
     let mut grad_ws = GradientWorkspace::allocate(batch.norbs);
 
@@ -966,7 +968,8 @@ pub fn transition_state(
         )));
     }
 
-    let mut batch = MolecularBatch::new(atomic_numbers.clone(), &coordinates);
+    let mut batch =
+        MolecularBatch::new_for_model(atomic_numbers.clone(), &coordinates, model.as_ref());
     let mut scf_ws = ScfWorkspace::allocate(batch.norbs);
     let mut grad_ws = GradientWorkspace::allocate(batch.norbs);
     let mut ef_ws = EigenvectorFollowingWorkspace::allocate(batch.natoms);
@@ -1103,7 +1106,7 @@ pub fn frequencies(
         )));
     }
 
-    let mut batch = MolecularBatch::new(atomic_numbers, &coordinates);
+    let mut batch = MolecularBatch::new_for_model(atomic_numbers, &coordinates, model.as_ref());
     let mut ws = ScfWorkspace::allocate(batch.norbs);
 
     let scf_opts = ScfOptions {
@@ -1237,7 +1240,7 @@ pub fn irc(
         }
     };
 
-    let mut batch = MolecularBatch::new(atomic_numbers, &coordinates);
+    let mut batch = MolecularBatch::new_for_model(atomic_numbers, &coordinates, model.as_ref());
     let mut scf_ws = ScfWorkspace::allocate(batch.norbs);
     let mut grad_ws = GradientWorkspace::allocate(batch.norbs);
     let mut irc_ws = IrcWorkspace::allocate(&batch);
@@ -1355,7 +1358,7 @@ pub fn drc(
         }
     };
 
-    let mut batch = MolecularBatch::new(atomic_numbers, &coordinates);
+    let mut batch = MolecularBatch::new_for_model(atomic_numbers, &coordinates, model.as_ref());
     let mut scf_ws = ScfWorkspace::allocate(batch.norbs);
     let mut grad_ws = GradientWorkspace::allocate(batch.norbs);
     let mut drc_ws = DrcWorkspace::allocate(&batch);
