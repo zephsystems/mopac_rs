@@ -281,11 +281,25 @@ pub fn compute_hessian_and_frequencies(
     };
 
     let n_vib = n3.saturating_sub(n_ext);
-    let mut vibrational_frequencies_cm1 = Vec::with_capacity(n_vib);
+    let mut indexed_modes: Vec<(usize, f64)> = eigenvalues
+        .iter()
+        .enumerate()
+        .map(|(idx, &lam)| (idx, lam.abs()))
+        .collect();
+    // Sort by absolute eigenvalue ascending: smallest |lambda| first
+    indexed_modes.sort_by(|a, b| a.1.partial_cmp(&b.1).unwrap_or(std::cmp::Ordering::Equal));
 
-    // The top n_vib eigenvalues correspond to genuine vibrational modes
-    for &f in all_frequencies_cm1.iter().skip(n_ext) {
-        vibrational_frequencies_cm1.push(f);
+    // The first n_ext indices with smallest |lambda| are external (translations/rotations)
+    let mut is_ext = vec![false; n3];
+    for &(idx, _) in indexed_modes.iter().take(n_ext) {
+        is_ext[idx] = true;
+    }
+
+    let mut vibrational_frequencies_cm1 = Vec::with_capacity(n_vib);
+    for i in 0..n3 {
+        if !is_ext[i] {
+            vibrational_frequencies_cm1.push(all_frequencies_cm1[i]);
+        }
     }
 
     // 10. Extract Normal Modes & atom displacement vectors

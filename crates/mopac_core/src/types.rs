@@ -194,6 +194,14 @@ impl<T: Copy + Default> AlignedMatrix<T> {
     pub fn fill_zero(&mut self) {
         self.data.fill_zero();
     }
+
+    /// Copy elements from another matrix of identical dimensions without reallocating.
+    #[inline(always)]
+    pub fn copy_from(&mut self, other: &Self) {
+        assert_eq!(self.rows, other.rows);
+        assert_eq!(self.cols, other.cols);
+        self.data.copy_from_slice(&other.data);
+    }
 }
 
 /// Orbital basis set type of an atomic site.

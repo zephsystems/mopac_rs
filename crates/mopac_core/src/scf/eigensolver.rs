@@ -16,14 +16,34 @@ pub fn diagonalize_symmetric(
     eigenvalues: &mut AlignedVec64<f64>,
     eigenvectors: &mut AlignedMatrix<f64>,
 ) -> usize {
+    let mut mat = a.clone();
+    diagonalize_symmetric_with_work(a, &mut mat, eigenvalues, eigenvectors)
+}
+
+/// Diagonalize a real symmetric matrix $A$ of dimension $N \times N$ using a preallocated workspace.
+///
+/// On exit:
+/// * `eigenvalues` contains the sorted eigenvalues $\epsilon_1 \le \epsilon_2 \le \dots \le \epsilon_N$.
+/// * `eigenvectors` contains the orthonormal eigenvectors as columns: $C_{\mu i}$.
+/// * Satisfies $C^T C = I$ to machine precision ($\le 10^{-14}$).
+/// * Strictly 0 heap allocations when reusing `work`.
+pub fn diagonalize_symmetric_with_work(
+    a: &AlignedMatrix<f64>,
+    work: &mut AlignedMatrix<f64>,
+    eigenvalues: &mut AlignedVec64<f64>,
+    eigenvectors: &mut AlignedMatrix<f64>,
+) -> usize {
     let n = a.rows;
     assert_eq!(a.cols, n);
+    assert_eq!(work.rows, n);
+    assert_eq!(work.cols, n);
     assert_eq!(eigenvalues.len(), n);
     assert_eq!(eigenvectors.rows, n);
     assert_eq!(eigenvectors.cols, n);
 
     // Working copy of matrix A
-    let mut mat = a.clone();
+    work.copy_from(a);
+    let mat = work;
 
     // Initialize eigenvectors to identity matrix
     eigenvectors.fill_zero();

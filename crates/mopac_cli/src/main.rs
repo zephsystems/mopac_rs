@@ -10,11 +10,15 @@ use mopac_core::corrections::{
     DispersionModel, H4Parameters,
 };
 use mopac_core::gradients::GradientWorkspace;
-use mopac_core::opt::{optimize_geometry_lbfgs, OptimizationOptions};
+use mopac_core::opt::{
+    optimize_geometry_lbfgs, optimize_transition_state, EigenvectorFollowingWorkspace,
+    HessianUpdateScheme, OptimizationOptions, TransitionStateOptions,
+};
 use mopac_core::parameters::am1::Am1Model;
 use mopac_core::parameters::mndo::MndoModel;
 use mopac_core::parameters::pm3::Pm3Model;
 use mopac_core::parameters::pm6::Pm6Model;
+use mopac_core::parameters::pm7::Pm7Model;
 use mopac_core::parameters::rm1::Rm1Model;
 use mopac_core::parameters::ParameterModel;
 use mopac_core::properties::{
@@ -57,6 +61,10 @@ struct Cli {
     /// Enable geometry optimization (L-BFGS)
     #[arg(long)]
     opt: bool,
+
+    /// Enable transition state optimization via Eigenvector Following (P-RFO Baker)
+    #[arg(long)]
+    ts: bool,
 
     /// Enable Cartesian Hessian, mass-weighting and normal mode vibrational analysis
     #[arg(long)]
@@ -134,6 +142,7 @@ struct ParsedInput {
     comment: String,
     atoms: Vec<ParsedAtom>,
     is_opt_requested: bool,
+    is_ts_requested: bool,
     is_force_requested: bool,
     is_gpu_requested: bool,
     is_fp32_requested: bool,
@@ -233,10 +242,11 @@ fn parse_mopac_input(content: &str) -> io::Result<ParsedInput> {
     };
 
     let mut is_opt_requested = false;
+    let mut is_ts_requested = false;
     let mut is_force_requested = false;
-    let mut is_1scf = false;
     let mut is_gpu = false;
     let mut is_fp32 = false;
+    let mut is_1scf = false;
     let mut method = None;
     let mut is_nddo_requested = false;
     let mut is_dipole_requested = false;
@@ -249,7 +259,9 @@ fn parse_mopac_input(content: &str) -> io::Result<ParsedInput> {
 
     for kw in &keywords {
         let u = kw.to_uppercase();
-        if u == "OPT" || u == "EF" || u == "BFGS" {
+        if u == "TS" {
+            is_ts_requested = true;
+        } else if u == "OPT" || u == "EF" || u == "BFGS" {
             is_opt_requested = true;
         } else if u == "FORCE" || u == "VIB" || u == "FREQ" || u == "THERMO" {
             is_force_requested = true;
@@ -364,6 +376,7 @@ fn parse_mopac_input(content: &str) -> io::Result<ParsedInput> {
         comment,
         atoms,
         is_opt_requested,
+        is_ts_requested,
         is_force_requested,
         is_gpu_requested: is_gpu,
         is_fp32_requested: is_fp32,
@@ -483,7 +496,8 @@ fn main() -> Result<(), Box<dyn std::error::Error>> {
 
     let use_gpu = cli.gpu || parsed.is_gpu_requested;
     let use_fp32 = cli.fp32 || parsed.is_fp32_requested;
-    let is_opt = (cli.opt || parsed.is_opt_requested) && !cli.one_scf;
+    let is_ts = (cli.ts || parsed.is_ts_requested) && !cli.one_scf;
+    let is_opt = (cli.opt || parsed.is_opt_requested) && !cli.one_scf && !is_ts;
 
     let method_name = cli
         .method
@@ -492,6 +506,7 @@ fn main() -> Result<(), Box<dyn std::error::Error>> {
         .to_uppercase();
 
     let model: Box<dyn ParameterModel> = match method_name.as_str() {
+        "PM7" => Box::new(Pm7Model),
         "PM6" => Box::new(Pm6Model),
         "PM3" => Box::new(Pm3Model),
         "RM1" => Box::new(Rm1Model),
@@ -517,7 +532,9 @@ fn main() -> Result<(), Box<dyn std::error::Error>> {
     );
     println!(
         " Calculation Mode      : {}",
-        if is_opt {
+        if is_ts {
+            "Eigenvector Following (P-RFO) Transition State Search"
+        } else if is_opt {
             "L-BFGS Geometry Optimization"
         } else {
             "1SCF (Single Point)"
@@ -571,7 +588,66 @@ fn main() -> Result<(), Box<dyn std::error::Error>> {
         }
     }
 
-    let (scf_final, total_scf_cycles) = if is_opt {
+    let (scf_final, total_scf_cycles) = if is_ts {
+        println!(" [Optimizer] Starting Transition State Search (Eigenvector Following P-RFO)...");
+        let mut opt_mask = Vec::with_capacity(3 * parsed.atoms.len());
+        for a in &parsed.atoms {
+            opt_mask.push(a.opt_x);
+            opt_mask.push(a.opt_y);
+            opt_mask.push(a.opt_z);
+        }
+
+        let opts = TransitionStateOptions {
+            max_cycles: 100,
+            grad_rms_tol: 0.1,
+            grad_max_tol: 0.2,
+            trust_radius: 0.1,
+            min_trust_radius: 0.005,
+            max_trust_radius: 0.3,
+            update_scheme: HessianUpdateScheme::Bofill,
+            mode_following: true,
+            target_mode: None,
+            opt_mask: Some(opt_mask),
+            use_nddo,
+            hessian_delta: 0.005,
+            initial_hessian: None,
+        };
+
+        let mut grad_ws = GradientWorkspace::allocate(batch.norbs);
+        let mut ef_ws = EigenvectorFollowingWorkspace::allocate(batch.natoms);
+        let ts_res = optimize_transition_state(
+            &mut batch,
+            model.as_ref(),
+            &mut ws,
+            &mut grad_ws,
+            &mut ef_ws,
+            &opts,
+        );
+
+        println!(
+            " [Optimizer] TS Search finished in {} cycles (Converged: {})",
+            ts_res.cycles, ts_res.converged
+        );
+        println!(
+            "   Transition Mode Eigenvalue : {:12.4} kcal/(mol*A^2) (Mode #{})",
+            ts_res.ts_mode_eigenvalue,
+            ts_res.ts_mode_index + 1
+        );
+        println!(
+            "   Final Electronic Energy    : {:12.6} eV",
+            ts_res.final_energy_ev
+        );
+        println!(
+            "   Standard Heat of Formation : {:12.5} kcal/mol",
+            ts_res.heat_of_formation_kcal
+        );
+        println!(
+            "   Initial RMS G: {:10.4} | Final RMS G: {:10.4} kcal/(mol*A)",
+            ts_res.initial_grad_rms, ts_res.final_grad_rms
+        );
+        let niter = ts_res.final_scf.iterations;
+        (ts_res.final_scf, niter)
+    } else if is_opt {
         println!(" [Optimizer] Starting Cartesian L-BFGS Relaxation...");
         let mut opt_mask = Vec::with_capacity(3 * parsed.atoms.len());
         for a in &parsed.atoms {

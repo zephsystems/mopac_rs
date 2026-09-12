@@ -22,8 +22,14 @@ use mopac_core::corrections::h_bonds4::{
 use mopac_core::gradients::nuclear_gradients::{
     compute_cartesian_gradients_with_options, GradientWorkspace,
 };
+use mopac_core::opt::eigenvector_following::{
+    optimize_transition_state, EigenvectorFollowingWorkspace, TransitionStateOptions,
+};
+use mopac_core::opt::hessian_update::HessianUpdateScheme;
 use mopac_core::opt::lbfgs::{optimize_geometry_lbfgs, OptimizationOptions};
-use mopac_core::parameters::{Am1Model, MndoModel, ParameterModel, Pm3Model, Pm6Model, Rm1Model};
+use mopac_core::parameters::{
+    Am1Model, MndoModel, ParameterModel, Pm3Model, Pm6Model, Pm7Model, Rm1Model,
+};
 use mopac_core::properties::{
     compute_dipole_moment, compute_heat_of_formation, compute_mulliken_population,
 };
@@ -35,13 +41,14 @@ use mopac_core::vibrations::{compute_hessian_and_frequencies, HessianOptions};
 /// Resolve model instance by string identifier.
 fn get_model(method: &str) -> PyResult<Box<dyn ParameterModel>> {
     match method.to_uppercase().as_str() {
+        "PM7" => Ok(Box::new(Pm7Model)),
         "PM6" => Ok(Box::new(Pm6Model)),
         "AM1" => Ok(Box::new(Am1Model)),
         "RM1" => Ok(Box::new(Rm1Model)),
         "PM3" => Ok(Box::new(Pm3Model)),
         "MNDO" => Ok(Box::new(MndoModel)),
         other => Err(PyValueError::new_err(format!(
-            "Unsupported semi-empirical method: '{}'. Supported methods: PM6, AM1, RM1, PM3, MNDO",
+            "Unsupported semi-empirical method: '{}'. Supported methods: PM7, PM6, AM1, RM1, PM3, MNDO",
             other
         ))),
     }
@@ -148,6 +155,64 @@ impl OptimizationPyResult {
             "<OptimizationPyResult converged={} cycles={} E_final={:.6} eV, dHf={:.3} kcal/mol, grad_rms={:.4}>",
             self.converged, self.cycles, self.final_energy_ev, self.final_heat_of_formation_kcal, self.final_grad_rms
         )
+    }
+}
+
+/// Result of transition state search via Eigenvector Following.
+#[pyclass(get_all)]
+#[derive(Debug, Clone)]
+pub struct TransitionStatePyResult {
+    /// Whether the transition state search converged
+    pub converged: bool,
+    /// Number of EF optimization cycles executed
+    pub cycles: usize,
+    /// Final total energy in eV
+    pub final_energy_ev: f64,
+    /// Final heat of formation in kcal/mol
+    pub final_heat_of_formation_kcal: f64,
+    /// Initial RMS gradient in kcal / (mol * \AA)
+    pub initial_grad_rms: f64,
+    /// Final RMS gradient in kcal / (mol * \AA)
+    pub final_grad_rms: f64,
+    /// Final maximum gradient component in kcal / (mol * \AA)
+    pub final_grad_max: f64,
+    /// Eigenvalue of the transition state mode along which energy is maximized (kcal / (mol * \AA^2))
+    pub ts_mode_eigenvalue: f64,
+    /// Transition state mode index (0-indexed)
+    pub ts_mode_index: usize,
+    /// Transition state Cartesian coordinates in \AA (shape: [natoms, 3])
+    pub coordinates: Vec<[f64; 3]>,
+    /// Final calculation result at the transition state
+    pub final_result: CalculationResult,
+}
+
+#[pymethods]
+impl TransitionStatePyResult {
+    fn __repr__(&self) -> String {
+        format!(
+            "<TransitionStatePyResult converged={} cycles={} E_final={:.6} eV, dHf={:.3} kcal/mol, ts_mode_val={:.3}, grad_rms={:.4}>",
+            self.converged, self.cycles, self.final_energy_ev, self.final_heat_of_formation_kcal, self.ts_mode_eigenvalue, self.final_grad_rms
+        )
+    }
+
+    /// Convert transition state result to a standard Python dictionary.
+    fn to_dict<'py>(&self, py: Python<'py>) -> PyResult<Bound<'py, PyDict>> {
+        let dict = PyDict::new_bound(py);
+        dict.set_item("converged", self.converged)?;
+        dict.set_item("cycles", self.cycles)?;
+        dict.set_item("final_energy_ev", self.final_energy_ev)?;
+        dict.set_item(
+            "final_heat_of_formation_kcal",
+            self.final_heat_of_formation_kcal,
+        )?;
+        dict.set_item("initial_grad_rms", self.initial_grad_rms)?;
+        dict.set_item("final_grad_rms", self.final_grad_rms)?;
+        dict.set_item("final_grad_max", self.final_grad_max)?;
+        dict.set_item("ts_mode_eigenvalue", self.ts_mode_eigenvalue)?;
+        dict.set_item("ts_mode_index", self.ts_mode_index)?;
+        dict.set_item("coordinates", &self.coordinates)?;
+        dict.set_item("final_result", self.final_result.to_dict(py)?)?;
+        Ok(dict)
     }
 }
 
@@ -647,6 +712,137 @@ pub fn optimize(
     })
 }
 
+/// Locate a transition state (first-order saddle point) using Eigenvector Following (P-RFO Baker).
+///
+/// Parameters:
+/// - `atomic_numbers`: list of integer atomic numbers (e.g. `[7, 1, 1, 1]`)
+/// - `coordinates`: 3D coordinates in Ångströms (shape: `[natoms, 3]`)
+/// - `method`: Semi-empirical Hamiltonian ("PM7", "PM6", "AM1", "RM1", "PM3", "MNDO"; default: "PM6")
+/// - `max_cycles`: Maximum EF optimization cycles (default: 100)
+/// - `grad_rms_tol`: RMS gradient convergence threshold in kcal / (mol * Å) (default: 0.1)
+/// - `grad_max_tol`: Maximum gradient component convergence threshold in kcal / (mol * Å) (default: 0.2)
+/// - `trust_radius`: Initial P-RFO trust radius in Ångströms (default: 0.1)
+/// - `target_mode`: Index of normal mode to follow (0-indexed, default: None -> lowest eigenvalue)
+/// - `use_nddo`: Enable full NDDO 22-multipole integrals (default: false)
+#[pyfunction]
+#[pyo3(signature = (
+    atomic_numbers,
+    coordinates,
+    method = "PM6",
+    max_cycles = 100,
+    grad_rms_tol = 0.1,
+    grad_max_tol = 0.2,
+    trust_radius = 0.1,
+    target_mode = None,
+    use_nddo = false,
+))]
+pub fn transition_state(
+    atomic_numbers: Vec<u8>,
+    coordinates: Vec<[f64; 3]>,
+    method: Option<&str>,
+    max_cycles: Option<usize>,
+    grad_rms_tol: Option<f64>,
+    grad_max_tol: Option<f64>,
+    trust_radius: Option<f64>,
+    target_mode: Option<usize>,
+    use_nddo: Option<bool>,
+) -> PyResult<TransitionStatePyResult> {
+    let natoms = atomic_numbers.len();
+    if natoms == 0 {
+        return Err(PyValueError::new_err("atomic_numbers cannot be empty"));
+    }
+    if coordinates.len() != natoms {
+        return Err(PyValueError::new_err("Coordinate count mismatch"));
+    }
+
+    let m_name = method.unwrap_or("PM6");
+    let model = get_model(m_name)?;
+
+    let mut total_valence_elecs = 0.0;
+    for &z in &atomic_numbers {
+        if let Some(p) = model.get_element(z) {
+            total_valence_elecs += p.core_charge;
+        } else {
+            return Err(PyValueError::new_err(format!(
+                "Unsupported element Z={} for semi-empirical method '{}'",
+                z, m_name
+            )));
+        }
+    }
+
+    let nelec = total_valence_elecs.round() as usize;
+    if !nelec.is_multiple_of(2) {
+        return Err(PyValueError::new_err(format!(
+            "Open-shell radical detected ({} valence electrons). Closed-shell RHF requires an even number of valence electrons (requires UHF/ROHF).",
+            nelec
+        )));
+    }
+
+    let mut batch = MolecularBatch::new(atomic_numbers.clone(), &coordinates);
+    let mut scf_ws = ScfWorkspace::allocate(batch.norbs);
+    let mut grad_ws = GradientWorkspace::allocate(batch.norbs);
+    let mut ef_ws = EigenvectorFollowingWorkspace::allocate(batch.natoms);
+
+    let ts_opts = TransitionStateOptions {
+        max_cycles: max_cycles.unwrap_or(100),
+        grad_rms_tol: grad_rms_tol.unwrap_or(0.1),
+        grad_max_tol: grad_max_tol.unwrap_or(0.2),
+        trust_radius: trust_radius.unwrap_or(0.1),
+        min_trust_radius: 0.005,
+        max_trust_radius: 0.3,
+        update_scheme: HessianUpdateScheme::Bofill,
+        mode_following: true,
+        target_mode,
+        opt_mask: None,
+        use_nddo: use_nddo.unwrap_or(false),
+        hessian_delta: 0.005,
+        initial_hessian: None,
+    };
+
+    let ts_res = optimize_transition_state(
+        &mut batch,
+        model.as_ref(),
+        &mut scf_ws,
+        &mut grad_ws,
+        &mut ef_ws,
+        &ts_opts,
+    );
+
+    let mut final_coords = Vec::with_capacity(natoms);
+    for i in 0..natoms {
+        final_coords.push([batch.x[i], batch.y[i], batch.z[i]]);
+    }
+
+    let final_calc = run_calculation_internal(
+        &atomic_numbers,
+        &final_coords,
+        m_name,
+        None,
+        None,
+        false,
+        use_nddo.unwrap_or(false),
+        60,
+        1e-7,
+        1e-6,
+        0.0,
+        0.5,
+    )?;
+
+    Ok(TransitionStatePyResult {
+        converged: ts_res.converged,
+        cycles: ts_res.cycles,
+        final_energy_ev: ts_res.final_energy_ev,
+        final_heat_of_formation_kcal: final_calc.heat_of_formation_kcal,
+        initial_grad_rms: ts_res.initial_grad_rms,
+        final_grad_rms: ts_res.final_grad_rms,
+        final_grad_max: ts_res.final_grad_max,
+        ts_mode_eigenvalue: ts_res.ts_mode_eigenvalue,
+        ts_mode_index: ts_res.ts_mode_index,
+        coordinates: final_coords,
+        final_result: final_calc,
+    })
+}
+
 /// Compute Cartesian Hessian, harmonic vibrational frequencies, normal modes, and thermodynamics.
 ///
 /// Parameters:
@@ -906,6 +1102,31 @@ impl MopacCalculator {
             Some(self.use_nddo),
         )
     }
+
+    /// Locate transition state using Eigenvector Following (P-RFO Baker).
+    #[pyo3(signature = (atomic_numbers, coordinates, max_cycles = 100, grad_rms_tol = 0.1, grad_max_tol = 0.2, trust_radius = 0.1, target_mode = None))]
+    fn transition_state(
+        &self,
+        atomic_numbers: Vec<u8>,
+        coordinates: Vec<[f64; 3]>,
+        max_cycles: Option<usize>,
+        grad_rms_tol: Option<f64>,
+        grad_max_tol: Option<f64>,
+        trust_radius: Option<f64>,
+        target_mode: Option<usize>,
+    ) -> PyResult<TransitionStatePyResult> {
+        transition_state(
+            atomic_numbers,
+            coordinates,
+            Some(&self.method),
+            max_cycles,
+            grad_rms_tol,
+            grad_max_tol,
+            trust_radius,
+            target_mode,
+            Some(self.use_nddo),
+        )
+    }
 }
 
 /// MOPAC_RS Python Module
@@ -913,12 +1134,14 @@ impl MopacCalculator {
 fn mopac_py(m: &Bound<'_, PyModule>) -> PyResult<()> {
     m.add_class::<CalculationResult>()?;
     m.add_class::<OptimizationPyResult>()?;
+    m.add_class::<TransitionStatePyResult>()?;
     m.add_class::<NormalModePy>()?;
     m.add_class::<ThermodynamicsPy>()?;
     m.add_class::<VibrationalResultPy>()?;
     m.add_class::<MopacCalculator>()?;
     m.add_function(wrap_pyfunction!(calculate, m)?)?;
     m.add_function(wrap_pyfunction!(optimize, m)?)?;
+    m.add_function(wrap_pyfunction!(transition_state, m)?)?;
     m.add_function(wrap_pyfunction!(frequencies, m)?)?;
 
     let py = m.py();
