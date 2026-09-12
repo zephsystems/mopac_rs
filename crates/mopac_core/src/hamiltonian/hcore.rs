@@ -3,7 +3,7 @@
 //! Licensed under the Apache License, Version 2.0 (the "License").
 //! Evaluates kinetic energy, atomic core energies, and nuclear attraction integrals.
 
-use crate::integrals::overlap::compute_diatomic_overlap_block;
+use crate::integrals::overlap::compute_diatomic_overlap_matrix_9x9;
 use crate::integrals::two_electron::dewar_klopman_monopole;
 use crate::parameters::ParameterModel;
 use crate::types::{AlignedMatrix, BasisType, MolecularBatch};
@@ -105,21 +105,27 @@ pub fn build_hcore(
                 continue;
             }
 
-            let dir = [
-                (batch.x[j] - batch.x[i]) / r_ab,
-                (batch.y[j] - batch.y[i]) / r_ab,
-                (batch.z[j] - batch.z[i]) / r_ab,
+            let dx = batch.x[j] - batch.x[i];
+            let dy = batch.y[j] - batch.y[i];
+            let dz = batch.z[j] - batch.z[i];
+
+            let mut s_mat = [[0.0f64; 9]; 9];
+            compute_diatomic_overlap_matrix_9x9(
+                za, zb, norb_a, norb_b, &p_a, &p_b, dx, dy, dz, r_ab, &mut s_mat,
+            );
+
+            let beta_a = [
+                p_a.betas, p_a.betap, p_a.betap, p_a.betap, p_a.betad, p_a.betad, p_a.betad,
+                p_a.betad, p_a.betad,
+            ];
+            let beta_b = [
+                p_b.betas, p_b.betap, p_b.betap, p_b.betap, p_b.betad, p_b.betad, p_b.betad,
+                p_b.betad, p_b.betad,
             ];
 
-            let mut s_mat = [[0.0f64; 4]; 4];
-            compute_diatomic_overlap_block(za, zb, &p_a, &p_b, r_ab, dir, &mut s_mat);
-
-            let beta_a = [p_a.betas, p_a.betap, p_a.betap, p_a.betap];
-            let beta_b = [p_b.betas, p_b.betap, p_b.betap, p_b.betap];
-
-            for oa in 0..norb_a.min(4) {
+            for oa in 0..norb_a {
                 let idx_a = orb_a_start + oa;
-                for ob in 0..norb_b.min(4) {
+                for ob in 0..norb_b {
                     let idx_b = orb_b_start + ob;
                     let h_res = 0.5 * (beta_a[oa] + beta_b[ob]) * s_mat[oa][ob];
                     h_core.set(idx_a, idx_b, h_res);
@@ -206,21 +212,27 @@ pub fn build_hcore_nddo(
                 continue;
             }
 
-            let dir = [
-                (batch.x[j] - batch.x[i]) / r_ab,
-                (batch.y[j] - batch.y[i]) / r_ab,
-                (batch.z[j] - batch.z[i]) / r_ab,
+            let dx = batch.x[j] - batch.x[i];
+            let dy = batch.y[j] - batch.y[i];
+            let dz = batch.z[j] - batch.z[i];
+
+            let mut s_mat = [[0.0f64; 9]; 9];
+            compute_diatomic_overlap_matrix_9x9(
+                za, zb, norb_a, norb_b, &p_a, &p_b, dx, dy, dz, r_ab, &mut s_mat,
+            );
+
+            let beta_a = [
+                p_a.betas, p_a.betap, p_a.betap, p_a.betap, p_a.betad, p_a.betad, p_a.betad,
+                p_a.betad, p_a.betad,
+            ];
+            let beta_b = [
+                p_b.betas, p_b.betap, p_b.betap, p_b.betap, p_b.betad, p_b.betad, p_b.betad,
+                p_b.betad, p_b.betad,
             ];
 
-            let mut s_mat = [[0.0f64; 4]; 4];
-            compute_diatomic_overlap_block(za, zb, &p_a, &p_b, r_ab, dir, &mut s_mat);
-
-            let beta_a = [p_a.betas, p_a.betap, p_a.betap, p_a.betap];
-            let beta_b = [p_b.betas, p_b.betap, p_b.betap, p_b.betap];
-
-            for oa in 0..norb_a.min(4) {
+            for oa in 0..norb_a {
                 let idx_a = orb_a_start + oa;
-                for ob in 0..norb_b.min(4) {
+                for ob in 0..norb_b {
                     let idx_b = orb_b_start + ob;
                     let h_res = 0.5 * (beta_a[oa] + beta_b[ob]) * s_mat[oa][ob];
                     h_core.set(idx_a, idx_b, h_res);

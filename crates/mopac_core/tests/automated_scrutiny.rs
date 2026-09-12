@@ -1831,10 +1831,10 @@ fn test_scrutiny_harmonic_vibrational_frequencies_and_thermodynamics() {
     }
 
     // 3. Water internal vibrational frequencies:
-    // OpenMOPAC reference values:
-    // Bend: ~1877 cm^-1
-    // Asymmetric stretch: ~3539 cm^-1
-    // Symmetric stretch: ~3612 cm^-1
+    // OpenMOPAC v23.2.5 reference values:
+    // Bend (1A1): 1885.35 cm^-1
+    // Asymmetric stretch (1B2): 3504.63 cm^-1
+    // Symmetric stretch (2A1): 3583.78 cm^-1
     let nu_bend = res.vibrational_frequencies_cm1[0];
     let nu_asym = res.vibrational_frequencies_cm1[1];
     let nu_sym = res.vibrational_frequencies_cm1[2];
@@ -1855,7 +1855,7 @@ fn test_scrutiny_harmonic_vibrational_frequencies_and_thermodynamics() {
         nu_asym
     );
     assert!(
-        (3600.0..=4200.0).contains(&nu_sym),
+        (3550.0..=4200.0).contains(&nu_sym),
         "H2O symmetric stretch out of range: got {:.1} cm^-1",
         nu_sym
     );

@@ -425,3 +425,71 @@ fn test_zero_allocation_scf_inner_loop_gate() {
         "[OK] 0-Malloc Gate: ScfWorkspace verified 100% realloc-free over consecutive iterations (7 buffers immutable)"
     );
 }
+
+/// Quantum Invariant 6: D-Orbital SO(3) Orthonormality and Casimir Invariance.
+///
+/// In accordance with Phase 1 Acceptance Gate (Test 1.1):
+/// Proves that the 5x5 rotation matrix for d-orbitals is strictly orthonormal
+/// in SO(3): ||D D^T - I_5||_inf < 10^-14, and preserves the Casimir invariant
+/// ||D v||^2 = ||v||^2 for arbitrary spherical harmonic states.
+#[test]
+fn test_d_orbital_orthonormality() {
+    use mopac_core::integrals::d_orbitals::DOrbitalRotation3D;
+
+    // Test orientations spanning the entire unit sphere, including poles and diagonals
+    let orientations: Vec<[f64; 3]> = vec![
+        [1.0, 0.0, 0.0],
+        [0.0, 1.0, 0.0],
+        [0.0, 0.0, 1.0],
+        [0.0, 0.0, -1.0],
+        [1.0, 1.0, 1.0],
+        [-1.5, 2.3, -0.7],
+        [0.12345, -0.98765, 0.54321],
+        [
+            std::f64::consts::PI,
+            std::f64::consts::E,
+            -std::f64::consts::SQRT_2,
+        ],
+    ];
+
+    // Arbitrary d-orbital spherical harmonic test state vectors (L=2)
+    let test_states: Vec<[f64; 5]> = vec![
+        [1.0, 0.0, 0.0, 0.0, 0.0],    // pure dx2-y2
+        [0.0, 0.0, 1.0, 0.0, 0.0],    // pure dz2
+        [0.2, -0.4, 0.6, -0.5, 0.35], // arbitrary superposition
+        [1.0 / 5.0f64.sqrt(); 5],     // normalized symmetric superposition
+    ];
+
+    for (idx, coord) in orientations.iter().enumerate() {
+        let r = (coord[0] * coord[0] + coord[1] * coord[1] + coord[2] * coord[2]).sqrt();
+        let rot = DOrbitalRotation3D::new(coord[0], coord[1], coord[2], r);
+
+        let (err_p, err_d) = rot.check_orthonormality();
+        assert!(
+            err_p < 1e-14,
+            "Orientation {} p-orbital rotation orthonormality violated: ||P P^T - I|| = {:.3e}",
+            idx,
+            err_p
+        );
+        assert!(
+            err_d < 1e-14,
+            "Orientation {} d-orbital rotation orthonormality violated: ||D D^T - I|| = {:.3e}",
+            idx,
+            err_d
+        );
+
+        for state in &test_states {
+            let casimir_err = rot.casimir_invariance(state);
+            assert!(
+                casimir_err < 1e-14,
+                "Orientation {} d-orbital Casimir invariance violated: Delta ||v||^2 = {:.3e}",
+                idx,
+                casimir_err
+            );
+        }
+    }
+
+    println!(
+        "[OK] Test 1.1 Passed: D-orbital 5x5 rotation matrix is strictly SO(3) orthonormal (||D D^T - I|| < 1e-14) and preserves Casimir norm identically"
+    );
+}

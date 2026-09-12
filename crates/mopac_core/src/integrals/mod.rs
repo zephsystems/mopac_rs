@@ -3,12 +3,14 @@
 //! Licensed under the Apache License, Version 2.0 (the "License").
 
 pub mod core_repulsion;
+pub mod d_orbitals;
 pub mod multipoles;
 pub mod overlap;
 pub mod rotation;
 pub mod two_electron;
 
 pub use core_repulsion::*;
+pub use d_orbitals::*;
 pub use multipoles::*;
 pub use overlap::*;
 pub use rotation::*;

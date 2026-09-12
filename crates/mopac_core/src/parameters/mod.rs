@@ -6,12 +6,14 @@ pub mod am1;
 pub mod mndo;
 pub mod pm3;
 pub mod pm6;
+pub mod pm7;
 pub mod rm1;
 
 pub use am1::Am1Model;
 pub use mndo::MndoModel;
 pub use pm3::Pm3Model;
 pub use pm6::Pm6Model;
+pub use pm7::Pm7Model;
 pub use rm1::Rm1Model;
 
 /// A Gaussian core-core repulsion correction term:
@@ -87,5 +89,34 @@ pub trait ParameterModel: Send + Sync {
         elem_b: &SemiEmpiricalElementParams,
     ) -> f64 {
         crate::integrals::core_repulsion::compute_pair_core_repulsion(r_angstrom, elem_a, elem_b)
+    }
+
+    /// Whether to apply PM7 feathering (smooth long-range transition to point-charge electrostatics).
+    fn use_feathering(&self) -> bool {
+        false
+    }
+
+    /// Retrieve precomputed d-orbital parameters (repd, ddp, po) if the element uses d-orbitals.
+    fn get_d_element_params(&self, _z: u8) -> Option<crate::integrals::d_orbitals::DElementParams> {
+        None
+    }
+
+    /// Determine the appropriate BasisType (S, SP, SPD) for an element under this model.
+    fn basis_type(&self, z: u8) -> crate::types::BasisType {
+        if let Some(p) = self.get_element(z) {
+            if p.zd > 1.0e-8 {
+                crate::types::BasisType::SPD
+            } else if p.zp > 1.0e-20 {
+                crate::types::BasisType::SP
+            } else {
+                crate::types::BasisType::S
+            }
+        } else {
+            match z {
+                1 => crate::types::BasisType::S,
+                2..=20 => crate::types::BasisType::SP,
+                _ => crate::types::BasisType::SPD,
+            }
+        }
     }
 }

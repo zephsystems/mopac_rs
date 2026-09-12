@@ -686,6 +686,7 @@ pub fn compute_electron_nuclear_attraction(
     rot: &DiatomicRotation3D,
     e1b: &mut [f64],
     e2a: &mut [f64],
+    feather: bool,
 ) {
     let ev = EV_HARTREE;
     let a0 = A0_BOHR;
@@ -763,17 +764,40 @@ pub fn compute_electron_nuclear_attraction(
         core[4][1] = -core_charge_a * ai4;
     }
 
+    if feather {
+        const TRUNC_1: f64 = 7.0;
+        const TRUNC_2: f64 = 0.22;
+        let const_val = if r_angstrom < TRUNC_1 {
+            let dr = r_angstrom - TRUNC_1;
+            1.0 - (-dr * dr * TRUNC_2).exp()
+        } else {
+            0.0
+        };
+        let inv_r = crate::constants::codata2018::EV_ANGSTROM_FACTOR / r_angstrom;
+        let pt_b = -core_charge_b * inv_r;
+        core[1][0] = core[1][0] * const_val + (1.0 - const_val) * pt_b;
+        core[2][0] *= const_val;
+        core[3][0] = core[3][0] * const_val + (1.0 - const_val) * pt_b;
+        core[4][0] = core[4][0] * const_val + (1.0 - const_val) * pt_b;
+
+        let pt_a = -core_charge_a * inv_r;
+        core[1][1] = core[1][1] * const_val + (1.0 - const_val) * pt_a;
+        core[2][1] *= const_val;
+        core[3][1] = core[3][1] * const_val + (1.0 - const_val) * pt_a;
+        core[4][1] = core[4][1] * const_val + (1.0 - const_val) * pt_a;
+    }
+
     // ELENUC: Rotate local-frame core attraction into Cartesian frame
     // For Atom A:
     e1b[0] = core[1][0]; // (s, s)
     if norb_a >= 4 {
         for i in 0..3 {
             let idx_s = ((i + 1) * (i + 2)) / 2;
-            e1b[idx_s] = core[2][0] * rot.p[i][0]; // (p_i, s)
+            e1b[idx_s] = core[2][0] * rot.p[0][i]; // (p_i, s)
             for j in 0..=i {
                 let idx_pp = idx_s + j + 1; // (p_i, p_j)
-                let term_sigma = rot.p[i][0] * rot.p[j][0] * core[3][0];
-                let term_pi = (rot.p[i][1] * rot.p[j][1] + rot.p[i][2] * rot.p[j][2]) * core[4][0];
+                let term_sigma = rot.p[0][i] * rot.p[0][j] * core[3][0];
+                let term_pi = (rot.p[1][i] * rot.p[1][j] + rot.p[2][i] * rot.p[2][j]) * core[4][0];
                 e1b[idx_pp] = term_sigma + term_pi;
             }
         }
@@ -784,11 +808,11 @@ pub fn compute_electron_nuclear_attraction(
     if norb_b >= 4 {
         for i in 0..3 {
             let idx_s = ((i + 1) * (i + 2)) / 2;
-            e2a[idx_s] = core[2][1] * rot.p[i][0]; // (p_i, s)
+            e2a[idx_s] = core[2][1] * rot.p[0][i]; // (p_i, s)
             for j in 0..=i {
                 let idx_pp = idx_s + j + 1; // (p_i, p_j)
-                let term_sigma = rot.p[i][0] * rot.p[j][0] * core[3][1];
-                let term_pi = (rot.p[i][1] * rot.p[j][1] + rot.p[i][2] * rot.p[j][2]) * core[4][1];
+                let term_sigma = rot.p[0][i] * rot.p[0][j] * core[3][1];
+                let term_pi = (rot.p[1][i] * rot.p[1][j] + rot.p[2][i] * rot.p[2][j]) * core[4][1];
                 e2a[idx_pp] = term_sigma + term_pi;
             }
         }
@@ -801,7 +825,7 @@ pub fn compute_electron_nuclear_attraction(
 pub fn contract_jab(
     pja: &[f64; 16],
     pjb: &[f64; 16],
-    w: &[f64; 100],
+    w: &[f64],
     f_block_a: &mut [f64; 10],
     f_block_b: &mut [f64; 10],
 ) {
@@ -869,7 +893,7 @@ pub fn contract_jab(
 /// Contract two-center two-electron exchange block $W$ with diatomic density block $P_{AB}$ (`KAB`).
 ///
 /// Direct port of OpenMOPAC `kab.F90`. Subtracts exchange from off-diagonal block $F_{AB}$.
-pub fn contract_kab(pk: &[f64; 16], w: &[f64; 100], f_ab: &mut [f64; 16]) {
+pub fn contract_kab(pk: &[f64; 16], w: &[f64], f_ab: &mut [f64; 16]) {
     const K_COLS: [[usize; 16]; 16] = [
         [0, 1, 3, 6, 10, 11, 13, 16, 30, 31, 33, 36, 60, 61, 63, 66],
         [1, 2, 4, 7, 11, 12, 14, 17, 31, 32, 34, 37, 61, 62, 64, 67],
@@ -934,9 +958,9 @@ pub struct DiatomicPairIntegrals {
     pub norb_b: usize,
     pub orb_start_a: usize,
     pub orb_start_b: usize,
-    pub w: [f64; 100],
-    pub e1b: [f64; 10],
-    pub e2a: [f64; 10],
+    pub w: Vec<f64>,
+    pub e1b: Vec<f64>,
+    pub e2a: Vec<f64>,
 }
 
 /// Precompute all diatomic multipole pairs $(A, B)$ with $A > B$ for a molecular batch.
@@ -974,26 +998,291 @@ pub fn precompute_diatomic_pairs(
             let dx = batch.x[j] - batch.x[i];
             let dy = batch.y[j] - batch.y[i];
             let dz = batch.z[j] - batch.z[i];
-            let rot = DiatomicRotation3D::new(dx, dy, dz, r_angstrom);
 
-            let (ri, _gab) = compute_22_multipoles(&params_a, &params_b, r_angstrom);
-            let mut w = [0.0f64; 100];
-            rotate_multipoles_to_w(norb_a, norb_b, &ri, &rot, &mut w);
+            let (mut ri, _gab) = compute_22_multipoles(&params_a, &params_b, r_angstrom);
+            if model.use_feathering() {
+                const TRUNC_1: f64 = 7.0;
+                const TRUNC_2: f64 = 0.22;
+                let (point, const_val) = if r_angstrom < TRUNC_1 {
+                    let dr = r_angstrom - TRUNC_1;
+                    let c = 1.0 - (-dr * dr * TRUNC_2).exp();
+                    let pt = crate::constants::codata2018::EV_ANGSTROM_FACTOR / r_angstrom;
+                    (pt, c)
+                } else {
+                    let pt = crate::constants::codata2018::EV_ANGSTROM_FACTOR / r_angstrom;
+                    (pt, 0.0)
+                };
 
-            let mut e1b = [0.0f64; 10];
-            let mut e2a = [0.0f64; 10];
-            compute_electron_nuclear_attraction(
-                norb_a,
-                norb_b,
-                &params_a,
-                &params_b,
-                p_a.core_charge,
-                p_b.core_charge,
-                r_angstrom,
-                &rot,
-                &mut e1b,
-                &mut e2a,
-            );
+                for (k, val) in ri.iter_mut().enumerate() {
+                    match k {
+                        0 | 2 | 3 | 10 | 11 | 15 | 16 | 17 | 18 | 20 => {
+                            *val = *val * const_val + (1.0 - const_val) * point;
+                        }
+                        _ => {
+                            *val *= const_val;
+                        }
+                    }
+                }
+            }
+
+            let has_d_a = norb_a >= 9;
+            let has_d_b = norb_b >= 9;
+
+            let (w, e1b, e2a) = if has_d_a || has_d_b {
+                let r_bohr = r_angstrom / A0_BOHR;
+                let rot_d =
+                    crate::integrals::d_orbitals::DOrbitalRotation3D::new(dx, dy, dz, r_angstrom);
+
+                let (po_a, ddp_a) = match model.get_d_element_params(za) {
+                    Some(dp) => (dp.po, dp.ddp),
+                    None => {
+                        let mut po = [0.0f64; 10];
+                        let mut ddp = [0.0f64; 7];
+                        po[1] = params_a.po[0];
+                        po[2] = params_a.po[1];
+                        po[3] = params_a.po[2];
+                        po[7] = params_a.po[0];
+                        po[9] = params_a.po[0];
+                        ddp[2] = params_a.dd;
+                        ddp[3] = params_a.qq * 2.0f64.sqrt();
+                        (po, ddp)
+                    }
+                };
+                let (po_b, ddp_b) = match model.get_d_element_params(zb) {
+                    Some(dp) => (dp.po, dp.ddp),
+                    None => {
+                        let mut po = [0.0f64; 10];
+                        let mut ddp = [0.0f64; 7];
+                        po[1] = params_b.po[0];
+                        po[2] = params_b.po[1];
+                        po[3] = params_b.po[2];
+                        po[7] = params_b.po[0];
+                        po[9] = params_b.po[0];
+                        ddp[2] = params_b.dd;
+                        ddp[3] = params_b.qq * 2.0f64.sqrt();
+                        (po, ddp)
+                    }
+                };
+
+                let r2 = r_bohr * r_bohr;
+                let ssi = (po_a[9] + po_b[1]).powi(2);
+                let ssj = (po_b[9] + po_a[1]).powi(2);
+
+                let mut cored = [[0.0f64; 2]; 10];
+                cored[0][0] = -p_b.core_charge * EV_HARTREE / (r2 + ssj).sqrt();
+                cored[0][1] = -p_a.core_charge * EV_HARTREE / (r2 + ssi).sqrt();
+
+                const PXY: [f64; 7] = [1.0, -0.5, -0.5, 0.5, 0.25, 0.25, 0.5];
+
+                if za >= 3 {
+                    let ppj = (po_b[9] + po_a[7]).powi(2);
+                    let da = ddp_a[2];
+                    let qa = ddp_a[3] / 2.0f64.sqrt();
+                    let twoqa = 2.0 * qa;
+                    let adj = (po_a[2] + po_b[9]).powi(2);
+                    let aqj = (po_a[3] + po_b[9]).powi(2);
+
+                    let mut xj = [0.0f64; 7];
+                    xj[0] = r2 + ppj;
+                    xj[1] = r2 + aqj;
+                    xj[2] = (r_bohr + da).powi(2) + adj;
+                    xj[3] = (r_bohr - da).powi(2) + adj;
+                    xj[4] = (r_bohr - twoqa).powi(2) + aqj;
+                    xj[5] = (r_bohr + twoqa).powi(2) + aqj;
+                    xj[6] = r2 + twoqa * twoqa + aqj;
+
+                    let mut xj_term = [0.0f64; 7];
+                    for k in 0..7 {
+                        xj_term[k] = PXY[k] / xj[k].sqrt();
+                    }
+
+                    let aj2 = (xj_term[2] + xj_term[3]) * EV_HARTREE;
+                    let aj3 = (xj_term[0] + xj_term[1] + xj_term[4] + xj_term[5]) * EV_HARTREE;
+                    let aj4 = (xj_term[0] + xj_term[1] + xj_term[6]) * EV_HARTREE;
+
+                    cored[1][0] = -p_b.core_charge * aj2;
+                    cored[2][0] = -p_b.core_charge * aj3;
+                    cored[3][0] = -p_b.core_charge * aj4;
+                }
+
+                if zb >= 3 {
+                    let ppi = (po_a[9] + po_b[7]).powi(2);
+                    let db = ddp_b[2];
+                    let qb = ddp_b[3] / 2.0f64.sqrt();
+                    let twoqb = 2.0 * qb;
+                    let adi = (po_b[2] + po_a[9]).powi(2);
+                    let aqi = (po_b[3] + po_a[9]).powi(2);
+
+                    let mut xi = [0.0f64; 7];
+                    xi[0] = r2 + ppi;
+                    xi[1] = r2 + aqi;
+                    xi[2] = (r_bohr + db).powi(2) + adi;
+                    xi[3] = (r_bohr - db).powi(2) + adi;
+                    xi[4] = (r_bohr - twoqb).powi(2) + aqi;
+                    xi[5] = (r_bohr + twoqb).powi(2) + aqi;
+                    xi[6] = r2 + twoqb * twoqb + aqi;
+
+                    let mut xi_term = [0.0f64; 7];
+                    for k in 0..7 {
+                        xi_term[k] = PXY[k] / xi[k].sqrt();
+                    }
+
+                    let ai2 = -(xi_term[2] + xi_term[3]) * EV_HARTREE;
+                    let ai3 = (xi_term[0] + xi_term[1] + xi_term[4] + xi_term[5]) * EV_HARTREE;
+                    let ai4 = (xi_term[0] + xi_term[1] + xi_term[6]) * EV_HARTREE;
+
+                    cored[1][1] = -p_a.core_charge * ai2;
+                    cored[2][1] = -p_a.core_charge * ai3;
+                    cored[3][1] = -p_a.core_charge * ai4;
+                }
+
+                let mut rep = [0.0f64; 492];
+                crate::integrals::d_orbitals::compute_reppd2(
+                    norb_a,
+                    norb_b,
+                    r_bohr,
+                    &ri,
+                    &po_a,
+                    &ddp_a,
+                    &po_b,
+                    &ddp_b,
+                    p_a.core_charge,
+                    p_b.core_charge,
+                    &mut rep,
+                    &mut cored,
+                    model.use_feathering(),
+                );
+
+                if model.use_feathering() {
+                    let const_val = if r_angstrom < 7.0 {
+                        let dr = r_angstrom - 7.0;
+                        1.0 - (-dr * dr * 0.22).exp()
+                    } else {
+                        0.0
+                    };
+
+                    let point_b = -(EV_HARTREE / r_bohr) * p_b.core_charge;
+                    cored[0][0] = cored[0][0] * const_val + (1.0 - const_val) * point_b;
+                    cored[1][0] *= const_val;
+                    cored[2][0] = cored[2][0] * const_val + (1.0 - const_val) * point_b;
+                    cored[3][0] = cored[3][0] * const_val + (1.0 - const_val) * point_b;
+                    cored[4][0] *= const_val;
+                    cored[5][0] *= const_val;
+                    cored[6][0] = cored[6][0] * const_val + (1.0 - const_val) * point_b;
+                    cored[7][0] *= const_val;
+                    cored[8][0] = cored[8][0] * const_val + (1.0 - const_val) * point_b;
+                    cored[9][0] = cored[9][0] * const_val + (1.0 - const_val) * point_b;
+
+                    let point_a = -(EV_HARTREE / r_bohr) * p_a.core_charge;
+                    cored[0][1] = cored[0][1] * const_val + (1.0 - const_val) * point_a;
+                    cored[1][1] *= const_val;
+                    cored[2][1] = cored[2][1] * const_val + (1.0 - const_val) * point_a;
+                    cored[3][1] = cored[3][1] * const_val + (1.0 - const_val) * point_a;
+                    cored[4][1] *= const_val;
+                    cored[5][1] *= const_val;
+                    cored[6][1] = cored[6][1] * const_val + (1.0 - const_val) * point_a;
+                    cored[7][1] *= const_val;
+                    cored[8][1] = cored[8][1] * const_val + (1.0 - const_val) * point_a;
+                    cored[9][1] = cored[9][1] * const_val + (1.0 - const_val) * point_a;
+                }
+
+                let mut logv = [[false; 45]; 45];
+                let mut v = [[0.0f64; 45]; 45];
+                crate::integrals::d_orbitals::tx(norb_a, norb_b, &rep, &mut logv, &mut v, &rot_d);
+
+                let mut ww = [0.0f64; 2025];
+                crate::integrals::d_orbitals::rotatd_step2(
+                    norb_a, norb_b, &v, &logv, &rot_d, &mut ww,
+                );
+
+                if model.use_feathering() {
+                    crate::integrals::d_orbitals::apply_pm7_d_correction(
+                        norb_a, norb_b, has_d_a, has_d_b, &mut ww, &mut cored,
+                    );
+                }
+
+                let limij = (norb_a * (norb_a + 1)) / 2;
+                let limkl = (norb_b * (norb_b + 1)) / 2;
+                let mut w = vec![0.0f64; limij * limkl];
+                w.copy_from_slice(&ww[..limij * limkl]);
+
+                let mut e1b = vec![0.0f64; limij];
+                for i in 0..norb_a {
+                    for j in 0..=i {
+                        let val = if i == 0 && j == 0 {
+                            cored[0][0]
+                        } else if i < 4 && j == 0 {
+                            rot_d.sp[0][i - 1] * cored[1][0]
+                        } else if i < 4 && j < 4 {
+                            let ipp = crate::integrals::d_orbitals::INDPP[i - 1][j - 1] - 1;
+                            cored[2][0] * rot_d.pp[ipp][0][0]
+                                + cored[3][0] * (rot_d.pp[ipp][1][1] + rot_d.pp[ipp][2][2])
+                        } else if i >= 4 && j == 0 {
+                            rot_d.sd[0][i - 4] * cored[4][0]
+                        } else if i >= 4 && j < 4 {
+                            let idp = crate::integrals::d_orbitals::INDDP[i - 4][j - 1] - 1;
+                            cored[5][0] * rot_d.dp[idp][0][0]
+                                + cored[7][0] * (rot_d.dp[idp][1][1] + rot_d.dp[idp][2][2])
+                        } else {
+                            let idd = crate::integrals::d_orbitals::INDDD[i - 4][j - 4] - 1;
+                            cored[6][0] * rot_d.d_d[idd][0][0]
+                                + cored[8][0] * (rot_d.d_d[idd][1][1] + rot_d.d_d[idd][2][2])
+                                + cored[9][0] * (rot_d.d_d[idd][3][3] + rot_d.d_d[idd][4][4])
+                        };
+                        e1b[(i * (i + 1)) / 2 + j] = val;
+                    }
+                }
+
+                let mut e2a = vec![0.0f64; limkl];
+                for i in 0..norb_b {
+                    for j in 0..=i {
+                        let val = if i == 0 && j == 0 {
+                            cored[0][1]
+                        } else if i < 4 && j == 0 {
+                            rot_d.sp[0][i - 1] * cored[1][1]
+                        } else if i < 4 && j < 4 {
+                            let ipp = crate::integrals::d_orbitals::INDPP[i - 1][j - 1] - 1;
+                            cored[2][1] * rot_d.pp[ipp][0][0]
+                                + cored[3][1] * (rot_d.pp[ipp][1][1] + rot_d.pp[ipp][2][2])
+                        } else if i >= 4 && j == 0 {
+                            rot_d.sd[0][i - 4] * cored[4][1]
+                        } else if i >= 4 && j < 4 {
+                            let idp = crate::integrals::d_orbitals::INDDP[i - 4][j - 1] - 1;
+                            cored[5][1] * rot_d.dp[idp][0][0]
+                                + cored[7][1] * (rot_d.dp[idp][1][1] + rot_d.dp[idp][2][2])
+                        } else {
+                            let idd = crate::integrals::d_orbitals::INDDD[i - 4][j - 4] - 1;
+                            cored[6][1] * rot_d.d_d[idd][0][0]
+                                + cored[8][1] * (rot_d.d_d[idd][1][1] + rot_d.d_d[idd][2][2])
+                                + cored[9][1] * (rot_d.d_d[idd][3][3] + rot_d.d_d[idd][4][4])
+                        };
+                        e2a[(i * (i + 1)) / 2 + j] = val;
+                    }
+                }
+
+                (w, e1b, e2a)
+            } else {
+                let rot = DiatomicRotation3D::new(dx, dy, dz, r_angstrom);
+                let mut w = vec![0.0f64; 100];
+                rotate_multipoles_to_w(norb_a, norb_b, &ri, &rot, &mut w);
+
+                let mut e1b = vec![0.0f64; 10];
+                let mut e2a = vec![0.0f64; 10];
+                compute_electron_nuclear_attraction(
+                    norb_a,
+                    norb_b,
+                    &params_a,
+                    &params_b,
+                    p_a.core_charge,
+                    p_b.core_charge,
+                    r_angstrom,
+                    &rot,
+                    &mut e1b,
+                    &mut e2a,
+                    model.use_feathering(),
+                );
+                (w, e1b, e2a)
+            };
 
             pairs.push(DiatomicPairIntegrals {
                 atom_a: i,
@@ -1012,6 +1301,69 @@ pub fn precompute_diatomic_pairs(
     pairs
 }
 
+#[allow(clippy::needless_range_loop)]
+fn assemble_nddo_pair_dorbs(
+    pair: &DiatomicPairIntegrals,
+    p_coul: &AlignedMatrix<f64>,
+    p_exch: &AlignedMatrix<f64>,
+    scale_exch: f64,
+    fock: &mut AlignedMatrix<f64>,
+) {
+    let ia = pair.orb_start_a;
+    let ja = pair.orb_start_b;
+    let na = pair.norb_a;
+    let nb = pair.norb_b;
+    let w = &pair.w;
+
+    let mut delta_f_ab = [[0.0f64; 9]; 9];
+    let mut kr = 0;
+
+    for i in 0..na {
+        for j in 0..=i {
+            let aa = if i == j { 1.0 } else { 2.0 };
+            for k in 0..nb {
+                for l in 0..=k {
+                    let bb = if k == l { 1.0 } else { 2.0 };
+                    let a = w[kr];
+                    kr += 1;
+
+                    let p_kl = p_coul.get(ja + k, ja + l);
+                    let p_ij = p_coul.get(ia + i, ia + j);
+                    let term_a = bb * a * p_kl;
+                    let term_b = aa * a * p_ij;
+
+                    let cur_a = fock.get(ia + i, ia + j);
+                    fock.set(ia + i, ia + j, cur_a + term_a);
+                    if i != j {
+                        fock.set(ia + j, ia + i, cur_a + term_a);
+                    }
+
+                    let cur_b = fock.get(ja + k, ja + l);
+                    fock.set(ja + k, ja + l, cur_b + term_b);
+                    if k != l {
+                        fock.set(ja + l, ja + k, cur_b + term_b);
+                    }
+
+                    let exch_a = a * aa * bb * 0.25 * scale_exch;
+                    delta_f_ab[i][k] -= exch_a * p_exch.get(ia + j, ja + l);
+                    delta_f_ab[i][l] -= exch_a * p_exch.get(ia + j, ja + k);
+                    delta_f_ab[j][k] -= exch_a * p_exch.get(ia + i, ja + l);
+                    delta_f_ab[j][l] -= exch_a * p_exch.get(ia + i, ja + k);
+                }
+            }
+        }
+    }
+
+    for i in 0..na {
+        for k in 0..nb {
+            let val = delta_f_ab[i][k];
+            let cur = fock.get(ia + i, ja + k);
+            fock.set(ia + i, ja + k, cur + val);
+            fock.set(ja + k, ia + i, cur + val);
+        }
+    }
+}
+
 /// Assemble full two-center two-electron NDDO Coulomb and Exchange into the Fock matrix.
 ///
 /// Direct port of OpenMOPAC `fock2.F90`.
@@ -1027,7 +1379,9 @@ pub fn assemble_nddo_two_center_fock(
         let nb = pair.norb_b;
         let w = &pair.w;
 
-        if na >= 4 && nb >= 4 {
+        if na >= 9 || nb >= 9 {
+            assemble_nddo_pair_dorbs(pair, density, density, 0.5, fock);
+        } else if na >= 4 && nb >= 4 {
             let mut pja = [0.0f64; 16];
             let mut pjb = [0.0f64; 16];
             let mut pk = [0.0f64; 16];
@@ -1191,7 +1545,9 @@ pub fn assemble_nddo_two_center_fock_spin(
         let nb = pair.norb_b;
         let w = &pair.w;
 
-        if na >= 4 && nb >= 4 {
+        if na >= 9 || nb >= 9 {
+            assemble_nddo_pair_dorbs(pair, p_tot, p_spin, 1.0, fock);
+        } else if na >= 4 && nb >= 4 {
             let mut pja = [0.0f64; 16];
             let mut pjb = [0.0f64; 16];
             let mut pk = [0.0f64; 16];
@@ -1351,38 +1707,28 @@ pub fn apply_electron_nuclear_attractions(
         let na = pair.norb_a;
         let nb = pair.norb_b;
 
-        if na >= 4 {
-            for r in 0..4 {
-                for c in 0..=r {
-                    let idx = (r * (r + 1)) / 2 + c;
-                    let val = pair.e1b[idx];
-                    let cur = h_core.get(ia + r, ia + c);
-                    h_core.set(ia + r, ia + c, cur + val);
-                    if r != c {
-                        h_core.set(ia + c, ia + r, cur + val);
-                    }
+        for r in 0..na {
+            for c in 0..=r {
+                let idx = (r * (r + 1)) / 2 + c;
+                let val = pair.e1b[idx];
+                let cur = h_core.get(ia + r, ia + c);
+                h_core.set(ia + r, ia + c, cur + val);
+                if r != c {
+                    h_core.set(ia + c, ia + r, cur + val);
                 }
             }
-        } else {
-            let cur = h_core.get(ia, ia);
-            h_core.set(ia, ia, cur + pair.e1b[0]);
         }
 
-        if nb >= 4 {
-            for r in 0..4 {
-                for c in 0..=r {
-                    let idx = (r * (r + 1)) / 2 + c;
-                    let val = pair.e2a[idx];
-                    let cur = h_core.get(ja + r, ja + c);
-                    h_core.set(ja + r, ja + c, cur + val);
-                    if r != c {
-                        h_core.set(ja + c, ja + r, cur + val);
-                    }
+        for r in 0..nb {
+            for c in 0..=r {
+                let idx = (r * (r + 1)) / 2 + c;
+                let val = pair.e2a[idx];
+                let cur = h_core.get(ja + r, ja + c);
+                h_core.set(ja + r, ja + c, cur + val);
+                if r != c {
+                    h_core.set(ja + c, ja + r, cur + val);
                 }
             }
-        } else {
-            let cur = h_core.get(ja, ja);
-            h_core.set(ja, ja, cur + pair.e2a[0]);
         }
     }
 }

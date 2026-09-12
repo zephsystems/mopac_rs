@@ -180,9 +180,40 @@ pub fn add_one_center_fock_terms(
                 }
             }
             BasisType::SPD => {
-                let p_ss = density.get(orb_start, orb_start);
-                let cur = fock.get(orb_start, orb_start);
-                fock.set(orb_start, orb_start, cur + 0.5 * p_ss * p_a.gss);
+                let d_params = model.get_d_element_params(za);
+                let mut w = [0.0f64; 2025];
+                crate::integrals::d_orbitals::wstore(
+                    za,
+                    9,
+                    p_a.gss,
+                    p_a.gsp,
+                    p_a.gpp,
+                    p_a.gp2,
+                    p_a.hsp,
+                    d_params.as_ref().map(|dp| &dp.repd),
+                    &mut w,
+                );
+
+                for io in 0..9 {
+                    for jo in 0..=io {
+                        let ij = pair_idx(io, jo);
+                        let mut sum = 0.0f64;
+                        for ko in 0..9 {
+                            for lo in 0..9 {
+                                let kl = pair_idx(ko, lo);
+                                let kj = pair_idx(ko, jo);
+                                let li = pair_idx(lo, io);
+                                let p_kl = density.get(orb_start + ko, orb_start + lo);
+                                sum += p_kl * (w[ij * 45 + kl] - 0.5 * w[kj * 45 + li]);
+                            }
+                        }
+                        let cur = fock.get(orb_start + io, orb_start + jo);
+                        fock.set(orb_start + io, orb_start + jo, cur + sum);
+                        if io != jo {
+                            fock.set(orb_start + jo, orb_start + io, cur + sum);
+                        }
+                    }
+                }
             }
         }
     }
@@ -292,10 +323,41 @@ pub fn add_one_center_fock_terms_spin(
                 }
             }
             BasisType::SPD => {
-                let p_ss_tot = p_tot.get(orb_start, orb_start);
-                let p_ss_spin = p_spin.get(orb_start, orb_start);
-                let cur = fock.get(orb_start, orb_start);
-                fock.set(orb_start, orb_start, cur + (p_ss_tot - p_ss_spin) * p_a.gss);
+                let d_params = model.get_d_element_params(za);
+                let mut w = [0.0f64; 2025];
+                crate::integrals::d_orbitals::wstore(
+                    za,
+                    9,
+                    p_a.gss,
+                    p_a.gsp,
+                    p_a.gpp,
+                    p_a.gp2,
+                    p_a.hsp,
+                    d_params.as_ref().map(|dp| &dp.repd),
+                    &mut w,
+                );
+
+                for io in 0..9 {
+                    for jo in 0..=io {
+                        let ij = pair_idx(io, jo);
+                        let mut sum = 0.0f64;
+                        for ko in 0..9 {
+                            for lo in 0..9 {
+                                let kl = pair_idx(ko, lo);
+                                let kj = pair_idx(ko, jo);
+                                let li = pair_idx(lo, io);
+                                let p_kl_tot = p_tot.get(orb_start + ko, orb_start + lo);
+                                let p_kl_spin = p_spin.get(orb_start + ko, orb_start + lo);
+                                sum += p_kl_tot * w[ij * 45 + kl] - p_kl_spin * w[kj * 45 + li];
+                            }
+                        }
+                        let cur = fock.get(orb_start + io, orb_start + jo);
+                        fock.set(orb_start + io, orb_start + jo, cur + sum);
+                        if io != jo {
+                            fock.set(orb_start + jo, orb_start + io, cur + sum);
+                        }
+                    }
+                }
             }
         }
     }

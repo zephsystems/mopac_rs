@@ -14,20 +14,45 @@ pub fn get_isolated_atom_energy_and_heat(z: u8, model: &dyn ParameterModel) -> (
         None => return (0.0, 0.0),
     };
 
-    let (ios, iop, eheat): (f64, f64, f64) = match z {
-        1 => (1.0, 0.0, 52.102),
-        5 => (2.0, 1.0, 135.700),
-        6 => (2.0, 2.0, 170.890),
-        7 => (2.0, 3.0, 113.000),
-        8 => (2.0, 4.0, 59.559),
-        9 => (2.0, 5.0, 18.890),
-        14 => (2.0, 2.0, 108.390),
-        15 => (2.0, 3.0, 75.570),
-        16 => (2.0, 4.0, 66.400),
-        17 => (2.0, 5.0, 28.990),
-        35 => (2.0, 5.0, 26.740),
-        53 => (2.0, 5.0, 25.517),
-        _ => (1.0, 0.0, 0.0),
+    let (ios, iop, iod, eheat): (f64, f64, f64, f64) = match z {
+        1 => (1.0, 0.0, 0.0, 52.102),
+        2 => (2.0, 0.0, 0.0, 0.0),
+        3 => (1.0, 0.0, 0.0, 38.410),
+        4 => (2.0, 0.0, 0.0, 76.960),
+        5 => (2.0, 1.0, 0.0, 135.700),
+        6 => (2.0, 2.0, 0.0, 170.890),
+        7 => (2.0, 3.0, 0.0, 113.000),
+        8 => (2.0, 4.0, 0.0, 59.559),
+        9 => (2.0, 5.0, 0.0, 18.890),
+        10 => (2.0, 6.0, 0.0, 0.0),
+        11 => (1.0, 0.0, 0.0, 25.650),
+        12 => (2.0, 0.0, 0.0, 35.000),
+        13 => (2.0, 1.0, 0.0, 79.490),
+        14 => (2.0, 2.0, 0.0, 108.390),
+        15 => (2.0, 3.0, 0.0, 75.570),
+        16 => (2.0, 4.0, 0.0, 66.400),
+        17 => (2.0, 5.0, 0.0, 28.990),
+        18 => (2.0, 6.0, 0.0, 0.0),
+        19 => (1.0, 0.0, 0.0, 21.420),
+        20 => (2.0, 0.0, 0.0, 42.600),
+        21 => (2.0, 0.0, 1.0, 90.300),
+        22 => (2.0, 0.0, 2.0, 112.300),
+        23 => (2.0, 0.0, 3.0, 122.900),
+        24 => (1.0, 0.0, 5.0, 95.000),
+        25 => (2.0, 0.0, 5.0, 67.700),
+        26 => (2.0, 0.0, 6.0, 99.300),
+        27 => (2.0, 0.0, 7.0, 102.400),
+        28 => (2.0, 0.0, 8.0, 102.800),
+        29 => (1.0, 0.0, 10.0, 80.700),
+        30 => (2.0, 0.0, 0.0, 31.170),
+        31 => (2.0, 1.0, 0.0, 65.400),
+        32 => (2.0, 2.0, 0.0, 89.500),
+        33 => (2.0, 3.0, 0.0, 72.300),
+        34 => (2.0, 4.0, 0.0, 54.300),
+        35 => (2.0, 5.0, 0.0, 26.740),
+        36 => (2.0, 6.0, 0.0, 0.0),
+        53 => (2.0, 5.0, 0.0, 25.517),
+        _ => (1.0, 0.0, 0.0, 0.0),
     };
 
     if z == 1 {
@@ -44,6 +69,7 @@ pub fn get_isolated_atom_energy_and_heat(z: u8, model: &dyn ParameterModel) -> (
 
     let eisol = p.uss * ios
         + p.upp * iop
+        + p.udd * iod
         + p.gss * gssc
         + p.gpp * gppc
         + p.gsp * gspc
@@ -75,4 +101,38 @@ pub fn compute_heat_of_formation(
     let heat_of_formation_kcal = binding_energy_ev * EV_TO_KCAL_MOL + sum_eheat + non_covalent_kcal;
 
     (binding_energy_ev, heat_of_formation_kcal)
+}
+
+/// Empirical C#C triple bond heat of formation correction for PM6, PM7, PM8.
+/// Matching OpenMOPAC `set_up_dentate.F90` lines 214-262.
+pub fn compute_c_triple_bond_c_correction(batch: &crate::types::MolecularBatch) -> f64 {
+    const R_MIN: f64 = 1.21;
+    const R_MAX: f64 = 1.33;
+    const PARAM1: f64 = -5.0;
+    const PARAM2: f64 = 25.0;
+
+    let mut sum = 0.0;
+    for i in 0..batch.natoms {
+        if batch.atomic_numbers[i] != 6 {
+            continue;
+        }
+        for j in 0..i {
+            if batch.atomic_numbers[j] != 6 {
+                continue;
+            }
+            let r = batch.distance(i, j);
+            if r < R_MIN {
+                sum += 1.0;
+            } else if r < R_MAX {
+                let x = (r - R_MIN) / (R_MAX - R_MIN);
+                let x3 = x * x * x;
+                let x4 = x3 * x;
+                let x5 = x4 * x;
+                let x6 = x5 * x;
+                sum += 1.0 - 10.0 * x3 + 15.0 * x4 - 6.0 * x5
+                    + (PARAM1 + x * PARAM2) * (x3 - 3.0 * x4 + 3.0 * x5 - x6);
+            }
+        }
+    }
+    sum * 12.0
 }

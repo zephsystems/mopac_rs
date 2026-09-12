@@ -163,6 +163,16 @@ impl<T: Copy + Default> AlignedMatrix<T> {
         self.data[r * self.cols + c] = val;
     }
 
+    /// Add value to element at (r, c).
+    #[inline(always)]
+    pub fn add(&mut self, r: usize, c: usize, val: T)
+    where
+        T: std::ops::AddAssign,
+    {
+        debug_assert!(r < self.rows && c < self.cols);
+        self.data[r * self.cols + c] += val;
+    }
+
     /// As mutable slice for row `r`.
     #[inline(always)]
     pub fn row(&self, r: usize) -> &[T] {
@@ -228,11 +238,53 @@ pub struct MolecularBatch {
 impl MolecularBatch {
     /// Construct a new MolecularBatch from vectors of atomic numbers and coordinates.
     pub fn new(atomic_numbers: Vec<u8>, coords_angstrom: &[[f64; 3]]) -> Self {
+        let basis_types: Vec<BasisType> = atomic_numbers
+            .iter()
+            .map(|&z_num| match z_num {
+                1 => BasisType::S,
+                2..=20 => BasisType::SP,   // He..Ca main group
+                21..=29 => BasisType::SPD, // Sc..Cu 3d transition metals
+                30..=38 => BasisType::SP,  // Zn..Sr main group (Zn 3d is core)
+                39..=47 => BasisType::SPD, // Y..Ag 4d transition metals
+                48..=56 => BasisType::SP,  // Cd..Ba main group (Cd 4d is core)
+                57..=79 => BasisType::SPD, // La..Au 5d transition metals
+                80..=86 => BasisType::SP,  // Hg..Rn main group (Hg 5d is core)
+                _ => BasisType::SPD,
+            })
+            .collect();
+
+        Self::new_with_basis(atomic_numbers, coords_angstrom, basis_types)
+    }
+
+    /// Construct a new MolecularBatch using basis types dictated by a specific ParameterModel.
+    pub fn new_for_model(
+        atomic_numbers: Vec<u8>,
+        coords_angstrom: &[[f64; 3]],
+        model: &dyn crate::parameters::ParameterModel,
+    ) -> Self {
+        let basis_types: Vec<BasisType> = atomic_numbers
+            .iter()
+            .map(|&z| model.basis_type(z))
+            .collect();
+        Self::new_with_basis(atomic_numbers, coords_angstrom, basis_types)
+    }
+
+    /// Construct a new MolecularBatch with explicit per-atom basis types.
+    pub fn new_with_basis(
+        atomic_numbers: Vec<u8>,
+        coords_angstrom: &[[f64; 3]],
+        basis_types: Vec<BasisType>,
+    ) -> Self {
         let natoms = atomic_numbers.len();
         assert_eq!(
             natoms,
             coords_angstrom.len(),
             "Atomic numbers and coordinates length mismatch"
+        );
+        assert_eq!(
+            natoms,
+            basis_types.len(),
+            "Atomic numbers and basis types length mismatch"
         );
 
         let mut x = AlignedVec64::zeroed(natoms);
@@ -245,22 +297,12 @@ impl MolecularBatch {
             z[i] = coord[2];
         }
 
-        let mut basis_types = Vec::with_capacity(natoms);
         let mut orbital_offsets = Vec::with_capacity(natoms);
         let mut norbs = 0;
 
-        for &z_num in &atomic_numbers {
+        for &b_type in &basis_types {
             orbital_offsets.push(norbs);
-            let b_type = match z_num {
-                1 => BasisType::S,
-                2..=20 => BasisType::SP,  // He..Ca main group
-                31..=38 => BasisType::SP, // Ga..Sr main group (including Br = 35)
-                49..=56 => BasisType::SP, // In..Ba main group (including I = 53)
-                81..=86 => BasisType::SP, // Tl..Rn main group
-                _ => BasisType::SPD,      // Transition metals (Sc..Zn, Y..Cd, La..Hg)
-            };
             norbs += b_type.num_orbitals();
-            basis_types.push(b_type);
         }
 
         Self {
