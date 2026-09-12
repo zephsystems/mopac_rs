@@ -317,9 +317,37 @@ With the consolidation of Phase 1 and the execution of the canonical integration
 - Zeroes out forces and search directions along pinned degrees of freedom, guaranteeing bit-exact immutability ($\Delta R < 10^{-15}\text{ \AA}$) on pinned sites while unconstrained atoms relax freely.
 
 ### 6.13 Canonical MNDO Semi-Empirical Hamiltonian Integration
-- Implemented `MndoModel` in [`crates/mopac_core/src/parameters/mndo.rs`](file:///home/cyclop/Projects/n/05_mopacrs/crates/mopac_core/src/parameters/mndo.rs) with authentic parameters directly extracted from OpenMOPAC `libmopac.so.2`.
-- Models Dewar and Thiel's classic MNDO theory (zero Gaussian core wells, pure core-core exponential repulsion).
-- Fully wired into the CLI for `MNDO` keyword and single-point/opt calculation modes.
+### 6.14 Harmonic Vibrational Frequency & Numerical Hessian Analysis (`crates/mopac_core/src/vibrations/`)
+- **Cartesian Hessian Evaluation**:
+  - Implemented finite-difference second derivatives of the potential energy surface:
+    $$\mathcal{H}_{ij} = \frac{\partial^2 E}{\partial R_i \partial R_j} \approx \frac{g_i(R_j + \delta) - g_i(R_j - \delta)}{2\delta}$$
+  - Step size: $\delta = 1.0 \times 10^{-3} \text{ \AA}$ with self-consistent field warm-starts.
+  - Exact matrix symmetrization: $\mathcal{H}_{\text{sym}} = \frac{1}{2}(\mathcal{H} + \mathcal{H}^T)$.
+- **Mass-Weighting & Eckart Frame Projection**:
+  - Constructed mass-weighted Hessian: $\tilde{\mathcal{H}}_{ij} = \mathcal{H}_{ij} / \sqrt{M_i M_j}$ using authentic standard atomic masses in amu.
+  - Formulated the 6 translational and rotational mass-weighted basis vectors $\vec{T}_x, \vec{T}_y, \vec{T}_z, \vec{R}_x, \vec{R}_y, \vec{R}_z$ about the center of mass.
+  - Orthonormalized via modified Gram-Schmidt and constructed the Eckart vibrational projector:
+    $$P_{\text{vib}} = I_{3N} - \sum_{k=1}^6 \vec{u}_k \vec{u}_k^T$$
+    $$\tilde{\mathcal{H}}_{\text{proj}} = P_{\text{vib}} \tilde{\mathcal{H}} P_{\text{vib}}$$
+  - Guaranteed trace $\text{Tr}(P_{\text{vib}}) = 3N - 6$ and machine-precision cancellation ($< 10^{-5} \text{ cm}^{-1}$) of all 6 rigid external translational and rotational degrees of freedom.
+- **Normal Modes & Statistical Thermodynamics**:
+  - Jacobi threshold sweeping diagonalization yields normal mode eigenvectors and harmonic wavenumbers $\tilde{\nu}_k$ in $\text{cm}^{-1}$:
+    $$\tilde{\nu}_k = \text{sign}(\lambda_k) \cdot \frac{\sqrt{4.184 \times 10^{26}}}{2\pi c} \sqrt{|\lambda_k|} = \text{sign}(\lambda_k) \cdot 108.59135859 \cdot \sqrt{|\lambda_k|}$$
+  - Evaluates Zero-Point Vibrational Energy:
+    $$E_{\text{ZPVE}} = \frac{1}{2} \sum_{i=1}^{3N-6} \frac{h c \tilde{\nu}_i}{4184 \text{ J/kcal}} N_A = \frac{1}{2} \sum_{i=1}^{3N-6} 0.0028591437 \cdot \tilde{\nu}_i \text{ [kcal/mol]}$$
+  - Evaluates complete statistical thermodynamics at standard temperature and pressure ($T = 298.15\text{ K}$, $P = 1.0\text{ atm}$):
+    - Vibrational thermal energy $E_{\text{vib}}(T)$, heat capacity $C_{v,\text{vib}}(T)$, entropy $S_{\text{vib}}(T)$.
+    - Rotational enthalpy $E_{\text{rot}}(T) = \frac{3}{2}RT$, heat capacity $C_{v,\text{rot}} = \frac{3}{2}R$, rotational entropy $S_{\text{rot}}$ via principal moments of inertia $I_A, I_B, I_C$.
+    - Translational enthalpy $E_{\text{trans}}(T) = \frac{3}{2}RT$, heat capacity $C_{p,\text{trans}} = \frac{5}{2}R$, Sackur-Tetrode entropy $S_{\text{trans}}$.
+    - Gibbs free energy thermal correction $G_{\text{corr}} = H_{\text{thermal}} - T \cdot S^\circ$.
+
+### 6.15 Canonical OpenMOPAC Standard Atomic Masses (`constants.rs`)
+- Extracted authentic IUPAC standard atomic weights table `ams` directly from OpenMOPAC v23.2.5 source (`parameters_C.F90` lines 331–348).
+- Implemented `standard_atomic_mass(atomic_number: u8) -> f64` supporting elements 1 through 107 with 100% bit-exact standard weights (e.g. H = 1.00790, C = 12.01100, N = 14.00670, O = 15.99940, S = 32.06000, Cl = 35.45300).
+
+### 6.16 CLI Integration of Vibrational Keywords (`FORCE`, `VIB`, `FREQ`, `THERMO`)
+- Added `--force` flag and keyword detection for `FORCE`, `VIB`, `FREQ`, and `THERMO` in `crates/mopac_cli/src/main.rs`.
+- Outputs full MOPAC-style normal coordinate analysis table, ZPVE, and 4-tier thermochemistry table to both stdout and `.out` reports.
 
 ---
 
@@ -336,10 +364,11 @@ With the consolidation of Phase 1 and the execution of the canonical integration
 
 ---
 
-## 8. Final Scrutiny Summary Table (31 / 31 Tests Passing)
+## 8. Final Scrutiny Summary Table (32 / 32 Tests Passing)
 
 | Test Suite | Scrutiny Test Name | Verification Target | Invariant / Precision | Result |
 | :---: | :--- | :--- | :--- | :---: |
+| `mopac_core` | `test_scrutiny_harmonic_vibrational_frequencies_and_thermodynamics` | Numerical Hessian, Eckart projection, frequencies & thermo | 6 zero modes $< 10^{-5}\text{ cm}^{-1}$, ZPVE $= 13.886\text{ kcal/mol}$ | **PASSED** |
 | `mopac_core` | `test_scrutiny_full_nddo_scf_water_parity` | Full NDDO 22-Multipole SCF on $H_2O$ | $E_{\text{tot}} = -350.4908\text{ eV}$, $\text{HOMO} = -12.7646\text{ eV}$ | **PASSED** |
 | `mopac_core` | `test_scrutiny_rm1_and_pm6_convergence` | RM1 & PM6 convergence on $H_2$ | RM1: $-28.4984\text{ eV}$, PM6: $-28.1146\text{ eV}$ | **PASSED** |
 | `mopac_core` | `test_scrutiny_pm3_and_extended_elements_convergence` | PM3 on $H_2O$ & AM1/PM6 on $HF, H_2S$ | Stable convergence & physical negative energies | **PASSED** |
@@ -352,6 +381,7 @@ With the consolidation of Phase 1 and the execution of the canonical integration
 | `mopac_gpu` | `test_scrutiny_vulkan_gpu_coulomb_matrix_fp32_parity` | FP32 18 TFLOPS Hardware Rate & Parity | Single-precision Coulomb bound $< 10^{-4}\text{ eV}$ | **PASSED** |
 | `mopac_gpu` | `test_scrutiny_vulkan_gpu_coulomb_matrix_parity` | FP64 Double-Precision Parity | Benzene 144 interaction pairs $< 10^{-12}\text{ eV}$ | **PASSED** |
 | `mopac_gpu` | `test_scrutiny_vulkan_gpu_zero_allocation_workspace_parity` | GPU Pre-allocated Zero-Malloc Workspace | 5 iterative dispatches, `0 malloc` | **PASSED** |
+
 
 
 

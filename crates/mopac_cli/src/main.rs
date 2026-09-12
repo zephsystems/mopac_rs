@@ -13,8 +13,9 @@ use mopac_core::parameters::pm3::Pm3Model;
 use mopac_core::parameters::pm6::Pm6Model;
 use mopac_core::parameters::rm1::Rm1Model;
 use mopac_core::parameters::ParameterModel;
-use mopac_core::scf::scf_loop::{run_rhf_scf_adaptive_with_nddo, ScfResult};
+use mopac_core::scf::scf_loop::{run_rhf_scf_adaptive_with_nddo, ScfOptions, ScfResult};
 use mopac_core::types::{MolecularBatch, ScfWorkspace};
+use mopac_core::vibrations::{compute_hessian_and_frequencies, HessianOptions};
 use mopac_gpu::{GpuCoulombCalculator, VulkanContext};
 use mopac_gpu::coulomb_fp32::GpuCoulombCalculatorFP32;
 use std::fs::{self, File};
@@ -55,6 +56,10 @@ struct Cli {
     #[arg(long, default_value_t = false)]
     opt: bool,
 
+    /// Force vibrational frequency and thermodynamic analysis (FORCE / THERMO)
+    #[arg(long, default_value_t = false)]
+    force: bool,
+
     /// Force single-point calculation (1SCF)
     #[arg(long = "1scf", default_value_t = false)]
     one_scf: bool,
@@ -92,6 +97,7 @@ struct ParsedInput {
     comment: String,
     atoms: Vec<ParsedAtom>,
     is_opt_requested: bool,
+    is_force_requested: bool,
     is_gpu_requested: bool,
     is_fp32_requested: bool,
     method: Option<String>,
@@ -208,6 +214,7 @@ fn parse_mopac_input(content: &str) -> io::Result<ParsedInput> {
     let comment = if lines.len() > 2 { lines[2].trim().to_string() } else { String::new() };
 
     let mut is_opt_requested = false;
+    let mut is_force_requested = false;
     let mut is_1scf = false;
     let mut is_gpu = false;
     let mut is_fp32 = false;
@@ -218,6 +225,8 @@ fn parse_mopac_input(content: &str) -> io::Result<ParsedInput> {
         let u = kw.to_uppercase();
         if u == "OPT" || u == "EF" || u == "BFGS" {
             is_opt_requested = true;
+        } else if u == "FORCE" || u == "VIB" || u == "FREQ" || u == "THERMO" {
+            is_force_requested = true;
         } else if u == "1SCF" {
             is_1scf = true;
         } else if u == "GPU" {
@@ -306,6 +315,7 @@ fn parse_mopac_input(content: &str) -> io::Result<ParsedInput> {
         comment,
         atoms,
         is_opt_requested,
+        is_force_requested,
         is_gpu_requested: is_gpu,
         is_fp32_requested: is_fp32,
         method,
@@ -540,6 +550,33 @@ fn main() -> Result<(), Box<dyn std::error::Error>> {
         (res, niter)
     };
 
+    let is_force = cli.force || parsed.is_force_requested;
+    let force_result = if is_force {
+        println!(" [Vibrations] Computing Cartesian Hessian, mass-weighting & normal modes...");
+        let scf_opts = ScfOptions {
+            max_iter: 50,
+            energy_tol_ev: 1e-8,
+            density_tol: 1e-7,
+            level_shift_ev: 0.0,
+            damping: 0.5,
+            use_nddo,
+        };
+        let hess_opts = HessianOptions {
+            delta: 1.0e-3,
+            recompute_scf: true,
+            use_nddo,
+            project_external: true,
+            temperature_k: 298.15,
+            pressure_atm: 1.0,
+            rotational_symmetry_number: 1.0,
+        };
+        let h_res = compute_hessian_and_frequencies(&mut batch, model.as_ref(), &mut ws, &scf_opts, &hess_opts);
+        println!(" [Vibrations] Done: {} vibrational modes, ZPVE = {:.3} kcal/mol", h_res.vibrational_frequencies_cm1.len(), h_res.zpve_kcal_mol);
+        Some(h_res)
+    } else {
+        None
+    };
+
     let elapsed = start_time.elapsed();
     let (hof_kcal, charges, pops, dipole) =
         compute_wavefunction_properties(&batch, model.as_ref(), &ws, &scf_final);
@@ -559,6 +596,25 @@ fn main() -> Result<(), Box<dyn std::error::Error>> {
     println!("   Hybridization Dipole  : {:15.4} Debye", dipole.hybrid_tot);
     println!(" SCF Iterations Total    : {}", total_scf_cycles);
     println!(" Total Wall-Clock Time   : {:.4} seconds", elapsed.as_secs_f64());
+
+    if let Some(ref h_res) = force_result {
+        println!("-------------------------------------------------------------------------------");
+        println!("                   NORMAL MODES & VIBRATIONAL FREQUENCIES                      ");
+        println!("-------------------------------------------------------------------------------");
+        println!("  MODE        FREQUENCY (CM^-1)      FORCE CONST (MDYNE/A)     REDUCED MASS");
+        for (i, &nu) in h_res.vibrational_frequencies_cm1.iter().enumerate() {
+            let mode_idx = h_res.all_frequencies_cm1.len() - h_res.vibrational_frequencies_cm1.len() + i;
+            let mode = &h_res.normal_modes[mode_idx];
+            println!("   {:3}             {:10.2}                 {:8.4}              {:8.4} amu", i + 1, nu, mode.force_constant_mdyne_a, mode.reduced_mass_amu);
+        }
+        println!(" Zero-Point Vibrational Energy : {:12.3} kcal/mol", h_res.zpve_kcal_mol);
+        println!();
+        println!(" CALCULATED THERMODYNAMIC PROPERTIES (T = {:.2} K, P = {:.2} atm):", h_res.thermo.temperature_k, h_res.thermo.pressure_atm);
+        println!("   Enthalpy (Thermal)          : {:12.4} cal/mol", h_res.thermo.enthalpy_thermal_cal_mol);
+        println!("   Heat Capacity (Cp)          : {:12.4} cal/(mol K)", h_res.thermo.cp_total_cal_k_mol);
+        println!("   Standard Entropy (S°)       : {:12.4} cal/(mol K)", h_res.thermo.entropy_total_cal_k_mol);
+        println!("   Gibbs Free Energy Corr.     : {:12.4} kcal/mol", h_res.thermo.gibbs_correction_kcal_mol);
+    }
     println!("===============================================================================");
 
     // Write .out file matching standard MOPAC format
@@ -612,6 +668,26 @@ fn main() -> Result<(), Box<dyn std::error::Error>> {
         writeln!(out, "  {:4}    {:2}       {:16.9}  {:16.9}  {:16.9}", i + 1, sym, x, y, z)?;
     }
     writeln!(out)?;
+
+    if let Some(ref h_res) = force_result {
+        writeln!(out, "           NORMAL COORDINATE ANALYSIS & VIBRATIONAL FREQUENCIES")?;
+        writeln!(out, "  ROOT NO.     FREQUENCY (CM^-1)      FORCE CONST (MDYNE/A)     REDUCED MASS")?;
+        for (i, &nu) in h_res.vibrational_frequencies_cm1.iter().enumerate() {
+            let mode_idx = h_res.all_frequencies_cm1.len() - h_res.vibrational_frequencies_cm1.len() + i;
+            let mode = &h_res.normal_modes[mode_idx];
+            writeln!(out, "   {:3}             {:10.2}                 {:8.4}              {:8.4} amu", i + 1, nu, mode.force_constant_mdyne_a, mode.reduced_mass_amu)?;
+        }
+        writeln!(out)?;
+        writeln!(out, " ZERO POINT VIBRATIONAL ENERGY = {:12.3} KCAL/MOL", h_res.zpve_kcal_mol)?;
+        writeln!(out)?;
+        writeln!(out, " CALCULATED THERMODYNAMIC PROPERTIES (T = {:.2} K, P = {:.2} ATM):", h_res.thermo.temperature_k, h_res.thermo.pressure_atm)?;
+        writeln!(out, "   ENTHALPY (THERMAL)          = {:12.4} CAL/MOL", h_res.thermo.enthalpy_thermal_cal_mol)?;
+        writeln!(out, "   HEAT CAPACITY (CP)          = {:12.4} CAL/(MOL K)", h_res.thermo.cp_total_cal_k_mol)?;
+        writeln!(out, "   STANDARD ENTROPY (S°)       = {:12.4} CAL/(MOL K)", h_res.thermo.entropy_total_cal_k_mol)?;
+        writeln!(out, "   GIBBS FREE ENERGY CORR.     = {:12.4} KCAL/MOL", h_res.thermo.gibbs_correction_kcal_mol)?;
+        writeln!(out)?;
+    }
+
     writeln!(out, " == MOPAC_RS DONE ==")?;
 
     // Write .arc file with optimized geometry

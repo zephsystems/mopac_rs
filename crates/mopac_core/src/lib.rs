@@ -13,6 +13,7 @@ pub mod parameters;
 pub mod ri;
 pub mod scf;
 pub mod types;
+pub mod vibrations;
 
 pub use constants::*;
 pub use fock::*;
@@ -24,3 +25,5 @@ pub use parameters::*;
 pub use ri::*;
 pub use scf::*;
 pub use types::*;
+pub use vibrations::*;
+

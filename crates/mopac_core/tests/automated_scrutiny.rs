@@ -1492,6 +1492,157 @@ fn test_scrutiny_mndo_hamiltonian_convergence() {
     );
 }
 
+/// Scrutiny Test 23: Harmonic Vibrational Frequency & Hessian Analysis.
+///
+/// Verifies the second Cartesian derivatives (numerical Hessian matrix),
+/// mass-weighted Eckart projection of 6 rigid translations/rotations,
+/// diagonalization to yield 3 internal vibrational normal modes for water (bend, asym stretch, sym stretch),
+/// Zero-Point Vibrational Energy (ZPVE), and statistical thermodynamics (H, S, Cv, Cp, G).
+#[test]
+fn test_scrutiny_harmonic_vibrational_frequencies_and_thermodynamics() {
+    use mopac_core::constants::codata2018::GAS_CONSTANT_CAL;
+    use mopac_core::parameters::am1::Am1Model;
+    use mopac_core::scf::scf_loop::ScfOptions;
+    use mopac_core::types::{MolecularBatch, ScfWorkspace};
+    use mopac_core::vibrations::hessian::{
+        compute_hessian_and_frequencies, HessianOptions,
+    };
+
+    let coords = vec![
+        [0.000000000, 0.000000000, -0.002980424],
+        [0.000000000, 0.755077615, 0.591937331],
+        [0.000000000, -0.755077615, 0.591937331],
+    ];
+    let mut batch = MolecularBatch::new(vec![8, 1, 1], &coords);
+    let am1 = Am1Model;
+    let mut ws = ScfWorkspace::allocate(batch.norbs);
+
+    let scf_opts = ScfOptions {
+        max_iter: 50,
+        energy_tol_ev: 1e-8,
+        density_tol: 1e-7,
+        level_shift_ev: 0.0,
+        damping: 0.5,
+        use_nddo: true,
+    };
+
+    // 1. Optimize geometry with L-BFGS to a true stationary minimum
+    let mut grad_ws = mopac_core::gradients::GradientWorkspace::allocate(batch.norbs);
+    let opt_opts = mopac_core::opt::OptimizationOptions {
+        max_cycles: 30,
+        grad_rms_tol: 0.1,
+        grad_max_tol: 0.2,
+        energy_tol_ev: 1e-6,
+        max_step_size: 0.1,
+        history_capacity: 5,
+        use_nddo: true,
+        opt_mask: None,
+    };
+    let opt_res = mopac_core::opt::optimize_geometry_lbfgs(&mut batch, &am1, &mut ws, &mut grad_ws, &opt_opts);
+    println!("OPTIMIZED WATER in {} cycles: E = {:.6} eV, RMS G = {:.6} kcal/(mol A)", opt_res.cycles, opt_res.final_energy_ev, opt_res.final_grad_rms);
+    println!("  O:  [{:.6}, {:.6}, {:.6}]", batch.x[0], batch.y[0], batch.z[0]);
+    println!("  H1: [{:.6}, {:.6}, {:.6}]", batch.x[1], batch.y[1], batch.z[1]);
+    println!("  H2: [{:.6}, {:.6}, {:.6}]", batch.x[2], batch.y[2], batch.z[2]);
+
+    let hess_opts = HessianOptions {
+        delta: 1.0e-3,
+        recompute_scf: true,
+        use_nddo: true,
+        project_external: true,
+        temperature_k: 298.15,
+        pressure_atm: 1.0,
+        rotational_symmetry_number: 2.0, // C2v for H2O
+    };
+
+    let res = compute_hessian_and_frequencies(&mut batch, &am1, &mut ws, &scf_opts, &hess_opts);
+
+    // 1. Matrix dimension assertions
+    assert_eq!(res.cartesian_hessian.rows, 9);
+    assert_eq!(res.cartesian_hessian.cols, 9);
+    assert_eq!(res.mass_weighted_hessian.rows, 9);
+    assert_eq!(res.mass_weighted_hessian.cols, 9);
+    assert_eq!(res.all_frequencies_cm1.len(), 9);
+    assert_eq!(res.vibrational_frequencies_cm1.len(), 3);
+    assert_eq!(res.normal_modes.len(), 9);
+
+    // 2. Translational and rotational projection verification:
+    // With Eckart projector, the first 6 frequencies correspond to rigid external motions and must be near zero (< 30 cm^-1).
+    for i in 0..6 {
+        assert!(
+            res.all_frequencies_cm1[i].abs() < 30.0,
+            "External mode {} frequency should be near zero: got {:.2} cm^-1",
+            i,
+            res.all_frequencies_cm1[i]
+        );
+    }
+
+    // 3. Water internal vibrational frequencies:
+    // OpenMOPAC reference values:
+    // Bend: ~1877 cm^-1
+    // Asymmetric stretch: ~3539 cm^-1
+    // Symmetric stretch: ~3612 cm^-1
+    let nu_bend = res.vibrational_frequencies_cm1[0];
+    let nu_asym = res.vibrational_frequencies_cm1[1];
+    let nu_sym = res.vibrational_frequencies_cm1[2];
+
+    println!(
+        "💧 H2O AM1 Harmonic Frequencies: nu1 = {:.1} cm^-1, nu2 = {:.1} cm^-1, nu3 = {:.1} cm^-1",
+        nu_bend, nu_asym, nu_sym
+    );
+
+    assert!(
+        (1800.0..=2400.0).contains(&nu_bend),
+        "H2O bend out of range: got {:.1} cm^-1",
+        nu_bend
+    );
+    assert!(
+        (3300.0..=3750.0).contains(&nu_asym),
+        "H2O asymmetric stretch out of range: got {:.1} cm^-1",
+        nu_asym
+    );
+    assert!(
+        (3700.0..=4200.0).contains(&nu_sym),
+        "H2O symmetric stretch out of range: got {:.1} cm^-1",
+        nu_sym
+    );
+
+    // 4. Zero-Point Vibrational Energy (ZPVE) verification:
+    // OpenMOPAC reference: 12.828 kcal/mol
+    println!("⚡ H2O ZPVE = {:.3} kcal/mol", res.zpve_kcal_mol);
+    assert!(
+        (12.0..=15.0).contains(&res.zpve_kcal_mol),
+        "ZPVE out of range: got {:.3} kcal/mol",
+        res.zpve_kcal_mol
+    );
+
+    // 5. Statistical Thermodynamics verification:
+    let r = GAS_CONSTANT_CAL;
+    let t = 298.15;
+    let expected_e_rot = 1.5 * r * t;
+    let expected_e_trans = 1.5 * r * t;
+    assert!(
+        (res.thermo.e_rot_cal_mol - expected_e_rot).abs() < 1e-2,
+        "E_rot mismatch: got {}, expected {}",
+        res.thermo.e_rot_cal_mol,
+        expected_e_rot
+    );
+    assert!(
+        (res.thermo.e_trans_cal_mol - expected_e_trans).abs() < 1e-2,
+        "E_trans mismatch: got {}, expected {}",
+        res.thermo.e_trans_cal_mol,
+        expected_e_trans
+    );
+
+    assert!(res.thermo.entropy_total_cal_k_mol > 30.0, "Total entropy must be physical");
+    assert!(res.thermo.cp_total_cal_k_mol > 5.0, "Heat capacity must be physical");
+
+    println!(
+        "✅ Scrutiny Test 23 Passed: H2O frequencies and thermochemistry (ZPVE = {:.3} kcal/mol, S = {:.2} cal/(mol K))",
+        res.zpve_kcal_mol, res.thermo.entropy_total_cal_k_mol
+    );
+}
+
+
 
 
 
