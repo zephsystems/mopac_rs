@@ -16,7 +16,10 @@ use mopac_core::parameters::ParameterModel;
 use mopac_core::properties::{
     compute_bond_orders, compute_dipole_moment, compute_mulliken_population, DipoleResult,
 };
-use mopac_core::scf::scf_loop::{run_rhf_scf_adaptive_with_nddo, ScfOptions, ScfResult};
+use mopac_core::scf::scf_loop::{
+    run_rhf_scf_adaptive_with_nddo_and_cosmo, ScfOptions, ScfResult,
+};
+use mopac_core::solvation::{CosmoCavity, CosmoParams};
 use mopac_core::types::{MolecularBatch, ScfWorkspace};
 use mopac_core::vibrations::{compute_hessian_and_frequencies, HessianOptions};
 use mopac_gpu::coulomb_fp32::GpuCoulombCalculatorFP32;
@@ -79,6 +82,10 @@ struct Cli {
     #[arg(long)]
     threads: Option<usize>,
 
+    /// Solvent dielectric constant for COSMO implicit solvation (e.g. --eps 78.4)
+    #[arg(long)]
+    eps: Option<f64>,
+
     /// Custom output file path (.out)
     #[arg(short, long)]
     output: Option<PathBuf>,
@@ -87,6 +94,7 @@ struct Cli {
     #[arg(long)]
     arc: Option<PathBuf>,
 }
+
 
 #[derive(Debug, Clone)]
 struct ParsedAtom {
@@ -117,7 +125,9 @@ struct ParsedInput {
     is_dipole_requested: bool,
     is_bonds_requested: bool,
     is_mullik_requested: bool,
+    eps: Option<f64>,
 }
+
 
 fn symbol_to_atomic_number(sym: &str) -> Option<u8> {
     match sym.to_uppercase().as_str() {
@@ -238,6 +248,7 @@ fn parse_mopac_input(content: &str) -> io::Result<ParsedInput> {
     let mut is_dipole_requested = false;
     let mut is_bonds_requested = false;
     let mut is_mullik_requested = false;
+    let mut eps = None;
 
     for kw in &keywords {
         let u = kw.to_uppercase();
@@ -269,8 +280,13 @@ fn parse_mopac_input(content: &str) -> io::Result<ParsedInput> {
             method = Some("MNDO".to_string());
         } else if u == "NDDO" {
             is_nddo_requested = true;
+        } else if let Some(stripped) = u.strip_prefix("EPS=") {
+            if let Ok(v) = stripped.parse::<f64>() {
+                eps = Some(v);
+            }
         }
     }
+
 
     let mut atoms = Vec::new();
     for line in lines.iter().skip(3) {
@@ -347,8 +363,10 @@ fn parse_mopac_input(content: &str) -> io::Result<ParsedInput> {
         is_dipole_requested,
         is_bonds_requested,
         is_mullik_requested,
+        eps,
     })
 }
+
 
 fn build_batch(atoms: &[ParsedAtom]) -> MolecularBatch {
     let natoms = atoms.len();
@@ -505,10 +523,22 @@ fn main() -> Result<(), Box<dyn std::error::Error>> {
         (opt_res.final_scf, niter)
     } else {
         println!(" [SCF] Running Roothaan-Hall Self-Consistent Field (NDDO: {})...", use_nddo);
-        let res = run_rhf_scf_adaptive_with_nddo(&batch, model.as_ref(), &mut ws, 60, 1e-7, 1e-6, use_nddo);
+        let cosmo_params = cli.eps.or(parsed.eps).map(|epsilon| CosmoParams {
+            epsilon,
+            rsolv: 1.30005,
+        });
+        if let Some(cp) = cosmo_params {
+            println!(" [COSMO] Implicit solvation active: EPS = {:.2}, RSOLV = {:.5} A", cp.epsilon, cp.rsolv);
+        }
+        let res = run_rhf_scf_adaptive_with_nddo_and_cosmo(&batch, model.as_ref(), &mut ws, 60, 1e-7, 1e-6, use_nddo, cosmo_params);
         let niter = res.iterations;
         (res, niter)
     };
+
+    let cosmo_params = cli.eps.or(parsed.eps).map(|epsilon| CosmoParams {
+        epsilon,
+        rsolv: 1.30005,
+    });
 
     let is_force = cli.force || parsed.is_force_requested;
     let force_result = if is_force {
@@ -520,7 +550,9 @@ fn main() -> Result<(), Box<dyn std::error::Error>> {
             level_shift_ev: 0.0,
             damping: 0.5,
             use_nddo,
+            cosmo: cosmo_params,
         };
+
         let hess_opts = HessianOptions {
             delta: 1.0e-3,
             recompute_scf: true,
@@ -548,6 +580,14 @@ fn main() -> Result<(), Box<dyn std::error::Error>> {
     println!(" Total SCF Energy        : {:15.6} eV", scf_final.total_energy_ev);
     println!(" Electronic Energy       : {:15.6} eV", scf_final.electronic_energy_ev);
     println!(" Nuclear Repulsion       : {:15.6} eV", scf_final.nuclear_repulsion_ev);
+    if let Some(diel_ev) = scf_final.dielectric_energy_ev {
+        println!(" Dielectric Solv Energy  : {:15.6} eV ({:12.5} kcal/mol)", diel_ev, diel_ev * 23.06054801);
+    }
+    if let Some(cp) = cosmo_params {
+        let cav = CosmoCavity::construct(&batch, cp.rsolv);
+        println!(" COSMO Cavity Area       : {:15.2} Square Angstroms", cav.total_area_angstrom2);
+        println!(" COSMO Cavity Volume     : {:15.2} Cubic Angstroms", cav.total_volume_angstrom3);
+    }
     println!(" HOMO Energy (IP)        : {:15.4} eV", scf_final.homo_energy_ev);
     println!(" LUMO Energy             : {:15.4} eV", scf_final.lumo_energy_ev);
     println!(" HOMO-LUMO Gap           : {:15.4} eV", scf_final.lumo_energy_ev - scf_final.homo_energy_ev);
@@ -647,6 +687,14 @@ fn main() -> Result<(), Box<dyn std::error::Error>> {
     writeln!(out, " TOTAL ENERGY            = {:17.6} EV", scf_final.total_energy_ev)?;
     writeln!(out, " ELECTRONIC ENERGY       = {:17.6} EV", scf_final.electronic_energy_ev)?;
     writeln!(out, " NUCLEAR REPULSION       = {:17.6} EV", scf_final.nuclear_repulsion_ev)?;
+    if let Some(diel_ev) = scf_final.dielectric_energy_ev {
+        writeln!(out, " DIELECTRIC ENERGY       = {:17.5} EV", diel_ev)?;
+    }
+    if let Some(cp) = cosmo_params {
+        let cav = CosmoCavity::construct(&batch, cp.rsolv);
+        writeln!(out, " COSMO AREA              = {:17.2} SQUARE ANGSTROMS", cav.total_area_angstrom2)?;
+        writeln!(out, " COSMO VOLUME            = {:17.2} CUBIC ANGSTROMS", cav.total_volume_angstrom3)?;
+    }
     writeln!(out, " IONIZATION POTENTIAL    = {:17.5} EV", -scf_final.homo_energy_ev)?;
     writeln!(out, " HOMO LUMO ENERGIES (EV) = {:12.4} {:12.4}", scf_final.homo_energy_ev, scf_final.lumo_energy_ev)?;
     writeln!(out, " DIPOLE MOMENT           = {:17.4} DEBYE", dipole.total[3])?;

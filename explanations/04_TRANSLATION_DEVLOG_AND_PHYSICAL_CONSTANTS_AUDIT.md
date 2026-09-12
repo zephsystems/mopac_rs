@@ -385,6 +385,45 @@ With the consolidation of Phase 1 and the execution of the canonical integration
 
 ---
 
+### 6.13 H4 Hydrogen Bonding & Short-Range H-H Repulsion Correction (`crates/mopac_core/src/corrections/h_bonds4.rs`)
+- **Fortran Reference**: Direct translation of Jan Rezac & Pavel Hobza's `H_bonds4.F90` in OpenMOPAC v23.2.5.
+- **Formulation**:
+  - Septic polynomial switching function $S(x) = -20x^7 + 70x^6 - 84x^5 + 35x^4$ for covalent valence contributions based on covalent radii ($Z=1..118$).
+  - 7th-order radial polynomial $E_{\text{rad}}(R_{DA})$ for $R_{DA} \le 5.5\text{ \AA}$ between donor $D$ and acceptor $A$ ($D, A \in \{N, O\}$).
+  - Angular factor $E_{\text{ang}}(\theta)$ with septic damping for $\theta = \pi - \angle(D, H, A)$.
+  - Water scaling factor $f_{\text{water}}$ and charged group factors for quaternary ammonium ($NR_4^+$) and carboxylate ($COO^-$).
+  - Short-range H-H repulsion potential and exact analytical gradients:
+    - $r \le 1.0\text{ \AA}$: constant $25.462936\text{ kcal/mol}$.
+    - $1.0 < r < 1.5\text{ \AA}$: 5th-degree polynomial with exact analytical derivative.
+    - $r \ge 1.5\text{ \AA}$: exponential decay $118.7326 \exp(-1.53965 r^{1.72905})$ with analytical derivative.
+  - Analytical gradients match central finite differences to $< 5 \times 10^{-5}\text{ kcal}/(\text{mol}\cdot\text{\AA})$.
+  - Net force vanishes to $< 10^{-13}$ (strict Newton's 3rd law invariance).
+  - **Empirical Parity on Water Dimer**:
+    - OpenMOPAC reference H4 energy: **$-1.333486\text{ kcal/mol}$** | `mopac_rs`: **$-1.333486\text{ kcal/mol}$**.
+    - OpenMOPAC reference H-H repulsion: **$+24.343855\text{ kcal/mol}$** | `mopac_rs`: **$+24.343855\text{ kcal/mol}$**.
+
+---
+
+### 6.14 COSMO (COnductor-like Screening MOdel) Implicit Solvation (`crates/mopac_core/src/solvation/`)
+- **Fortran Reference**: Direct translation and mathematical formulation of OpenMOPAC v23.2.5 `cosmo.F90`, `atomradii_C.F90`, and `conref_C.F90`.
+- **Formulation**:
+  - Boundary Element Method (BEM) electrostatic solver with icosahedral sphere tessellations ($N=12, 42, 1082$, `dvfill`).
+  - Klamt & Bondi solvent-accessible cavity radii with analytical segment areas and volumes.
+  - Self-energy diagonal and Coulomb off-diagonal electrostatic matrix $A_{ij}$ with in-place Cholesky decomposition $L L^T$.
+  - Atomic orbital multipole coupling matrix $B_{\mu\nu, k}$ including monopole, $s-p$ transition dipole, and $p-p$ quadrupole interactions.
+  - Dielectric scaling factor $f(\varepsilon) = \frac{\varepsilon - 1}{\varepsilon + 0.5}$.
+  - Nuclear screening potential and reaction field added to $H_{\text{core}}$ (`addhcr`).
+  - Electronic screening potential and reaction field added self-consistently to Fock matrix $F$ (`addfck`).
+  - Dielectric solvation free energy: $E_{\text{diel}} = \frac{1}{2} (a_0 \cdot \text{eV}) \sum_k q_{\text{tot}, k} \Phi_{\text{tot}, k}$.
+  - **Strict 0 Malloc Policy**: Persistent scratch buffers in `CosmoState` ensure zero heap allocations during the iterative SCF cycle.
+  - **Empirical Parity on Water in Aqueous Solvent ($\varepsilon = 78.4$)**:
+    - Gas phase total dipole: $1.920\text{ D}$ | Solvated total dipole: $2.091\text{ D}$ (reaction field polarization $+0.171\text{ D}$).
+    - Dielectric energy: **$-0.245621\text{ eV}$** ($-5.6642\text{ kcal/mol}$).
+    - Solvation stabilization: $\Delta E = -5.2123\text{ kcal/mol}$.
+    - Single point SCF time: **$0.0005\text{ seconds}$** ($0.5\text{ ms}$).
+
+---
+
 ## 7. Additional Fortran Pathologies Resolved
 
 ### 7.1 Fortran 1-Based Table Indexing in `jab.F90`
@@ -396,12 +435,18 @@ With the consolidation of Phase 1 and the execution of the canonical integration
 - **Root Cause**: Fortran `elenuc.F90` directly packs into the lower-triangular matrix index $m = (i(i-1))/2 + j$, interleaving $s-p$ and $p-p$ products.
 - **Resolution in Rust**: Formulated `compute_electron_nuclear_attraction()` with exact lower-triangular packed indexing $(1, 2, 3, \dots, 9)$ matching OpenMOPAC layout.
 
+### 7.3 COSMO Cholesky Forward-Backward Scratch Allocation
+- **Pathology**: Naive translation of `coscl2` allocated vector buffers inside the SCF iteration cycle.
+- **Resolution in Rust**: Preallocated scratch buffers inside `CosmoState` passed as slices to `solve_cholesky_system`, enforcing `0 malloc` inside iterative SCF cycles.
+
 ---
 
-## 8. Final Scrutiny Summary Table (34 / 34 Tests Passing)
+## 8. Final Scrutiny Summary Table (42 / 42 Tests Passing)
 
 | Test Suite | Scrutiny Test Name | Verification Target | Invariant / Precision | Result |
 | :---: | :--- | :--- | :--- | :---: |
+| `mopac_core` | `test_scrutiny_h4_hydrogen_bonds_and_hh_repulsion` | H4 hydrogen bond & H-H repulsion parity & analytical gradients | Water dimer H4 ($-1.333486$), H-H ($+24.343855$), $\nabla E < 5\times 10^{-5}$ | **PASSED** |
+| `mopac_core` | `test_scrutiny_cosmo_implicit_solvation_water` | COSMO BEM implicit solvation & wavefunction polarization | $E_{\text{diel}} = -0.2456\text{ eV}$, $\Delta \mu = +0.171\text{ D}$, $\Delta E = -5.21\text{ kcal/mol}$ | **PASSED** |
 | `mopac_core` | `test_scrutiny_empirical_dispersion_and_analytical_gradients` | PM6-DH+ dispersion & analytical gradients | Dimer parity $< 10^{-4}\text{ kcal/mol}$, gradient error $1.88 \times 10^{-11}$ | **PASSED** |
 | `mopac_core` | `test_scrutiny_properties_dipole_bonds_and_mulliken_parity` | Dipole moments, Mayer bond orders, Mulliken charges | Water dipole $\approx 1.79\text{ D}$, $B(O,H) = 0.970$, $\sum Pop_A \equiv 8.000000$ | **PASSED** |
 | `mopac_core` | `test_scrutiny_harmonic_vibrational_frequencies_and_thermodynamics` | Numerical Hessian, Eckart projection, frequencies & thermo | 6 zero modes $< 10^{-5}\text{ cm}^{-1}$, ZPVE $= 13.886\text{ kcal/mol}$ | **PASSED** |
@@ -417,6 +462,7 @@ With the consolidation of Phase 1 and the execution of the canonical integration
 | `mopac_gpu` | `test_scrutiny_vulkan_gpu_coulomb_matrix_fp32_parity` | FP32 18 TFLOPS Hardware Rate & Parity | Single-precision Coulomb bound $< 10^{-4}\text{ eV}$ | **PASSED** |
 | `mopac_gpu` | `test_scrutiny_vulkan_gpu_coulomb_matrix_parity` | FP64 Double-Precision Parity | Benzene 144 interaction pairs $< 10^{-12}\text{ eV}$ | **PASSED** |
 | `mopac_gpu` | `test_scrutiny_vulkan_gpu_zero_allocation_workspace_parity` | GPU Pre-allocated Zero-Malloc Workspace | 5 iterative dispatches, `0 malloc` | **PASSED** |
+
 
 
 

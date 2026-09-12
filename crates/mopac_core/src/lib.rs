@@ -14,6 +14,7 @@ pub mod parameters;
 pub mod properties;
 pub mod ri;
 pub mod scf;
+pub mod solvation;
 pub mod types;
 pub mod vibrations;
 
@@ -28,6 +29,8 @@ pub use parameters::*;
 pub use properties::*;
 pub use ri::*;
 pub use scf::*;
+pub use solvation::*;
 pub use types::*;
 pub use vibrations::*;
+
 

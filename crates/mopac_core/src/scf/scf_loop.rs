@@ -21,6 +21,7 @@ pub struct ScfResult {
     pub nuclear_repulsion_ev: f64,
     pub homo_energy_ev: f64,
     pub lumo_energy_ev: f64,
+    pub dielectric_energy_ev: Option<f64>,
 }
 
 /// Configuration options for the Self-Consistent Field (SCF) solver.
@@ -41,6 +42,8 @@ pub struct ScfOptions {
     pub damping: f64,
     /// Enable full NDDO 22 diatomic multipoles and rotated attractions (default: false)
     pub use_nddo: bool,
+    /// COSMO implicit solvation model parameters (default: None)
+    pub cosmo: Option<crate::solvation::CosmoParams>,
 }
 
 impl Default for ScfOptions {
@@ -52,9 +55,11 @@ impl Default for ScfOptions {
             level_shift_ev: 0.0,
             damping: 0.5,
             use_nddo: false,
+            cosmo: None,
         }
     }
 }
+
 
 /// Apply virtual orbital level shift to the Fock matrix:
 /// $$\tilde{F} = F + \sigma \left( I - \frac{1}{2} P \right)$$
@@ -110,7 +115,18 @@ pub fn run_rhf_scf_with_options(
     assert!(nocc > 0, "System must have at least one electron pair for closed-shell RHF");
 
     // 2. Nuclear-nuclear core repulsion energy
-    let enuc = compute_total_core_repulsion(batch, model);
+    let mut enuc = compute_total_core_repulsion(batch, model);
+
+    // Optional COSMO implicit solvation initialization
+    let mut cosmo_state = if let Some(cosmo_params) = options.cosmo {
+        crate::solvation::CosmoState::initialize(batch, model, cosmo_params).ok()
+    } else {
+        None
+    };
+
+    if let Some(ref cs) = cosmo_state {
+        enuc += cs.e_nuc_diel_ev;
+    }
 
     // 3. Build one-electron core Hamiltonian H_core
     if options.use_nddo {
@@ -118,6 +134,10 @@ pub fn run_rhf_scf_with_options(
         crate::hamiltonian::hcore::build_hcore_nddo(batch, model, &ws.diatomic_pairs, &mut ws.h_core);
     } else {
         build_hcore(batch, model, &mut ws.h_core);
+    }
+
+    if let Some(ref cs) = cosmo_state {
+        cs.apply_nuclear_reaction_field_to_hcore(&mut ws.h_core);
     }
 
     // 4. Initial guess: diagonalize H_core to generate initial density P^(0)
@@ -128,6 +148,7 @@ pub fn run_rhf_scf_with_options(
     let mut prev_energy = 0.0f64;
     let mut converged = false;
     let mut iters_done = 0;
+    let mut last_diel_ev: Option<f64> = None;
 
     // 5. SCF Iteration Loop (ZERO dynamic heap allocations)
     for iter in 1..=options.max_iter {
@@ -147,9 +168,16 @@ pub fn run_rhf_scf_with_options(
             build_fock(batch, model, &ws.h_core, &ws.density, &mut ws.fock);
         }
 
+        // Apply COSMO reaction field to Fock matrix
+        if let Some(ref mut cs) = cosmo_state {
+            let ediel = cs.apply_electronic_reaction_field_to_fock(&ws.density, &mut ws.fock);
+            last_diel_ev = Some(ediel);
+        }
+
         // Compute physical electronic energy of the current state before level shift
         let e_elec = compute_electronic_energy(&ws.density, &ws.h_core, &ws.fock);
         let e_total = e_elec + enuc;
+
 
         // Apply Pulay DIIS acceleration (modifies ws.fock in-place if m >= 2)
         let diis_res = ws.diis.push_and_extrapolate(&mut ws.fock, &ws.density, &mut ws.tmp2);
@@ -215,6 +243,7 @@ pub fn run_rhf_scf_with_options(
         nuclear_repulsion_ev: enuc,
         homo_energy_ev: homo,
         lumo_energy_ev: lumo,
+        dielectric_energy_ev: last_diel_ev,
     }
 }
 
@@ -240,6 +269,7 @@ pub fn run_rhf_scf(
             level_shift_ev: 0.0,
             damping: 0.5,
             use_nddo: false,
+            cosmo: None,
         },
     )
 }
@@ -282,11 +312,35 @@ pub fn run_rhf_scf_adaptive_with_nddo(
     density_tol: f64,
     use_nddo: bool,
 ) -> ScfResult {
+    run_rhf_scf_adaptive_with_nddo_and_cosmo(
+        batch,
+        model,
+        ws,
+        max_iter_per_stage,
+        energy_tol_ev,
+        density_tol,
+        use_nddo,
+        None,
+    )
+}
+
+/// Run an adaptive multi-tier SCF calculation with automatic converger escalation, configurable NDDO multipoles, and COSMO solvation.
+#[allow(clippy::too_many_arguments)]
+pub fn run_rhf_scf_adaptive_with_nddo_and_cosmo(
+    batch: &MolecularBatch,
+    model: &dyn ParameterModel,
+    ws: &mut ScfWorkspace,
+    max_iter_per_stage: usize,
+    energy_tol_ev: f64,
+    density_tol: f64,
+    use_nddo: bool,
+    cosmo: Option<crate::solvation::CosmoParams>,
+) -> ScfResult {
     let stages = [
-        ScfOptions { max_iter: max_iter_per_stage, energy_tol_ev, density_tol, level_shift_ev: 0.0, damping: 0.5, use_nddo },
-        ScfOptions { max_iter: max_iter_per_stage * 2, energy_tol_ev, density_tol, level_shift_ev: 8.0, damping: 0.5, use_nddo },
-        ScfOptions { max_iter: max_iter_per_stage * 2, energy_tol_ev, density_tol, level_shift_ev: 4.44, damping: 0.7, use_nddo },
-        ScfOptions { max_iter: max_iter_per_stage * 2, energy_tol_ev, density_tol, level_shift_ev: 8.0, damping: 0.7, use_nddo },
+        ScfOptions { max_iter: max_iter_per_stage, energy_tol_ev, density_tol, level_shift_ev: 0.0, damping: 0.5, use_nddo, cosmo },
+        ScfOptions { max_iter: max_iter_per_stage * 2, energy_tol_ev, density_tol, level_shift_ev: 8.0, damping: 0.5, use_nddo, cosmo },
+        ScfOptions { max_iter: max_iter_per_stage * 2, energy_tol_ev, density_tol, level_shift_ev: 4.44, damping: 0.7, use_nddo, cosmo },
+        ScfOptions { max_iter: max_iter_per_stage * 2, energy_tol_ev, density_tol, level_shift_ev: 8.0, damping: 0.7, use_nddo, cosmo },
     ];
 
     let mut last_res = ScfResult {
@@ -297,6 +351,7 @@ pub fn run_rhf_scf_adaptive_with_nddo(
         nuclear_repulsion_ev: 0.0,
         homo_energy_ev: 0.0,
         lumo_energy_ev: 0.0,
+        dielectric_energy_ev: None,
     };
 
     for (stage_idx, opts) in stages.iter().enumerate() {
