@@ -236,6 +236,46 @@ impl ParameterModel for Am1Model {
                 num_gaussians: 2,
             }),
 
+            // Element 14: Silicon
+            14 => Some(SemiEmpiricalElementParams {
+                z: 14,
+                core_charge: 4.0,
+                uss: -33.9536220,
+                upp: -28.9347490,
+                udd: 0.0,
+                zs: 1.8306970,
+                zp: 1.2849530,
+                zd: 0.0,
+                betas: -3.7848520,
+                betap: -1.9681230,
+                betad: 0.0,
+                alpha: 2.2578160,
+                gss: 9.8200000,
+                gsp: 8.3600000,
+                gpp: 7.3100000,
+                gp2: 6.5400000,
+                hsp: 1.3200000,
+                gaussians: [
+                    GaussianCoreCorrection {
+                        a: 0.2500000,
+                        b: 9.0000000,
+                        c: 0.9114530,
+                    },
+                    GaussianCoreCorrection {
+                        a: 0.0615130,
+                        b: 5.0000000,
+                        c: 1.9955690,
+                    },
+                    GaussianCoreCorrection {
+                        a: 0.0207890,
+                        b: 5.0000000,
+                        c: 2.9906100,
+                    },
+                    GaussianCoreCorrection { a: 0.0, b: 0.0, c: 0.0 },
+                ],
+                num_gaussians: 3,
+            }),
+
             // Element 15: Phosphorus
             15 => Some(SemiEmpiricalElementParams {
                 z: 15,

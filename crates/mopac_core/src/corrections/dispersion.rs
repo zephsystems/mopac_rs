@@ -17,6 +17,8 @@ pub enum DispersionModel {
     Pm6DhPlus,
     /// PM7 dispersion model (Stewart 2013)
     Pm7,
+    /// Grimme D3 dispersion with Becke-Johnson rational damping (Grimme et al. 2011/2012)
+    D3Bj,
 }
 
 impl DispersionModel {
@@ -26,6 +28,7 @@ impl DispersionModel {
         match self {
             Self::Pm6DhPlus => 20.0,
             Self::Pm7 => 15.450118,
+            Self::D3Bj => 14.0,
         }
     }
 
@@ -35,6 +38,7 @@ impl DispersionModel {
         match self {
             Self::Pm6DhPlus => 1.04,
             Self::Pm7 => 1.226593,
+            Self::D3Bj => 1.0,
         }
     }
 
@@ -44,6 +48,7 @@ impl DispersionModel {
         match self {
             Self::Pm6DhPlus => 0.89,
             Self::Pm7 => 2.286419,
+            Self::D3Bj => 1.0,
         }
     }
 }
@@ -239,9 +244,21 @@ pub fn compute_dispersion_energy(batch: &MolecularBatch, model: DispersionModel)
                 let rij = rij_angstrom * 0.1; // in nm
 
                 if rij > 1e-6 {
-                    let damp = 1.0 / (1.0 + (-alpha * (rij / (s * r0_ab) - 1.0)).exp());
-                    // 1 kcal = 4184.0 J
-                    let e_pair = (c6_ab / rij.powi(6)) * damp / (1000.0 * 4.184);
+                    let e_pair = if model == DispersionModel::D3Bj {
+                        let s6 = 1.0;
+                        let s8 = 1.009;
+                        let a1 = 0.538;
+                        let a2_nm = 0.233;
+                        let r_cut6 = (a1 * r0_ab + a2_nm).powi(6);
+                        let r_cut8 = (a1 * r0_ab + a2_nm).powi(8);
+                        let c8_ab = 3.0 * c6_ab * r0_ab.powi(2);
+                        let term6 = s6 * c6_ab / (rij.powi(6) + r_cut6);
+                        let term8 = s8 * c8_ab / (rij.powi(8) + r_cut8);
+                        (term6 + term8) / (1000.0 * 4.184)
+                    } else {
+                        let damp = 1.0 / (1.0 + (-alpha * (rij / (s * r0_ab) - 1.0)).exp());
+                        (c6_ab / rij.powi(6)) * damp / (1000.0 * 4.184)
+                    };
                     e_disp_tot -= e_pair;
                 }
             }
@@ -331,21 +348,41 @@ pub fn compute_dispersion_energy_and_gradients(
 
                 if rij_angstrom > 1e-6 {
                     let rij = rij_angstrom * 0.1; // in nm
-                    let exp_term = (-alpha * (rij / (s * r0_ab) - 1.0)).exp();
-                    let damp = 1.0 / (1.0 + exp_term);
 
-                    // E_disp_pair in kcal/mol
-                    let inv_r6 = 1.0 / rij.powi(6);
-                    let e_pair = (c6_ab * inv_r6) * damp / (1000.0 * 4.184);
+                    let (e_pair, de_d_rij_nm) = if model == DispersionModel::D3Bj {
+                        let s6 = 1.0;
+                        let s8 = 1.009;
+                        let a1 = 0.538;
+                        let a2_nm = 0.233;
+                        let r_cut6 = (a1 * r0_ab + a2_nm).powi(6);
+                        let r_cut8 = (a1 * r0_ab + a2_nm).powi(8);
+                        let c8_ab = 3.0 * c6_ab * r0_ab.powi(2);
+
+                        let term6 = s6 * c6_ab / (rij.powi(6) + r_cut6);
+                        let term8 = s8 * c8_ab / (rij.powi(8) + r_cut8);
+                        let ep = (term6 + term8) / (1000.0 * 4.184);
+
+                        // Derivative d(E_pair)/d(rij_nm):
+                        // Note E_pair is attractive (-ep), so dE/dr = + d(ep)/dr
+                        let deriv = (s6 * 6.0 * c6_ab * rij.powi(5) / (rij.powi(6) + r_cut6).powi(2)
+                            + s8 * 8.0 * c8_ab * rij.powi(7) / (rij.powi(8) + r_cut8).powi(2))
+                            / (1000.0 * 4.184);
+
+                        (ep, deriv)
+                    } else {
+                        let exp_term = (-alpha * (rij / (s * r0_ab) - 1.0)).exp();
+                        let damp = 1.0 / (1.0 + exp_term);
+                        let inv_r6 = 1.0 / rij.powi(6);
+                        let ep = (c6_ab * inv_r6) * damp / (1000.0 * 4.184);
+
+                        let d_damp_d_rij = (alpha / (s * r0_ab)) * damp * (1.0 - damp);
+                        let deriv = (cscale * c6_ab / (4184.0 * rij.powi(6)))
+                            * (6.0 / rij * damp - d_damp_d_rij);
+
+                        (ep, deriv)
+                    };
+
                     e_disp_tot -= e_pair;
-
-                    // Analytical derivative d(E_pair)/d(rij_angstrom):
-                    // E_pair(rij) = - cscale * (C6 / rij^6) * damp / (4184.0)
-                    // d(E_pair)/d(rij_nm) = cscale * (C6 / (4184.0 * rij^6)) * [ 6/rij * damp - alpha/(s*r0) * damp * (1 - damp) ]
-                    // Note rij = 0.1 * rij_angstrom, so d/d(rij_angstrom) = 0.1 * d/d(rij_nm)
-                    let d_damp_d_rij = (alpha / (s * r0_ab)) * damp * (1.0 - damp);
-                    let de_d_rij_nm = (cscale * c6_ab / (4184.0 * rij.powi(6)))
-                        * (6.0 / rij * damp - d_damp_d_rij);
                     let de_d_rij_angstrom = de_d_rij_nm * 0.1;
 
                     // Cartesian force projection on atom i: F_x = dE/dR * (dx / R)

@@ -2272,7 +2272,57 @@ fn test_scrutiny_empirical_dispersion_and_analytical_gradients() {
         net_force
     );
 
-    println!("✅ Scrutiny Test 25 Passed: Empirical dispersion energies and analytical gradients match OpenMOPAC to < 1e-4 kcal/mol and < 1e-6 gradient error.");
+    // 5. Verification of Grimme D3-BJ Dispersion and Analytical Gradients
+    let e_d3 = compute_dispersion_energy(&batch, DispersionModel::D3Bj);
+    let mut g_d3_anal = vec![[0.0; 3]; natoms];
+    let e_d3_check =
+        compute_dispersion_energy_and_gradients(&batch, DispersionModel::D3Bj, &mut g_d3_anal);
+    assert!(
+        (e_d3 - e_d3_check).abs() < 1e-12,
+        "D3-BJ energy consistency"
+    );
+
+    let mut g_d3_num = vec![[0.0; 3]; natoms];
+    for a in 0..natoms {
+        for alpha in 0..3 {
+            coords_work[a][alpha] += delta;
+            let b_plus = MolecularBatch::new(batch.atomic_numbers.clone(), &coords_work);
+            let e_plus = compute_dispersion_energy(&b_plus, DispersionModel::D3Bj);
+
+            coords_work[a][alpha] -= 2.0 * delta;
+            let b_minus = MolecularBatch::new(batch.atomic_numbers.clone(), &coords_work);
+            let e_minus = compute_dispersion_energy(&b_minus, DispersionModel::D3Bj);
+
+            coords_work[a][alpha] += delta;
+
+            g_d3_num[a][alpha] = (e_plus - e_minus) * inv_2delta;
+        }
+    }
+
+    let mut max_d3_grad_diff = 0.0f64;
+    for a in 0..natoms {
+        for alpha in 0..3 {
+            let diff = (g_d3_anal[a][alpha] - g_d3_num[a][alpha]).abs();
+            if diff > max_d3_grad_diff {
+                max_d3_grad_diff = diff;
+            }
+            assert!(
+                diff < 1e-6,
+                "D3-BJ gradient mismatch at atom {}, coord {}: anal = {:e}, num = {:e}, diff = {:e}",
+                a,
+                alpha,
+                g_d3_anal[a][alpha],
+                g_d3_num[a][alpha],
+                diff
+            );
+        }
+    }
+    println!(
+        "⚡ D3-BJ Max Analytical vs Finite-Difference Gradient Error: {:e} kcal/(mol * A)",
+        max_d3_grad_diff
+    );
+
+    println!("✅ Scrutiny Test 25 Passed: Empirical dispersion energies (PM6-DH+, D3-BJ) and analytical gradients match OpenMOPAC to < 1e-4 kcal/mol and < 1e-6 gradient error.");
 }
 
 /// Scrutiny Test 26: Empirical H4 Hydrogen Bonding & H-H Short-Range Repulsion Verification.

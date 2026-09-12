@@ -237,6 +237,42 @@ impl ParameterModel for Pm3Model {
                 num_gaussians: 2,
             }),
 
+            // Element 14: Silicon
+            14 => Some(SemiEmpiricalElementParams {
+                z: 14,
+                core_charge: 4.0,
+                uss: -26.7634830,
+                upp: -22.8136350,
+                udd: 0.0,
+                zs: 1.6350750,
+                zp: 1.3130880,
+                zd: 0.0,
+                betas: -2.8621450,
+                betap: -3.9331480,
+                betad: 0.0,
+                alpha: 2.1358090,
+                gss: 5.0471960,
+                gsp: 5.9490570,
+                gpp: 6.7593670,
+                gp2: 5.1612970,
+                hsp: 0.9198320,
+                gaussians: [
+                    GaussianCoreCorrection {
+                        a: -0.3906000,
+                        b: 6.0000540,
+                        c: 0.6322620,
+                    },
+                    GaussianCoreCorrection {
+                        a: 0.0572590,
+                        b: 6.0071830,
+                        c: 2.0199870,
+                    },
+                    GaussianCoreCorrection { a: 0.0, b: 0.0, c: 0.0 },
+                    GaussianCoreCorrection { a: 0.0, b: 0.0, c: 0.0 },
+                ],
+                num_gaussians: 2,
+            }),
+
             // Element 15: Phosphorus
             15 => Some(SemiEmpiricalElementParams {
                 z: 15,

@@ -156,6 +156,7 @@ pub fn run_rhf_scf_with_options(
     let mut converged = false;
     let mut iters_done = 0;
     let mut last_diel_ev: Option<f64> = None;
+    let mut current_eff_shift = 0.0f64;
 
     // 5. SCF Iteration Loop (ZERO dynamic heap allocations)
     for iter in 1..=options.max_iter {
@@ -190,9 +191,20 @@ pub fn run_rhf_scf_with_options(
             .diis
             .push_and_extrapolate(&mut ws.fock, &ws.density, &mut ws.tmp2);
 
-        // Apply Saunders-Hillier level shifting if enabled (MOPAC iter.F90 lines 450-456)
-        if options.level_shift_ev > 0.0 && iter > 2 {
-            apply_level_shift(&mut ws.fock, &ws.density, options.level_shift_ev);
+        // Determine effective Saunders-Hillier level shift:
+        // 1. Explicit level_shift_ev requested by caller
+        // 2. Automatic adaptive level shift if calculation reaches iter > 25 (MOPAC iter.F90 lines 450-456)
+        let eff_shift = if options.level_shift_ev > 0.0 && iter > 2 {
+            options.level_shift_ev
+        } else if options.level_shift_ev == 0.0 && iter > 25 {
+            2.0 // Automatic level shift to break limit-cycle density oscillation
+        } else {
+            0.0
+        };
+        current_eff_shift = eff_shift;
+
+        if eff_shift > 0.0 {
+            apply_level_shift(&mut ws.fock, &ws.density, eff_shift);
         }
 
         // Diagonalize Fock matrix: F C = C epsilon
@@ -222,7 +234,11 @@ pub fn run_rhf_scf_with_options(
             ws.density.data.copy_from_slice(&ws.tmp1.data);
         } else {
             // Linear damping fallback (e.g. iteration 1 or if DIIS reset)
-            let d = options.damping;
+            let d = if iter > 25 && (options.damping - 0.5).abs() < 1e-4 {
+                0.3 // Adaptive damping
+            } else {
+                options.damping
+            };
             for i in 0..ws.norbs {
                 for j in 0..ws.norbs {
                     let p_new = ws.tmp1.get(i, j);
@@ -235,8 +251,8 @@ pub fn run_rhf_scf_with_options(
 
     let homo = ws.eigenvalues[nocc - 1];
     let lumo = if nocc < ws.norbs {
-        if options.level_shift_ev > 0.0 && iters_done > 2 {
-            ws.eigenvalues[nocc] - options.level_shift_ev
+        if current_eff_shift > 0.0 {
+            ws.eigenvalues[nocc] - current_eff_shift
         } else {
             ws.eigenvalues[nocc]
         }

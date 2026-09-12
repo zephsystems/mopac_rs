@@ -153,6 +153,33 @@ impl ParameterModel for MndoModel {
                 num_gaussians: 0,
             }),
 
+            // Element 14: Silicon
+            14 => Some(SemiEmpiricalElementParams {
+                z: 14,
+                core_charge: 4.0,
+                uss: -37.0375330,
+                upp: -27.7696780,
+                udd: 0.0,
+                zs: 1.3159860,
+                zp: 1.7099430,
+                zd: 0.0,
+                betas: -9.0868040,
+                betap: -1.0758270,
+                betad: 0.0,
+                alpha: 2.2053160,
+                gss: 9.8200000,
+                gsp: 8.3600000,
+                gpp: 7.3100000,
+                gp2: 6.5400000,
+                hsp: 1.3200000,
+                gaussians: [GaussianCoreCorrection {
+                    a: 0.0,
+                    b: 0.0,
+                    c: 0.0,
+                }; 4],
+                num_gaussians: 0,
+            }),
+
             // Element 15: Phosphorus
             15 => Some(SemiEmpiricalElementParams {
                 z: 15,

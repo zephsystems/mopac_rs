@@ -8,7 +8,7 @@
       "PM3",
       "MNDO"
     ],
-    "timestamp": 1789200851.783729
+    "timestamp": 1789201606.8441267
   },
   "by_method": {
     "PM6": {
@@ -31,8 +31,8 @@
     },
     "PM3": {
       "attempted": 71,
-      "converged": 63,
-      "failed": 4,
+      "converged": 62,
+      "failed": 5,
       "unsupported": 4
     },
     "MNDO": {
@@ -73,11 +73,11 @@
     },
     "Aromatic amine": {
       "total": 1,
-      "converged_pm6": 0
+      "converged_pm6": 1
     },
     "Pharmaceutical": {
       "total": 4,
-      "converged_pm6": 4
+      "converged_pm6": 3
     },
     "Aromatic": {
       "total": 2,
@@ -227,13 +227,6 @@
   "failures": [
     {
       "compound": "aniline",
-      "method": "PM6",
-      "category": "Aromatic amine",
-      "type": "SCF_NON_CONVERGENCE",
-      "detail": "Reached max_iter (60) without satisfying density/energy tol"
-    },
-    {
-      "compound": "aniline",
       "method": "PM3",
       "category": "Aromatic amine",
       "type": "SCF_NON_CONVERGENCE",
@@ -276,6 +269,13 @@
     },
     {
       "compound": "ibuprofen",
+      "method": "PM6",
+      "category": "Pharmaceutical",
+      "type": "SCF_NON_CONVERGENCE",
+      "detail": "Reached max_iter (60) without satisfying density/energy tol"
+    },
+    {
+      "compound": "ibuprofen",
       "method": "AM1",
       "category": "Pharmaceutical",
       "type": "SCF_NON_CONVERGENCE",
@@ -312,6 +312,13 @@
     {
       "compound": "naphthalene",
       "method": "RM1",
+      "category": "Polyaromatic",
+      "type": "SCF_NON_CONVERGENCE",
+      "detail": "Reached max_iter (60) without satisfying density/energy tol"
+    },
+    {
+      "compound": "naphthalene",
+      "method": "PM3",
       "category": "Polyaromatic",
       "type": "SCF_NON_CONVERGENCE",
       "detail": "Reached max_iter (60) without satisfying density/energy tol"
@@ -450,7 +457,7 @@
         "PM6": {
           "status": "CONVERGED",
           "iterations": 15,
-          "time_ms": 3.02,
+          "time_ms": 2.59,
           "total_energy_ev": -595.918293,
           "heat_of_formation_kcal": -160.477,
           "dipole_debye": 3.086,
@@ -460,7 +467,7 @@
         "AM1": {
           "status": "CONVERGED",
           "iterations": 18,
-          "time_ms": 3.69,
+          "time_ms": 2.7,
           "total_energy_ev": -642.259302,
           "heat_of_formation_kcal": -288.288,
           "dipole_debye": 2.768,
@@ -470,7 +477,7 @@
         "RM1": {
           "status": "CONVERGED",
           "iterations": 18,
-          "time_ms": 4.17,
+          "time_ms": 2.66,
           "total_energy_ev": -632.248126,
           "heat_of_formation_kcal": -234.97,
           "dipole_debye": 2.458,
@@ -480,7 +487,7 @@
         "PM3": {
           "status": "CONVERGED",
           "iterations": 21,
-          "time_ms": 4.58,
+          "time_ms": 2.82,
           "total_energy_ev": -602.145565,
           "heat_of_formation_kcal": -267.712,
           "dipole_debye": 2.909,
@@ -490,7 +497,7 @@
         "MNDO": {
           "status": "CONVERGED",
           "iterations": 19,
-          "time_ms": 3.27,
+          "time_ms": 2.67,
           "total_energy_ev": -644.714422,
           "heat_of_formation_kcal": -271.618,
           "dipole_debye": 2.255,
@@ -501,7 +508,7 @@
       "features": {
         "COSMO": {
           "converged": true,
-          "time_ms": 4.0,
+          "time_ms": 4.06,
           "solv_energy_ev": -596.192674,
           "diel_stabilization_kcal": -6.327,
           "gas_dipole": 3.086,
@@ -528,7 +535,7 @@
         "PM6": {
           "status": "CONVERGED",
           "iterations": 18,
-          "time_ms": 6.21,
+          "time_ms": 5.68,
           "total_energy_ev": -805.752319,
           "heat_of_formation_kcal": -540.426,
           "dipole_debye": 4.278,
@@ -538,7 +545,7 @@
         "AM1": {
           "status": "CONVERGED",
           "iterations": 19,
-          "time_ms": 6.6,
+          "time_ms": 5.54,
           "total_energy_ev": -879.38145,
           "heat_of_formation_kcal": -668.175,
           "dipole_debye": 4.021,
@@ -548,7 +555,7 @@
         "RM1": {
           "status": "CONVERGED",
           "iterations": 19,
-          "time_ms": 6.41,
+          "time_ms": 7.02,
           "total_energy_ev": -875.880378,
           "heat_of_formation_kcal": -682.908,
           "dipole_debye": 3.862,
@@ -558,7 +565,7 @@
         "PM3": {
           "status": "CONVERGED",
           "iterations": 21,
-          "time_ms": 6.89,
+          "time_ms": 6.24,
           "total_energy_ev": -792.332211,
           "heat_of_formation_kcal": -552.281,
           "dipole_debye": 2.999,
@@ -568,7 +575,7 @@
         "MNDO": {
           "status": "CONVERGED",
           "iterations": 20,
-          "time_ms": 7.85,
+          "time_ms": 5.98,
           "total_energy_ev": -882.277078,
           "heat_of_formation_kcal": -638.988,
           "dipole_debye": 3.263,
@@ -579,7 +586,7 @@
       "features": {
         "COSMO": {
           "converged": true,
-          "time_ms": 12.72,
+          "time_ms": 14.48,
           "solv_energy_ev": -806.281073,
           "diel_stabilization_kcal": -12.193,
           "gas_dipole": 4.278,
@@ -605,7 +612,7 @@
         "PM6": {
           "status": "CONVERGED",
           "iterations": 22,
-          "time_ms": 5.77,
+          "time_ms": 5.93,
           "total_energy_ev": -895.878991,
           "heat_of_formation_kcal": -396.865,
           "dipole_debye": 1.878,
@@ -615,7 +622,7 @@
         "AM1": {
           "status": "CONVERGED",
           "iterations": 17,
-          "time_ms": 4.86,
+          "time_ms": 4.62,
           "total_energy_ev": -977.650823,
           "heat_of_formation_kcal": -673.613,
           "dipole_debye": 1.778,
@@ -625,7 +632,7 @@
         "RM1": {
           "status": "CONVERGED",
           "iterations": 18,
-          "time_ms": 4.75,
+          "time_ms": 4.79,
           "total_energy_ev": -964.344097,
           "heat_of_formation_kcal": -637.904,
           "dipole_debye": 1.639,
@@ -635,7 +642,7 @@
         "PM3": {
           "status": "CONVERGED",
           "iterations": 18,
-          "time_ms": 4.94,
+          "time_ms": 5.18,
           "total_energy_ev": -905.149619,
           "heat_of_formation_kcal": -523.203,
           "dipole_debye": 1.331,
@@ -656,7 +663,7 @@
       "features": {
         "COSMO": {
           "converged": true,
-          "time_ms": 7.46,
+          "time_ms": 6.88,
           "solv_energy_ev": -896.266801,
           "diel_stabilization_kcal": -8.943,
           "gas_dipole": 1.878,
@@ -682,7 +689,7 @@
         "PM6": {
           "status": "CONVERGED",
           "iterations": 18,
-          "time_ms": 6.97,
+          "time_ms": 6.86,
           "total_energy_ev": -754.643103,
           "heat_of_formation_kcal": -370.331,
           "dipole_debye": 7.239,
@@ -692,7 +699,7 @@
         "AM1": {
           "status": "CONVERGED",
           "iterations": 17,
-          "time_ms": 6.7,
+          "time_ms": 6.59,
           "total_energy_ev": -813.268774,
           "heat_of_formation_kcal": -645.072,
           "dipole_debye": 6.111,
@@ -702,7 +709,7 @@
         "RM1": {
           "status": "CONVERGED",
           "iterations": 19,
-          "time_ms": 7.16,
+          "time_ms": 7.2,
           "total_energy_ev": -800.583141,
           "heat_of_formation_kcal": -572.048,
           "dipole_debye": 4.353,
@@ -712,7 +719,7 @@
         "PM3": {
           "status": "CONVERGED",
           "iterations": 16,
-          "time_ms": 6.64,
+          "time_ms": 6.57,
           "total_energy_ev": -763.917152,
           "heat_of_formation_kcal": -555.181,
           "dipole_debye": 5.042,
@@ -722,7 +729,7 @@
         "MNDO": {
           "status": "CONVERGED",
           "iterations": 20,
-          "time_ms": 7.44,
+          "time_ms": 7.24,
           "total_energy_ev": -815.513152,
           "heat_of_formation_kcal": -607.296,
           "dipole_debye": 3.631,
@@ -733,7 +740,7 @@
       "features": {
         "COSMO": {
           "converged": true,
-          "time_ms": 12.48,
+          "time_ms": 17.5,
           "solv_energy_ev": -755.482427,
           "diel_stabilization_kcal": -19.355,
           "gas_dipole": 7.239,
@@ -759,7 +766,7 @@
         "PM6": {
           "status": "CONVERGED",
           "iterations": 12,
-          "time_ms": 1.63,
+          "time_ms": 1.56,
           "total_energy_ev": -464.840983,
           "heat_of_formation_kcal": 17.381,
           "dipole_debye": 3.666,
@@ -769,7 +776,7 @@
         "AM1": {
           "status": "CONVERGED",
           "iterations": 14,
-          "time_ms": 1.8,
+          "time_ms": 1.69,
           "total_energy_ev": -503.370944,
           "heat_of_formation_kcal": 24.026,
           "dipole_debye": 3.646,
@@ -779,7 +786,7 @@
         "RM1": {
           "status": "CONVERGED",
           "iterations": 12,
-          "time_ms": 1.69,
+          "time_ms": 1.72,
           "total_energy_ev": -502.423705,
           "heat_of_formation_kcal": 17.984,
           "dipole_debye": 3.144,
@@ -789,7 +796,7 @@
         "PM3": {
           "status": "CONVERGED",
           "iterations": 11,
-          "time_ms": 1.59,
+          "time_ms": 1.49,
           "total_energy_ev": -444.527066,
           "heat_of_formation_kcal": 29.188,
           "dipole_debye": 3.329,
@@ -799,7 +806,7 @@
         "MNDO": {
           "status": "CONVERGED",
           "iterations": 15,
-          "time_ms": 1.74,
+          "time_ms": 1.73,
           "total_energy_ev": -504.735985,
           "heat_of_formation_kcal": 24.201,
           "dipole_debye": 2.612,
@@ -810,7 +817,7 @@
       "features": {
         "COSMO": {
           "converged": true,
-          "time_ms": 2.8,
+          "time_ms": 2.87,
           "solv_energy_ev": -465.101276,
           "diel_stabilization_kcal": -6.002,
           "gas_dipole": 3.666,
@@ -835,7 +842,7 @@
         "PM6": {
           "status": "CONVERGED",
           "iterations": 8,
-          "time_ms": 0.43,
+          "time_ms": 0.39,
           "total_energy_ev": -271.201984,
           "heat_of_formation_kcal": 23.863,
           "dipole_debye": 0.0,
@@ -865,7 +872,7 @@
         "PM3": {
           "status": "CONVERGED",
           "iterations": 8,
-          "time_ms": 0.36,
+          "time_ms": 0.4,
           "total_energy_ev": -265.715472,
           "heat_of_formation_kcal": 51.441,
           "dipole_debye": 0.0,
@@ -886,7 +893,7 @@
       "features": {
         "COSMO": {
           "converged": true,
-          "time_ms": 0.91,
+          "time_ms": 0.95,
           "solv_energy_ev": -271.231916,
           "diel_stabilization_kcal": -0.69,
           "gas_dipole": 0.0,
@@ -913,7 +920,7 @@
         "PM6": {
           "status": "CONVERGED",
           "iterations": 20,
-          "time_ms": 19.83,
+          "time_ms": 19.35,
           "total_energy_ev": -1282.894143,
           "heat_of_formation_kcal": -1412.28,
           "dipole_debye": 8.062,
@@ -923,7 +930,7 @@
         "AM1": {
           "status": "CONVERGED",
           "iterations": 20,
-          "time_ms": 20.18,
+          "time_ms": 19.35,
           "total_energy_ev": -1405.486014,
           "heat_of_formation_kcal": -1864.66,
           "dipole_debye": 4.871,
@@ -933,7 +940,7 @@
         "RM1": {
           "status": "CONVERGED",
           "iterations": 21,
-          "time_ms": 20.66,
+          "time_ms": 20.65,
           "total_energy_ev": -1392.935154,
           "heat_of_formation_kcal": -1806.274,
           "dipole_debye": 4.167,
@@ -943,7 +950,7 @@
         "PM3": {
           "status": "CONVERGED",
           "iterations": 22,
-          "time_ms": 26.19,
+          "time_ms": 25.01,
           "total_energy_ev": -1280.704321,
           "heat_of_formation_kcal": -1639.388,
           "dipole_debye": 4.229,
@@ -953,7 +960,7 @@
         "MNDO": {
           "status": "CONVERGED",
           "iterations": 20,
-          "time_ms": 19.41,
+          "time_ms": 19.22,
           "total_energy_ev": -1408.058217,
           "heat_of_formation_kcal": -1770.974,
           "dipole_debye": 3.847,
@@ -964,7 +971,7 @@
       "features": {
         "COSMO": {
           "converged": true,
-          "time_ms": 29.41,
+          "time_ms": 27.45,
           "solv_energy_ev": -1284.449899,
           "diel_stabilization_kcal": -35.877,
           "gas_dipole": 8.062,
@@ -989,7 +996,7 @@
         "PM6": {
           "status": "CONVERGED",
           "iterations": 8,
-          "time_ms": 0.27,
+          "time_ms": 0.22,
           "total_energy_ev": -222.457403,
           "heat_of_formation_kcal": -48.124,
           "dipole_debye": 2.2,
@@ -999,7 +1006,7 @@
         "AM1": {
           "status": "CONVERGED",
           "iterations": 9,
-          "time_ms": 0.22,
+          "time_ms": 0.23,
           "total_energy_ev": -250.497659,
           "heat_of_formation_kcal": -58.514,
           "dipole_debye": 2.23,
@@ -1029,7 +1036,7 @@
         "MNDO": {
           "status": "CONVERGED",
           "iterations": 9,
-          "time_ms": 0.24,
+          "time_ms": 0.22,
           "total_energy_ev": -251.635348,
           "heat_of_formation_kcal": -38.56,
           "dipole_debye": 1.702,
@@ -1064,15 +1071,20 @@
       ],
       "methods": {
         "PM6": {
-          "status": "NOT_CONVERGED",
-          "iterations": 60,
-          "time_ms": 65.88
+          "status": "CONVERGED",
+          "iterations": 57,
+          "time_ms": 60.24,
+          "total_energy_ev": -1087.037917,
+          "heat_of_formation_kcal": -1774.963,
+          "dipole_debye": 3.785,
+          "max_grad_ev_a": 21.2225,
+          "homo_lumo_gap_ev": 5.272
         },
         "AM1": {
           "status": "CONVERGED",
-          "iterations": 34,
-          "time_ms": 38.26,
-          "total_energy_ev": -1164.30783,
+          "iterations": 39,
+          "time_ms": 41.1,
+          "total_energy_ev": -1164.307834,
           "heat_of_formation_kcal": -2130.028,
           "dipole_debye": 1.412,
           "max_grad_ev_a": 29.7173,
@@ -1080,9 +1092,9 @@
         },
         "RM1": {
           "status": "CONVERGED",
-          "iterations": 32,
-          "time_ms": 42.82,
-          "total_energy_ev": -1145.956233,
+          "iterations": 34,
+          "time_ms": 36.78,
+          "total_energy_ev": -1145.956236,
           "heat_of_formation_kcal": -1954.64,
           "dipole_debye": 4.346,
           "max_grad_ev_a": 27.531,
@@ -1091,12 +1103,12 @@
         "PM3": {
           "status": "NOT_CONVERGED",
           "iterations": 60,
-          "time_ms": 60.36
+          "time_ms": 61.76
         },
         "MNDO": {
           "status": "CONVERGED",
           "iterations": 23,
-          "time_ms": 29.4,
+          "time_ms": 28.46,
           "total_energy_ev": -1157.206165,
           "heat_of_formation_kcal": -1916.65,
           "dipole_debye": 2.589,
@@ -1104,7 +1116,21 @@
           "homo_lumo_gap_ev": 5.098
         }
       },
-      "features": {}
+      "features": {
+        "COSMO": {
+          "converged": true,
+          "time_ms": 45.42,
+          "solv_energy_ev": -1088.104019,
+          "diel_stabilization_kcal": -24.585,
+          "gas_dipole": 3.785,
+          "solv_dipole": 9.851
+        },
+        "Dispersion_PM6_DH+": {
+          "converged": true,
+          "heat_of_formation_kcal": -1776.053,
+          "disp_delta_kcal": -1.09
+        }
+      }
     },
     "aspirin": {
       "name": "aspirin",
@@ -1119,8 +1145,8 @@
         "PM6": {
           "status": "CONVERGED",
           "iterations": 26,
-          "time_ms": 147.12,
-          "total_energy_ev": -2520.702943,
+          "time_ms": 145.65,
+          "total_energy_ev": -2520.702942,
           "heat_of_formation_kcal": -3466.093,
           "dipole_debye": 8.31,
           "max_grad_ev_a": 24.2646,
@@ -1129,8 +1155,8 @@
         "AM1": {
           "status": "CONVERGED",
           "iterations": 28,
-          "time_ms": 146.92,
-          "total_energy_ev": -2737.024451,
+          "time_ms": 145.46,
+          "total_energy_ev": -2737.024454,
           "heat_of_formation_kcal": -4589.341,
           "dipole_debye": 3.944,
           "max_grad_ev_a": 45.4954,
@@ -1139,8 +1165,8 @@
         "RM1": {
           "status": "CONVERGED",
           "iterations": 28,
-          "time_ms": 144.22,
-          "total_energy_ev": -2690.078688,
+          "time_ms": 150.83,
+          "total_energy_ev": -2690.078686,
           "heat_of_formation_kcal": -4389.012,
           "dipole_debye": 5.119,
           "max_grad_ev_a": 42.9767,
@@ -1149,8 +1175,8 @@
         "PM3": {
           "status": "CONVERGED",
           "iterations": 29,
-          "time_ms": 155.93,
-          "total_energy_ev": -2524.480099,
+          "time_ms": 148.27,
+          "total_energy_ev": -2524.480094,
           "heat_of_formation_kcal": -3836.244,
           "dipole_debye": 4.456,
           "max_grad_ev_a": 34.8385,
@@ -1159,8 +1185,8 @@
         "MNDO": {
           "status": "CONVERGED",
           "iterations": 26,
-          "time_ms": 137.0,
-          "total_energy_ev": -2736.202784,
+          "time_ms": 144.2,
+          "total_energy_ev": -2736.202786,
           "heat_of_formation_kcal": -4378.574,
           "dipole_debye": 3.37,
           "max_grad_ev_a": 47.6378,
@@ -1170,7 +1196,7 @@
       "features": {
         "COSMO": {
           "converged": true,
-          "time_ms": 222.3,
+          "time_ms": 198.27,
           "solv_energy_ev": -2522.598008,
           "diel_stabilization_kcal": -43.701,
           "gas_dipole": 8.31,
@@ -1195,7 +1221,7 @@
         "PM6": {
           "status": "CONVERGED",
           "iterations": 15,
-          "time_ms": 14.73,
+          "time_ms": 15.08,
           "total_energy_ev": -882.116269,
           "heat_of_formation_kcal": -1508.297,
           "dipole_debye": 0.001,
@@ -1205,7 +1231,7 @@
         "AM1": {
           "status": "CONVERGED",
           "iterations": 16,
-          "time_ms": 15.78,
+          "time_ms": 16.04,
           "total_energy_ev": -928.433425,
           "heat_of_formation_kcal": -1778.914,
           "dipole_debye": 0.001,
@@ -1215,7 +1241,7 @@
         "RM1": {
           "status": "CONVERGED",
           "iterations": 17,
-          "time_ms": 16.13,
+          "time_ms": 20.09,
           "total_energy_ev": -908.139051,
           "heat_of_formation_kcal": -1640.8,
           "dipole_debye": 0.001,
@@ -1225,7 +1251,7 @@
         "PM3": {
           "status": "CONVERGED",
           "iterations": 19,
-          "time_ms": 17.15,
+          "time_ms": 16.32,
           "total_energy_ev": -871.045573,
           "heat_of_formation_kcal": -1549.832,
           "dipole_debye": 0.001,
@@ -1235,7 +1261,7 @@
         "MNDO": {
           "status": "CONVERGED",
           "iterations": 18,
-          "time_ms": 20.64,
+          "time_ms": 16.27,
           "total_energy_ev": -920.831859,
           "heat_of_formation_kcal": -1576.684,
           "dipole_debye": 0.001,
@@ -1246,7 +1272,7 @@
       "features": {
         "COSMO": {
           "converged": true,
-          "time_ms": 27.39,
+          "time_ms": 26.91,
           "solv_energy_ev": -882.980338,
           "diel_stabilization_kcal": -19.926,
           "gas_dipole": 0.001,
@@ -1272,7 +1298,7 @@
         "PM6": {
           "status": "CONVERGED",
           "iterations": 22,
-          "time_ms": 23.51,
+          "time_ms": 30.73,
           "total_energy_ev": -1097.384608,
           "heat_of_formation_kcal": -1523.383,
           "dipole_debye": 2.322,
@@ -1281,9 +1307,9 @@
         },
         "AM1": {
           "status": "CONVERGED",
-          "iterations": 32,
-          "time_ms": 32.01,
-          "total_energy_ev": -1273.136964,
+          "iterations": 38,
+          "time_ms": 43.7,
+          "total_energy_ev": -1273.136965,
           "heat_of_formation_kcal": -1891.578,
           "dipole_debye": 1.717,
           "max_grad_ev_a": 26.9468,
@@ -1292,7 +1318,7 @@
         "RM1": {
           "status": "CONVERGED",
           "iterations": 21,
-          "time_ms": 23.02,
+          "time_ms": 22.9,
           "total_energy_ev": -1257.843733,
           "heat_of_formation_kcal": -1771.063,
           "dipole_debye": 0.899,
@@ -1301,8 +1327,8 @@
         },
         "PM3": {
           "status": "CONVERGED",
-          "iterations": 32,
-          "time_ms": 28.97,
+          "iterations": 38,
+          "time_ms": 38.62,
           "total_energy_ev": -1215.66247,
           "heat_of_formation_kcal": -1693.963,
           "dipole_debye": 0.879,
@@ -1311,9 +1337,9 @@
         },
         "MNDO": {
           "status": "CONVERGED",
-          "iterations": 38,
-          "time_ms": 32.36,
-          "total_energy_ev": -1258.976465,
+          "iterations": 46,
+          "time_ms": 38.82,
+          "total_energy_ev": -1258.976466,
           "heat_of_formation_kcal": -1679.751,
           "dipole_debye": 2.42,
           "max_grad_ev_a": 24.0931,
@@ -1323,7 +1349,7 @@
       "features": {
         "COSMO": {
           "converged": true,
-          "time_ms": 48.36,
+          "time_ms": 39.98,
           "solv_energy_ev": -1098.763126,
           "diel_stabilization_kcal": -31.789,
           "gas_dipole": 2.322,
@@ -1349,7 +1375,7 @@
         "PM6": {
           "status": "CONVERGED",
           "iterations": 21,
-          "time_ms": 0.95,
+          "time_ms": 0.94,
           "total_energy_ev": -386.70089,
           "heat_of_formation_kcal": 104.939,
           "dipole_debye": 3.019,
@@ -1359,7 +1385,7 @@
         "AM1": {
           "status": "CONVERGED",
           "iterations": 11,
-          "time_ms": 0.94,
+          "time_ms": 0.7,
           "total_energy_ev": -518.949214,
           "heat_of_formation_kcal": 85.743,
           "dipole_debye": 2.463,
@@ -1369,7 +1395,7 @@
         "RM1": {
           "status": "CONVERGED",
           "iterations": 12,
-          "time_ms": 0.86,
+          "time_ms": 0.72,
           "total_energy_ev": -523.278498,
           "heat_of_formation_kcal": 67.692,
           "dipole_debye": 3.185,
@@ -1379,7 +1405,7 @@
         "PM3": {
           "status": "CONVERGED",
           "iterations": 12,
-          "time_ms": 0.82,
+          "time_ms": 0.71,
           "total_energy_ev": -515.207888,
           "heat_of_formation_kcal": 72.18,
           "dipole_debye": 2.8,
@@ -1389,7 +1415,7 @@
         "MNDO": {
           "status": "CONVERGED",
           "iterations": 10,
-          "time_ms": 0.77,
+          "time_ms": 0.66,
           "total_energy_ev": -514.771802,
           "heat_of_formation_kcal": 80.181,
           "dipole_debye": 3.464,
@@ -1400,7 +1426,7 @@
       "features": {
         "COSMO": {
           "converged": true,
-          "time_ms": 1.51,
+          "time_ms": 1.4,
           "solv_energy_ev": -386.932951,
           "diel_stabilization_kcal": -5.351,
           "gas_dipole": 3.019,
@@ -1427,8 +1453,8 @@
         "PM6": {
           "status": "CONVERGED",
           "iterations": 28,
-          "time_ms": 198.69,
-          "total_energy_ev": -2663.743985,
+          "time_ms": 202.73,
+          "total_energy_ev": -2663.743987,
           "heat_of_formation_kcal": -5741.109,
           "dipole_debye": 5.021,
           "max_grad_ev_a": 32.7106,
@@ -1437,18 +1463,18 @@
         "AM1": {
           "status": "CONVERGED",
           "iterations": 44,
-          "time_ms": 279.86,
-          "total_energy_ev": -2907.562621,
-          "heat_of_formation_kcal": -6453.69,
+          "time_ms": 268.94,
+          "total_energy_ev": -2907.562618,
+          "heat_of_formation_kcal": -6453.689,
           "dipole_debye": 3.67,
           "max_grad_ev_a": 39.8077,
           "homo_lumo_gap_ev": 3.287
         },
         "RM1": {
           "status": "CONVERGED",
-          "iterations": 29,
-          "time_ms": 217.86,
-          "total_energy_ev": -2891.445003,
+          "iterations": 30,
+          "time_ms": 211.73,
+          "total_energy_ev": -2891.445001,
           "heat_of_formation_kcal": -6406.789,
           "dipole_debye": 3.145,
           "max_grad_ev_a": 38.2008,
@@ -1456,9 +1482,9 @@
         },
         "PM3": {
           "status": "CONVERGED",
-          "iterations": 37,
-          "time_ms": 245.35,
-          "total_energy_ev": -2588.669106,
+          "iterations": 42,
+          "time_ms": 266.32,
+          "total_energy_ev": -2588.669111,
           "heat_of_formation_kcal": -5818.488,
           "dipole_debye": 4.204,
           "max_grad_ev_a": 32.9802,
@@ -1466,9 +1492,9 @@
         },
         "MNDO": {
           "status": "CONVERGED",
-          "iterations": 27,
-          "time_ms": 191.68,
-          "total_energy_ev": -2900.072986,
+          "iterations": 26,
+          "time_ms": 195.6,
+          "total_energy_ev": -2900.072987,
           "heat_of_formation_kcal": -6096.287,
           "dipole_debye": 3.807,
           "max_grad_ev_a": 35.0294,
@@ -1478,9 +1504,9 @@
       "features": {
         "COSMO": {
           "converged": true,
-          "time_ms": 278.48,
+          "time_ms": 268.79,
           "solv_energy_ev": -2666.442556,
-          "diel_stabilization_kcal": -62.231,
+          "diel_stabilization_kcal": -62.23,
           "gas_dipole": 5.021,
           "solv_dipole": 16.888
         },
@@ -1503,7 +1529,7 @@
         "PM6": {
           "status": "CONVERGED",
           "iterations": 9,
-          "time_ms": 0.37,
+          "time_ms": 0.41,
           "total_energy_ev": -705.589724,
           "heat_of_formation_kcal": -82.044,
           "dipole_debye": 0.0,
@@ -1513,7 +1539,7 @@
         "AM1": {
           "status": "CONVERGED",
           "iterations": 8,
-          "time_ms": 0.35,
+          "time_ms": 0.4,
           "total_energy_ev": -768.843565,
           "heat_of_formation_kcal": -75.011,
           "dipole_debye": 0.0,
@@ -1523,7 +1549,7 @@
         "RM1": {
           "status": "CONVERGED",
           "iterations": 8,
-          "time_ms": 0.32,
+          "time_ms": 0.41,
           "total_energy_ev": -757.753919,
           "heat_of_formation_kcal": -74.484,
           "dipole_debye": 0.0,
@@ -1533,7 +1559,7 @@
         "PM3": {
           "status": "CONVERGED",
           "iterations": 8,
-          "time_ms": 0.31,
+          "time_ms": 0.4,
           "total_energy_ev": -705.230202,
           "heat_of_formation_kcal": -63.184,
           "dipole_debye": 0.0,
@@ -1543,7 +1569,7 @@
         "MNDO": {
           "status": "CONVERGED",
           "iterations": 8,
-          "time_ms": 0.33,
+          "time_ms": 0.39,
           "total_energy_ev": -771.791986,
           "heat_of_formation_kcal": -68.684,
           "dipole_debye": 0.0,
@@ -1554,7 +1580,7 @@
       "features": {
         "COSMO": {
           "converged": true,
-          "time_ms": 1.12,
+          "time_ms": 1.55,
           "solv_energy_ev": -705.721592,
           "diel_stabilization_kcal": -3.041,
           "gas_dipole": 0.0,
@@ -1579,7 +1605,7 @@
         "PM6": {
           "status": "CONVERGED",
           "iterations": 11,
-          "time_ms": 2.63,
+          "time_ms": 4.56,
           "total_energy_ev": -1213.028331,
           "heat_of_formation_kcal": -1700.721,
           "dipole_debye": 1.772,
@@ -1589,7 +1615,7 @@
         "AM1": {
           "status": "CONVERGED",
           "iterations": 11,
-          "time_ms": 2.77,
+          "time_ms": 4.63,
           "total_energy_ev": -1645.988636,
           "heat_of_formation_kcal": -552.072,
           "dipole_debye": 2.906,
@@ -1599,7 +1625,7 @@
         "RM1": {
           "status": "CONVERGED",
           "iterations": 11,
-          "time_ms": 2.64,
+          "time_ms": 4.29,
           "total_energy_ev": -1684.374605,
           "heat_of_formation_kcal": -557.786,
           "dipole_debye": 2.34,
@@ -1609,7 +1635,7 @@
         "PM3": {
           "status": "CONVERGED",
           "iterations": 11,
-          "time_ms": 2.64,
+          "time_ms": 3.72,
           "total_energy_ev": -1437.32178,
           "heat_of_formation_kcal": -1219.282,
           "dipole_debye": 2.713,
@@ -1619,7 +1645,7 @@
         "MNDO": {
           "status": "CONVERGED",
           "iterations": 11,
-          "time_ms": 2.62,
+          "time_ms": 2.82,
           "total_energy_ev": -1572.321517,
           "heat_of_formation_kcal": -620.588,
           "dipole_debye": 3.254,
@@ -1630,7 +1656,7 @@
       "features": {
         "COSMO": {
           "converged": true,
-          "time_ms": 5.03,
+          "time_ms": 4.94,
           "solv_energy_ev": -1213.139222,
           "diel_stabilization_kcal": -2.557,
           "gas_dipole": 1.772,
@@ -1656,7 +1682,7 @@
         "PM6": {
           "status": "CONVERGED",
           "iterations": 23,
-          "time_ms": 28.25,
+          "time_ms": 23.81,
           "total_energy_ev": -1127.480195,
           "heat_of_formation_kcal": -1616.768,
           "dipole_debye": 0.034,
@@ -1666,7 +1692,7 @@
         "AM1": {
           "status": "CONVERGED",
           "iterations": 23,
-          "time_ms": 23.01,
+          "time_ms": 23.35,
           "total_energy_ev": -1296.638247,
           "heat_of_formation_kcal": -1972.739,
           "dipole_debye": 2.226,
@@ -1676,7 +1702,7 @@
         "RM1": {
           "status": "CONVERGED",
           "iterations": 21,
-          "time_ms": 21.85,
+          "time_ms": 25.71,
           "total_energy_ev": -1286.405244,
           "heat_of_formation_kcal": -1842.788,
           "dipole_debye": 0.866,
@@ -1685,9 +1711,9 @@
         },
         "PM3": {
           "status": "CONVERGED",
-          "iterations": 33,
-          "time_ms": 29.3,
-          "total_energy_ev": -1181.721026,
+          "iterations": 35,
+          "time_ms": 32.55,
+          "total_energy_ev": -1181.721025,
           "heat_of_formation_kcal": -1770.199,
           "dipole_debye": 1.172,
           "max_grad_ev_a": 29.9778,
@@ -1696,7 +1722,7 @@
         "MNDO": {
           "status": "CONVERGED",
           "iterations": 23,
-          "time_ms": 28.2,
+          "time_ms": 23.03,
           "total_energy_ev": -1268.92752,
           "heat_of_formation_kcal": -1758.551,
           "dipole_debye": 2.556,
@@ -1707,11 +1733,11 @@
       "features": {
         "COSMO": {
           "converged": false,
-          "time_ms": 75.5,
-          "solv_energy_ev": -1127.086054,
-          "diel_stabilization_kcal": 9.089,
+          "time_ms": 79.73,
+          "solv_energy_ev": -1127.374992,
+          "diel_stabilization_kcal": 2.426,
           "gas_dipole": 0.034,
-          "solv_dipole": 11.825
+          "solv_dipole": 12.862
         },
         "Dispersion_PM6_DH+": {
           "converged": true,
@@ -1733,7 +1759,7 @@
         "PM6": {
           "status": "CONVERGED",
           "iterations": 14,
-          "time_ms": 2.01,
+          "time_ms": 2.02,
           "total_energy_ev": -927.297377,
           "heat_of_formation_kcal": -661.365,
           "dipole_debye": 1.764,
@@ -1743,7 +1769,7 @@
         "AM1": {
           "status": "CONVERGED",
           "iterations": 14,
-          "time_ms": 2.0,
+          "time_ms": 1.96,
           "total_energy_ev": -1274.189359,
           "heat_of_formation_kcal": -275.357,
           "dipole_debye": 3.383,
@@ -1753,7 +1779,7 @@
         "RM1": {
           "status": "CONVERGED",
           "iterations": 13,
-          "time_ms": 1.94,
+          "time_ms": 1.96,
           "total_energy_ev": -1305.82778,
           "heat_of_formation_kcal": -349.327,
           "dipole_debye": 2.495,
@@ -1763,7 +1789,7 @@
         "PM3": {
           "status": "CONVERGED",
           "iterations": 16,
-          "time_ms": 2.17,
+          "time_ms": 2.1,
           "total_energy_ev": -1101.34905,
           "heat_of_formation_kcal": -415.545,
           "dipole_debye": 2.724,
@@ -1773,7 +1799,7 @@
         "MNDO": {
           "status": "CONVERGED",
           "iterations": 12,
-          "time_ms": 1.94,
+          "time_ms": 1.89,
           "total_energy_ev": -1217.266191,
           "heat_of_formation_kcal": -278.227,
           "dipole_debye": 3.378,
@@ -1784,7 +1810,7 @@
       "features": {
         "COSMO": {
           "converged": true,
-          "time_ms": 3.75,
+          "time_ms": 3.86,
           "solv_energy_ev": -927.407323,
           "diel_stabilization_kcal": -2.535,
           "gas_dipole": 1.764,
@@ -1820,7 +1846,7 @@
         "AM1": {
           "status": "CONVERGED",
           "iterations": 10,
-          "time_ms": 0.7,
+          "time_ms": 0.72,
           "total_energy_ev": -540.440096,
           "heat_of_formation_kcal": 50.943,
           "dipole_debye": 2.366,
@@ -1830,7 +1856,7 @@
         "RM1": {
           "status": "CONVERGED",
           "iterations": 11,
-          "time_ms": 0.71,
+          "time_ms": 0.74,
           "total_energy_ev": -550.054483,
           "heat_of_formation_kcal": 37.143,
           "dipole_debye": 2.867,
@@ -1840,7 +1866,7 @@
         "PM3": {
           "status": "CONVERGED",
           "iterations": 12,
-          "time_ms": 0.75,
+          "time_ms": 0.74,
           "total_energy_ev": -478.960778,
           "heat_of_formation_kcal": 49.113,
           "dipole_debye": 1.923,
@@ -1850,7 +1876,7 @@
         "MNDO": {
           "status": "CONVERGED",
           "iterations": 10,
-          "time_ms": 0.67,
+          "time_ms": 0.7,
           "total_energy_ev": -522.811636,
           "heat_of_formation_kcal": 45.456,
           "dipole_debye": 2.83,
@@ -1861,7 +1887,7 @@
       "features": {
         "COSMO": {
           "converged": true,
-          "time_ms": 1.33,
+          "time_ms": 1.47,
           "solv_energy_ev": -414.674528,
           "diel_stabilization_kcal": -4.013,
           "gas_dipole": 2.7,
@@ -1886,7 +1912,7 @@
         "PM6": {
           "status": "CONVERGED",
           "iterations": 15,
-          "time_ms": 8.73,
+          "time_ms": 8.91,
           "total_energy_ev": -627.861361,
           "heat_of_formation_kcal": -677.117,
           "dipole_debye": 1.529,
@@ -1896,7 +1922,7 @@
         "AM1": {
           "status": "CONVERGED",
           "iterations": 17,
-          "time_ms": 13.19,
+          "time_ms": 9.6,
           "total_energy_ev": -660.061778,
           "heat_of_formation_kcal": -874.234,
           "dipole_debye": 1.474,
@@ -1906,7 +1932,7 @@
         "RM1": {
           "status": "CONVERGED",
           "iterations": 17,
-          "time_ms": 10.31,
+          "time_ms": 9.41,
           "total_energy_ev": -649.288084,
           "heat_of_formation_kcal": -793.663,
           "dipole_debye": 1.489,
@@ -1916,7 +1942,7 @@
         "PM3": {
           "status": "CONVERGED",
           "iterations": 15,
-          "time_ms": 8.39,
+          "time_ms": 8.65,
           "total_energy_ev": -632.988312,
           "heat_of_formation_kcal": -824.766,
           "dipole_debye": 1.547,
@@ -1926,7 +1952,7 @@
         "MNDO": {
           "status": "CONVERGED",
           "iterations": 16,
-          "time_ms": 8.75,
+          "time_ms": 9.99,
           "total_energy_ev": -658.317084,
           "heat_of_formation_kcal": -769.015,
           "dipole_debye": 1.269,
@@ -1937,7 +1963,7 @@
       "features": {
         "COSMO": {
           "converged": true,
-          "time_ms": 11.84,
+          "time_ms": 17.58,
           "solv_energy_ev": -628.238408,
           "diel_stabilization_kcal": -8.695,
           "gas_dipole": 1.529,
@@ -1962,7 +1988,7 @@
         "PM6": {
           "status": "CONVERGED",
           "iterations": 17,
-          "time_ms": 30.84,
+          "time_ms": 30.86,
           "total_energy_ev": -956.506976,
           "heat_of_formation_kcal": -1355.009,
           "dipole_debye": 0.992,
@@ -1972,7 +1998,7 @@
         "AM1": {
           "status": "CONVERGED",
           "iterations": 18,
-          "time_ms": 36.1,
+          "time_ms": 32.03,
           "total_energy_ev": -1007.08864,
           "heat_of_formation_kcal": -1703.287,
           "dipole_debye": 1.004,
@@ -1982,7 +2008,7 @@
         "RM1": {
           "status": "CONVERGED",
           "iterations": 22,
-          "time_ms": 34.86,
+          "time_ms": 40.06,
           "total_energy_ev": -989.600262,
           "heat_of_formation_kcal": -1551.81,
           "dipole_debye": 0.841,
@@ -1992,7 +2018,7 @@
         "PM3": {
           "status": "CONVERGED",
           "iterations": 17,
-          "time_ms": 30.48,
+          "time_ms": 31.16,
           "total_energy_ev": -965.854914,
           "heat_of_formation_kcal": -1614.707,
           "dipole_debye": 0.847,
@@ -2002,7 +2028,7 @@
         "MNDO": {
           "status": "CONVERGED",
           "iterations": 18,
-          "time_ms": 36.3,
+          "time_ms": 32.01,
           "total_energy_ev": -1002.307755,
           "heat_of_formation_kcal": -1495.559,
           "dipole_debye": 0.942,
@@ -2013,7 +2039,7 @@
       "features": {
         "COSMO": {
           "converged": true,
-          "time_ms": 39.48,
+          "time_ms": 43.99,
           "solv_energy_ev": -956.899757,
           "diel_stabilization_kcal": -9.058,
           "gas_dipole": 0.992,
@@ -2038,7 +2064,7 @@
         "PM6": {
           "status": "CONVERGED",
           "iterations": 16,
-          "time_ms": 16.98,
+          "time_ms": 17.02,
           "total_energy_ev": -791.062967,
           "heat_of_formation_kcal": -990.208,
           "dipole_debye": 1.62,
@@ -2048,7 +2074,7 @@
         "AM1": {
           "status": "CONVERGED",
           "iterations": 16,
-          "time_ms": 17.85,
+          "time_ms": 17.34,
           "total_energy_ev": -832.793995,
           "heat_of_formation_kcal": -1270.745,
           "dipole_debye": 1.955,
@@ -2058,7 +2084,7 @@
         "RM1": {
           "status": "CONVERGED",
           "iterations": 16,
-          "time_ms": 18.68,
+          "time_ms": 17.23,
           "total_energy_ev": -818.440159,
           "heat_of_formation_kcal": -1149.583,
           "dipole_debye": 1.716,
@@ -2068,7 +2094,7 @@
         "PM3": {
           "status": "CONVERGED",
           "iterations": 14,
-          "time_ms": 20.9,
+          "time_ms": 16.63,
           "total_energy_ev": -798.266202,
           "heat_of_formation_kcal": -1193.092,
           "dipole_debye": 1.367,
@@ -2078,7 +2104,7 @@
         "MNDO": {
           "status": "CONVERGED",
           "iterations": 16,
-          "time_ms": 16.94,
+          "time_ms": 22.21,
           "total_energy_ev": -829.294899,
           "heat_of_formation_kcal": -1108.822,
           "dipole_debye": 1.745,
@@ -2089,7 +2115,7 @@
       "features": {
         "COSMO": {
           "converged": true,
-          "time_ms": 23.01,
+          "time_ms": 21.5,
           "solv_energy_ev": -791.431805,
           "diel_stabilization_kcal": -8.506,
           "gas_dipole": 1.62,
@@ -2114,7 +2140,7 @@
         "PM6": {
           "status": "CONVERGED",
           "iterations": 12,
-          "time_ms": 3.27,
+          "time_ms": 3.26,
           "total_energy_ev": -464.813456,
           "heat_of_formation_kcal": -367.57,
           "dipole_debye": 1.424,
@@ -2124,7 +2150,7 @@
         "AM1": {
           "status": "CONVERGED",
           "iterations": 12,
-          "time_ms": 3.28,
+          "time_ms": 3.27,
           "total_energy_ev": -486.957535,
           "heat_of_formation_kcal": -469.143,
           "dipole_debye": 1.938,
@@ -2144,7 +2170,7 @@
         "PM3": {
           "status": "CONVERGED",
           "iterations": 12,
-          "time_ms": 3.36,
+          "time_ms": 3.23,
           "total_energy_ev": -466.311658,
           "heat_of_formation_kcal": -424.184,
           "dipole_debye": 2.162,
@@ -2154,7 +2180,7 @@
         "MNDO": {
           "status": "CONVERGED",
           "iterations": 13,
-          "time_ms": 3.36,
+          "time_ms": 3.34,
           "total_energy_ev": -486.237467,
           "heat_of_formation_kcal": -403.799,
           "dipole_debye": 1.74,
@@ -2165,7 +2191,7 @@
       "features": {
         "COSMO": {
           "converged": true,
-          "time_ms": 5.16,
+          "time_ms": 4.97,
           "solv_energy_ev": -465.039423,
           "diel_stabilization_kcal": -5.211,
           "gas_dipole": 1.424,
@@ -2191,7 +2217,7 @@
         "PM6": {
           "status": "CONVERGED",
           "iterations": 12,
-          "time_ms": 2.11,
+          "time_ms": 1.27,
           "total_energy_ev": -661.790987,
           "heat_of_formation_kcal": -88.398,
           "dipole_debye": 3.681,
@@ -2201,7 +2227,7 @@
         "AM1": {
           "status": "CONVERGED",
           "iterations": 11,
-          "time_ms": 2.06,
+          "time_ms": 1.25,
           "total_energy_ev": -909.734539,
           "heat_of_formation_kcal": -168.009,
           "dipole_debye": 4.686,
@@ -2211,7 +2237,7 @@
         "RM1": {
           "status": "CONVERGED",
           "iterations": 12,
-          "time_ms": 2.11,
+          "time_ms": 1.25,
           "total_energy_ev": -929.594651,
           "heat_of_formation_kcal": -194.223,
           "dipole_debye": 4.032,
@@ -2221,7 +2247,7 @@
         "PM3": {
           "status": "CONVERGED",
           "iterations": 14,
-          "time_ms": 2.3,
+          "time_ms": 1.38,
           "total_energy_ev": -788.96552,
           "heat_of_formation_kcal": -155.788,
           "dipole_debye": 5.103,
@@ -2242,7 +2268,7 @@
       "features": {
         "COSMO": {
           "converged": true,
-          "time_ms": 2.17,
+          "time_ms": 2.16,
           "solv_energy_ev": -662.159949,
           "diel_stabilization_kcal": -8.508,
           "gas_dipole": 3.681,
@@ -2268,7 +2294,7 @@
         "PM6": {
           "status": "CONVERGED",
           "iterations": 14,
-          "time_ms": 16.62,
+          "time_ms": 19.74,
           "total_energy_ev": -936.312095,
           "heat_of_formation_kcal": -486.364,
           "dipole_debye": 2.423,
@@ -2278,7 +2304,7 @@
         "AM1": {
           "status": "CONVERGED",
           "iterations": 16,
-          "time_ms": 18.19,
+          "time_ms": 18.2,
           "total_energy_ev": -999.584863,
           "heat_of_formation_kcal": -725.015,
           "dipole_debye": 3.55,
@@ -2288,7 +2314,7 @@
         "RM1": {
           "status": "CONVERGED",
           "iterations": 17,
-          "time_ms": 18.38,
+          "time_ms": 17.72,
           "total_energy_ev": -984.90825,
           "heat_of_formation_kcal": -622.024,
           "dipole_debye": 3.157,
@@ -2298,7 +2324,7 @@
         "PM3": {
           "status": "CONVERGED",
           "iterations": 18,
-          "time_ms": 18.64,
+          "time_ms": 18.13,
           "total_energy_ev": -948.027578,
           "heat_of_formation_kcal": -650.636,
           "dipole_debye": 3.279,
@@ -2308,7 +2334,7 @@
         "MNDO": {
           "status": "CONVERGED",
           "iterations": 15,
-          "time_ms": 21.93,
+          "time_ms": 16.62,
           "total_energy_ev": -1001.475466,
           "heat_of_formation_kcal": -639.32,
           "dipole_debye": 3.39,
@@ -2319,7 +2345,7 @@
       "features": {
         "COSMO": {
           "converged": true,
-          "time_ms": 22.76,
+          "time_ms": 26.67,
           "solv_energy_ev": -936.768644,
           "diel_stabilization_kcal": -10.528,
           "gas_dipole": 2.423,
@@ -2345,7 +2371,7 @@
         "PM6": {
           "status": "CONVERGED",
           "iterations": 11,
-          "time_ms": 3.18,
+          "time_ms": 3.38,
           "total_energy_ev": -517.440513,
           "heat_of_formation_kcal": -381.792,
           "dipole_debye": 2.098,
@@ -2355,7 +2381,7 @@
         "AM1": {
           "status": "CONVERGED",
           "iterations": 10,
-          "time_ms": 3.17,
+          "time_ms": 3.2,
           "total_energy_ev": -550.344885,
           "heat_of_formation_kcal": -400.009,
           "dipole_debye": 3.084,
@@ -2365,7 +2391,7 @@
         "RM1": {
           "status": "CONVERGED",
           "iterations": 12,
-          "time_ms": 3.4,
+          "time_ms": 3.59,
           "total_energy_ev": -544.662802,
           "heat_of_formation_kcal": -473.235,
           "dipole_debye": 2.813,
@@ -2375,7 +2401,7 @@
         "PM3": {
           "status": "CONVERGED",
           "iterations": 11,
-          "time_ms": 3.2,
+          "time_ms": 3.59,
           "total_energy_ev": -536.511876,
           "heat_of_formation_kcal": -482.009,
           "dipole_debye": 2.902,
@@ -2385,7 +2411,7 @@
         "MNDO": {
           "status": "CONVERGED",
           "iterations": 11,
-          "time_ms": 3.26,
+          "time_ms": 3.27,
           "total_energy_ev": -582.102962,
           "heat_of_formation_kcal": -285.84,
           "dipole_debye": 3.639,
@@ -2396,7 +2422,7 @@
       "features": {
         "COSMO": {
           "converged": true,
-          "time_ms": 4.99,
+          "time_ms": 4.81,
           "solv_energy_ev": -517.578948,
           "diel_stabilization_kcal": -3.192,
           "gas_dipole": 2.098,
@@ -2423,7 +2449,7 @@
         "PM6": {
           "status": "CONVERGED",
           "iterations": 13,
-          "time_ms": 5.84,
+          "time_ms": 5.94,
           "total_energy_ev": -813.697957,
           "heat_of_formation_kcal": -532.781,
           "dipole_debye": 7.646,
@@ -2433,7 +2459,7 @@
         "AM1": {
           "status": "CONVERGED",
           "iterations": 21,
-          "time_ms": 7.41,
+          "time_ms": 7.38,
           "total_energy_ev": -891.078329,
           "heat_of_formation_kcal": -908.522,
           "dipole_debye": 7.791,
@@ -2443,7 +2469,7 @@
         "RM1": {
           "status": "CONVERGED",
           "iterations": 19,
-          "time_ms": 10.43,
+          "time_ms": 7.05,
           "total_energy_ev": -875.11451,
           "heat_of_formation_kcal": -838.252,
           "dipole_debye": 6.694,
@@ -2453,7 +2479,7 @@
         "PM3": {
           "status": "CONVERGED",
           "iterations": 21,
-          "time_ms": 9.28,
+          "time_ms": 7.49,
           "total_energy_ev": -848.185662,
           "heat_of_formation_kcal": -937.428,
           "dipole_debye": 7.133,
@@ -2463,7 +2489,7 @@
         "MNDO": {
           "status": "CONVERGED",
           "iterations": 22,
-          "time_ms": 7.73,
+          "time_ms": 8.43,
           "total_energy_ev": -920.085676,
           "heat_of_formation_kcal": -690.126,
           "dipole_debye": 7.543,
@@ -2474,7 +2500,7 @@
       "features": {
         "COSMO": {
           "converged": true,
-          "time_ms": 9.15,
+          "time_ms": 15.05,
           "solv_energy_ev": -815.140103,
           "diel_stabilization_kcal": -33.257,
           "gas_dipole": 7.646,
@@ -2500,7 +2526,7 @@
         "PM6": {
           "status": "CONVERGED",
           "iterations": 10,
-          "time_ms": 3.88,
+          "time_ms": 3.92,
           "total_energy_ev": -535.62468,
           "heat_of_formation_kcal": -369.078,
           "dipole_debye": 2.891,
@@ -2510,7 +2536,7 @@
         "AM1": {
           "status": "CONVERGED",
           "iterations": 12,
-          "time_ms": 4.12,
+          "time_ms": 4.11,
           "total_energy_ev": -574.121053,
           "heat_of_formation_kcal": -347.871,
           "dipole_debye": 3.789,
@@ -2520,7 +2546,7 @@
         "RM1": {
           "status": "CONVERGED",
           "iterations": 12,
-          "time_ms": 4.2,
+          "time_ms": 4.26,
           "total_energy_ev": -576.735669,
           "heat_of_formation_kcal": -384.004,
           "dipole_debye": 3.152,
@@ -2530,7 +2556,7 @@
         "PM3": {
           "status": "CONVERGED",
           "iterations": 12,
-          "time_ms": 4.14,
+          "time_ms": 4.09,
           "total_energy_ev": -521.224036,
           "heat_of_formation_kcal": -325.167,
           "dipole_debye": 3.213,
@@ -2540,7 +2566,7 @@
         "MNDO": {
           "status": "CONVERGED",
           "iterations": 11,
-          "time_ms": 4.03,
+          "time_ms": 3.94,
           "total_energy_ev": -576.636279,
           "heat_of_formation_kcal": -327.19,
           "dipole_debye": 3.037,
@@ -2551,7 +2577,7 @@
       "features": {
         "COSMO": {
           "converged": true,
-          "time_ms": 5.9,
+          "time_ms": 5.45,
           "solv_energy_ev": -535.864044,
           "diel_stabilization_kcal": -5.52,
           "gas_dipole": 2.891,
@@ -2586,7 +2612,7 @@
         "AM1": {
           "status": "CONVERGED",
           "iterations": 10,
-          "time_ms": 1.75,
+          "time_ms": 1.73,
           "total_energy_ev": -339.384474,
           "heat_of_formation_kcal": -22.996,
           "dipole_debye": 0.177,
@@ -2596,7 +2622,7 @@
         "RM1": {
           "status": "CONVERGED",
           "iterations": 11,
-          "time_ms": 1.82,
+          "time_ms": 1.75,
           "total_energy_ev": -336.894784,
           "heat_of_formation_kcal": -23.497,
           "dipole_debye": 0.159,
@@ -2606,7 +2632,7 @@
         "PM3": {
           "status": "CONVERGED",
           "iterations": 11,
-          "time_ms": 1.71,
+          "time_ms": 1.74,
           "total_energy_ev": -330.469551,
           "heat_of_formation_kcal": -27.504,
           "dipole_debye": 0.207,
@@ -2616,7 +2642,7 @@
         "MNDO": {
           "status": "CONVERGED",
           "iterations": 10,
-          "time_ms": 1.66,
+          "time_ms": 1.68,
           "total_energy_ev": -341.903336,
           "heat_of_formation_kcal": -25.075,
           "dipole_debye": 0.16,
@@ -2627,7 +2653,7 @@
       "features": {
         "COSMO": {
           "converged": true,
-          "time_ms": 2.6,
+          "time_ms": 2.65,
           "solv_energy_ev": -327.292447,
           "diel_stabilization_kcal": -0.581,
           "gas_dipole": 0.113,
@@ -2653,7 +2679,7 @@
         "PM6": {
           "status": "CONVERGED",
           "iterations": 13,
-          "time_ms": 3.48,
+          "time_ms": 3.46,
           "total_energy_ev": -626.580232,
           "heat_of_formation_kcal": -244.632,
           "dipole_debye": 2.454,
@@ -2663,7 +2689,7 @@
         "AM1": {
           "status": "CONVERGED",
           "iterations": 18,
-          "time_ms": 4.03,
+          "time_ms": 3.9,
           "total_energy_ev": -671.7386,
           "heat_of_formation_kcal": -338.277,
           "dipole_debye": 2.184,
@@ -2673,7 +2699,7 @@
         "RM1": {
           "status": "CONVERGED",
           "iterations": 19,
-          "time_ms": 6.02,
+          "time_ms": 4.03,
           "total_energy_ev": -662.439821,
           "heat_of_formation_kcal": -275.363,
           "dipole_debye": 2.073,
@@ -2683,7 +2709,7 @@
         "PM3": {
           "status": "CONVERGED",
           "iterations": 19,
-          "time_ms": 6.71,
+          "time_ms": 3.97,
           "total_energy_ev": -635.092913,
           "heat_of_formation_kcal": -320.336,
           "dipole_debye": 2.097,
@@ -2693,7 +2719,7 @@
         "MNDO": {
           "status": "CONVERGED",
           "iterations": 18,
-          "time_ms": 5.11,
+          "time_ms": 4.08,
           "total_energy_ev": -673.671474,
           "heat_of_formation_kcal": -286.049,
           "dipole_debye": 1.964,
@@ -2704,7 +2730,7 @@
       "features": {
         "COSMO": {
           "converged": true,
-          "time_ms": 5.1,
+          "time_ms": 5.96,
           "solv_energy_ev": -627.051416,
           "diel_stabilization_kcal": -10.866,
           "gas_dipole": 2.454,
@@ -2729,7 +2755,7 @@
         "PM6": {
           "status": "CONVERGED",
           "iterations": 10,
-          "time_ms": 0.94,
+          "time_ms": 1.6,
           "total_energy_ev": -298.734951,
           "heat_of_formation_kcal": 11.864,
           "dipole_debye": 0.011,
@@ -2739,7 +2765,7 @@
         "AM1": {
           "status": "CONVERGED",
           "iterations": 9,
-          "time_ms": 1.07,
+          "time_ms": 1.55,
           "total_energy_ev": -310.45634,
           "heat_of_formation_kcal": 14.283,
           "dipole_debye": 0.008,
@@ -2749,7 +2775,7 @@
         "RM1": {
           "status": "CONVERGED",
           "iterations": 10,
-          "time_ms": 1.33,
+          "time_ms": 1.71,
           "total_energy_ev": -306.915355,
           "heat_of_formation_kcal": 12.002,
           "dipole_debye": 0.009,
@@ -2759,7 +2785,7 @@
         "PM3": {
           "status": "CONVERGED",
           "iterations": 10,
-          "time_ms": 1.35,
+          "time_ms": 1.1,
           "total_energy_ev": -298.11859,
           "heat_of_formation_kcal": 11.367,
           "dipole_debye": 0.011,
@@ -2769,7 +2795,7 @@
         "MNDO": {
           "status": "CONVERGED",
           "iterations": 9,
-          "time_ms": 1.0,
+          "time_ms": 0.9,
           "total_energy_ev": -312.141309,
           "heat_of_formation_kcal": 7.919,
           "dipole_debye": 0.008,
@@ -2780,7 +2806,7 @@
       "features": {
         "COSMO": {
           "converged": true,
-          "time_ms": 1.6,
+          "time_ms": 1.63,
           "solv_energy_ev": -298.74026,
           "diel_stabilization_kcal": -0.122,
           "gas_dipole": 0.011,
@@ -2806,12 +2832,12 @@
         "PM6": {
           "status": "UNSUPPORTED_ELEMENT",
           "error": "Unsupported element Z=26 for semi-empirical method 'PM6'",
-          "time_ms": 0.02
+          "time_ms": 0.03
         },
         "AM1": {
           "status": "UNSUPPORTED_ELEMENT",
           "error": "Unsupported element Z=26 for semi-empirical method 'AM1'",
-          "time_ms": 0.01
+          "time_ms": 0.03
         },
         "RM1": {
           "status": "UNSUPPORTED_ELEMENT",
@@ -2821,12 +2847,12 @@
         "PM3": {
           "status": "UNSUPPORTED_ELEMENT",
           "error": "Unsupported element Z=26 for semi-empirical method 'PM3'",
-          "time_ms": 0.0
+          "time_ms": 0.01
         },
         "MNDO": {
           "status": "UNSUPPORTED_ELEMENT",
           "error": "Unsupported element Z=26 for semi-empirical method 'MNDO'",
-          "time_ms": 0.0
+          "time_ms": 0.01
         }
       },
       "features": {}
@@ -2844,7 +2870,7 @@
         "PM6": {
           "status": "CONVERGED",
           "iterations": 25,
-          "time_ms": 24.46,
+          "time_ms": 25.45,
           "total_energy_ev": -1352.066543,
           "heat_of_formation_kcal": -1842.21,
           "dipole_debye": 1.02,
@@ -2854,7 +2880,7 @@
         "AM1": {
           "status": "CONVERGED",
           "iterations": 20,
-          "time_ms": 21.22,
+          "time_ms": 21.81,
           "total_energy_ev": -1418.876456,
           "heat_of_formation_kcal": -2262.934,
           "dipole_debye": 0.675,
@@ -2864,7 +2890,7 @@
         "RM1": {
           "status": "CONVERGED",
           "iterations": 17,
-          "time_ms": 22.44,
+          "time_ms": 19.87,
           "total_energy_ev": -1398.2152,
           "heat_of_formation_kcal": -2076.214,
           "dipole_debye": 1.342,
@@ -2874,7 +2900,7 @@
         "PM3": {
           "status": "CONVERGED",
           "iterations": 21,
-          "time_ms": 23.96,
+          "time_ms": 26.98,
           "total_energy_ev": -1312.542057,
           "heat_of_formation_kcal": -1976.287,
           "dipole_debye": 1.079,
@@ -2884,7 +2910,7 @@
         "MNDO": {
           "status": "CONVERGED",
           "iterations": 20,
-          "time_ms": 21.84,
+          "time_ms": 21.86,
           "total_energy_ev": -1404.633592,
           "heat_of_formation_kcal": -2048.605,
           "dipole_debye": 1.927,
@@ -2894,10 +2920,10 @@
       },
       "features": {
         "COSMO": {
-          "converged": true,
-          "time_ms": 70.1,
-          "solv_energy_ev": -1352.088008,
-          "diel_stabilization_kcal": -0.495,
+          "converged": false,
+          "time_ms": 78.28,
+          "solv_energy_ev": -1352.087984,
+          "diel_stabilization_kcal": -0.494,
           "gas_dipole": 1.02,
           "solv_dipole": 2.15
         },
@@ -2921,7 +2947,7 @@
         "PM6": {
           "status": "CONVERGED",
           "iterations": 10,
-          "time_ms": 0.71,
+          "time_ms": 0.73,
           "total_energy_ev": -634.422137,
           "heat_of_formation_kcal": -53.371,
           "dipole_debye": 1.621,
@@ -2931,7 +2957,7 @@
         "AM1": {
           "status": "CONVERGED",
           "iterations": 11,
-          "time_ms": 0.73,
+          "time_ms": 0.76,
           "total_energy_ev": -654.971482,
           "heat_of_formation_kcal": -61.528,
           "dipole_debye": 1.64,
@@ -2941,7 +2967,7 @@
         "RM1": {
           "status": "CONVERGED",
           "iterations": 11,
-          "time_ms": 0.7,
+          "time_ms": 0.73,
           "total_energy_ev": -655.51422,
           "heat_of_formation_kcal": -49.844,
           "dipole_debye": 1.805,
@@ -2951,7 +2977,7 @@
         "PM3": {
           "status": "CONVERGED",
           "iterations": 12,
-          "time_ms": 0.71,
+          "time_ms": 0.76,
           "total_energy_ev": -604.814103,
           "heat_of_formation_kcal": -42.416,
           "dipole_debye": 1.762,
@@ -2961,7 +2987,7 @@
         "MNDO": {
           "status": "CONVERGED",
           "iterations": 10,
-          "time_ms": 0.66,
+          "time_ms": 0.74,
           "total_energy_ev": -650.554085,
           "heat_of_formation_kcal": -60.953,
           "dipole_debye": 1.909,
@@ -2972,7 +2998,7 @@
       "features": {
         "COSMO": {
           "converged": true,
-          "time_ms": 1.24,
+          "time_ms": 1.39,
           "solv_energy_ev": -634.501544,
           "diel_stabilization_kcal": -1.831,
           "gas_dipole": 1.621,
@@ -2998,7 +3024,7 @@
         "PM6": {
           "status": "CONVERGED",
           "iterations": 12,
-          "time_ms": 0.51,
+          "time_ms": 0.52,
           "total_energy_ev": -439.59005,
           "heat_of_formation_kcal": -5.89,
           "dipole_debye": 2.015,
@@ -3008,7 +3034,7 @@
         "AM1": {
           "status": "CONVERGED",
           "iterations": 12,
-          "time_ms": 0.58,
+          "time_ms": 0.51,
           "total_energy_ev": -474.924221,
           "heat_of_formation_kcal": -16.238,
           "dipole_debye": 1.657,
@@ -3018,7 +3044,7 @@
         "RM1": {
           "status": "CONVERGED",
           "iterations": 12,
-          "time_ms": 0.54,
+          "time_ms": 0.51,
           "total_energy_ev": -469.024501,
           "heat_of_formation_kcal": -15.762,
           "dipole_debye": 1.566,
@@ -3028,7 +3054,7 @@
         "PM3": {
           "status": "CONVERGED",
           "iterations": 12,
-          "time_ms": 0.5,
+          "time_ms": 0.49,
           "total_energy_ev": -441.997058,
           "heat_of_formation_kcal": -17.673,
           "dipole_debye": 1.537,
@@ -3038,7 +3064,7 @@
         "MNDO": {
           "status": "CONVERGED",
           "iterations": 12,
-          "time_ms": 0.55,
+          "time_ms": 0.5,
           "total_energy_ev": -477.431045,
           "heat_of_formation_kcal": -17.006,
           "dipole_debye": 1.637,
@@ -3049,7 +3075,7 @@
       "features": {
         "COSMO": {
           "converged": true,
-          "time_ms": 1.05,
+          "time_ms": 1.04,
           "solv_energy_ev": -439.736698,
           "diel_stabilization_kcal": -3.382,
           "gas_dipole": 2.015,
@@ -3076,7 +3102,7 @@
         "PM6": {
           "status": "CONVERGED",
           "iterations": 14,
-          "time_ms": 2.2,
+          "time_ms": 1.83,
           "total_energy_ev": -641.036103,
           "heat_of_formation_kcal": -192.407,
           "dipole_debye": 3.697,
@@ -3086,7 +3112,7 @@
         "AM1": {
           "status": "CONVERGED",
           "iterations": 14,
-          "time_ms": 2.96,
+          "time_ms": 1.76,
           "total_energy_ev": -709.465249,
           "heat_of_formation_kcal": -336.603,
           "dipole_debye": 3.181,
@@ -3096,7 +3122,7 @@
         "RM1": {
           "status": "CONVERGED",
           "iterations": 15,
-          "time_ms": 3.16,
+          "time_ms": 2.59,
           "total_energy_ev": -704.23612,
           "heat_of_formation_kcal": -269.516,
           "dipole_debye": 2.901,
@@ -3106,7 +3132,7 @@
         "PM3": {
           "status": "CONVERGED",
           "iterations": 16,
-          "time_ms": 3.09,
+          "time_ms": 3.25,
           "total_energy_ev": -631.120651,
           "heat_of_formation_kcal": -277.727,
           "dipole_debye": 3.304,
@@ -3116,7 +3142,7 @@
         "MNDO": {
           "status": "CONVERGED",
           "iterations": 14,
-          "time_ms": 2.55,
+          "time_ms": 3.06,
           "total_energy_ev": -711.02629,
           "heat_of_formation_kcal": -292.886,
           "dipole_debye": 2.872,
@@ -3127,7 +3153,7 @@
       "features": {
         "COSMO": {
           "converged": true,
-          "time_ms": 3.68,
+          "time_ms": 5.11,
           "solv_energy_ev": -641.420327,
           "diel_stabilization_kcal": -8.86,
           "gas_dipole": 3.697,
@@ -3153,7 +3179,7 @@
         "PM6": {
           "status": "CONVERGED",
           "iterations": 12,
-          "time_ms": 1.43,
+          "time_ms": 1.92,
           "total_energy_ev": -739.281428,
           "heat_of_formation_kcal": -236.067,
           "dipole_debye": 1.679,
@@ -3163,7 +3189,7 @@
         "AM1": {
           "status": "CONVERGED",
           "iterations": 13,
-          "time_ms": 1.4,
+          "time_ms": 1.58,
           "total_energy_ev": -810.306893,
           "heat_of_formation_kcal": -401.359,
           "dipole_debye": 2.415,
@@ -3173,7 +3199,7 @@
         "RM1": {
           "status": "CONVERGED",
           "iterations": 13,
-          "time_ms": 1.37,
+          "time_ms": 1.38,
           "total_energy_ev": -796.840226,
           "heat_of_formation_kcal": -319.992,
           "dipole_debye": 1.944,
@@ -3183,7 +3209,7 @@
         "PM3": {
           "status": "CONVERGED",
           "iterations": 14,
-          "time_ms": 1.41,
+          "time_ms": 1.32,
           "total_energy_ev": -749.901547,
           "heat_of_formation_kcal": -386.17,
           "dipole_debye": 2.499,
@@ -3193,7 +3219,7 @@
         "MNDO": {
           "status": "CONVERGED",
           "iterations": 12,
-          "time_ms": 1.32,
+          "time_ms": 1.29,
           "total_energy_ev": -813.489431,
           "heat_of_formation_kcal": -376.916,
           "dipole_debye": 1.981,
@@ -3204,7 +3230,7 @@
       "features": {
         "COSMO": {
           "converged": true,
-          "time_ms": 2.3,
+          "time_ms": 2.38,
           "solv_energy_ev": -739.619042,
           "diel_stabilization_kcal": -7.786,
           "gas_dipole": 1.679,
@@ -3231,7 +3257,7 @@
         "PM6": {
           "status": "CONVERGED",
           "iterations": 21,
-          "time_ms": 9.98,
+          "time_ms": 11.72,
           "total_energy_ev": -1100.2189,
           "heat_of_formation_kcal": -650.116,
           "dipole_debye": 4.854,
@@ -3241,7 +3267,7 @@
         "AM1": {
           "status": "CONVERGED",
           "iterations": 22,
-          "time_ms": 10.15,
+          "time_ms": 10.35,
           "total_energy_ev": -1215.183217,
           "heat_of_formation_kcal": -1062.961,
           "dipole_debye": 3.772,
@@ -3251,7 +3277,7 @@
         "RM1": {
           "status": "CONVERGED",
           "iterations": 24,
-          "time_ms": 10.9,
+          "time_ms": 11.31,
           "total_energy_ev": -1202.671538,
           "heat_of_formation_kcal": -963.51,
           "dipole_debye": 4.966,
@@ -3261,7 +3287,7 @@
         "PM3": {
           "status": "CONVERGED",
           "iterations": 21,
-          "time_ms": 9.95,
+          "time_ms": 10.14,
           "total_energy_ev": -1096.564331,
           "heat_of_formation_kcal": -836.091,
           "dipole_debye": 2.448,
@@ -3271,7 +3297,7 @@
         "MNDO": {
           "status": "CONVERGED",
           "iterations": 24,
-          "time_ms": 10.6,
+          "time_ms": 10.74,
           "total_energy_ev": -1218.085559,
           "heat_of_formation_kcal": -993.135,
           "dipole_debye": 4.431,
@@ -3282,7 +3308,7 @@
       "features": {
         "COSMO": {
           "converged": true,
-          "time_ms": 13.86,
+          "time_ms": 19.66,
           "solv_energy_ev": -1101.296406,
           "diel_stabilization_kcal": -24.848,
           "gas_dipole": 4.854,
@@ -3310,7 +3336,7 @@
         "PM6": {
           "status": "CONVERGED",
           "iterations": 16,
-          "time_ms": 10.7,
+          "time_ms": 11.01,
           "total_energy_ev": -2202.134157,
           "heat_of_formation_kcal": -1249.571,
           "dipole_debye": 8.285,
@@ -3320,7 +3346,7 @@
         "AM1": {
           "status": "CONVERGED",
           "iterations": 15,
-          "time_ms": 10.11,
+          "time_ms": 10.67,
           "total_energy_ev": -2529.907647,
           "heat_of_formation_kcal": -1926.496,
           "dipole_debye": 5.597,
@@ -3330,7 +3356,7 @@
         "RM1": {
           "status": "CONVERGED",
           "iterations": 14,
-          "time_ms": 9.66,
+          "time_ms": 9.9,
           "total_energy_ev": -2523.893468,
           "heat_of_formation_kcal": -1403.696,
           "dipole_debye": 6.151,
@@ -3340,7 +3366,7 @@
         "PM3": {
           "status": "CONVERGED",
           "iterations": 18,
-          "time_ms": 11.21,
+          "time_ms": 11.85,
           "total_energy_ev": -2296.202465,
           "heat_of_formation_kcal": -1347.393,
           "dipole_debye": 4.837,
@@ -3350,7 +3376,7 @@
         "MNDO": {
           "status": "CONVERGED",
           "iterations": 14,
-          "time_ms": 9.32,
+          "time_ms": 9.94,
           "total_energy_ev": -2492.172459,
           "heat_of_formation_kcal": -2016.881,
           "dipole_debye": 4.659,
@@ -3361,7 +3387,7 @@
       "features": {
         "COSMO": {
           "converged": true,
-          "time_ms": 16.25,
+          "time_ms": 18.86,
           "solv_energy_ev": -2202.822835,
           "diel_stabilization_kcal": -15.881,
           "gas_dipole": 8.285,
@@ -3387,7 +3413,7 @@
         "PM6": {
           "status": "CONVERGED",
           "iterations": 9,
-          "time_ms": 0.26,
+          "time_ms": 0.24,
           "total_energy_ev": -314.393084,
           "heat_of_formation_kcal": 36.364,
           "dipole_debye": 2.551,
@@ -3397,7 +3423,7 @@
         "AM1": {
           "status": "CONVERGED",
           "iterations": 11,
-          "time_ms": 0.22,
+          "time_ms": 0.24,
           "total_energy_ev": -347.297264,
           "heat_of_formation_kcal": 36.382,
           "dipole_debye": 3.017,
@@ -3427,7 +3453,7 @@
         "MNDO": {
           "status": "CONVERGED",
           "iterations": 11,
-          "time_ms": 0.23,
+          "time_ms": 0.22,
           "total_energy_ev": -347.701514,
           "heat_of_formation_kcal": 42.467,
           "dipole_debye": 2.478,
@@ -3438,7 +3464,7 @@
       "features": {
         "COSMO": {
           "converged": true,
-          "time_ms": 0.66,
+          "time_ms": 0.67,
           "solv_energy_ev": -314.591719,
           "diel_stabilization_kcal": -4.581,
           "gas_dipole": 2.551,
@@ -3463,7 +3489,7 @@
         "PM6": {
           "status": "CONVERGED",
           "iterations": 13,
-          "time_ms": 0.28,
+          "time_ms": 0.17,
           "total_energy_ev": -195.408679,
           "heat_of_formation_kcal": 143.583,
           "dipole_debye": 3.071,
@@ -3473,7 +3499,7 @@
         "AM1": {
           "status": "CONVERGED",
           "iterations": 11,
-          "time_ms": 0.24,
+          "time_ms": 0.16,
           "total_energy_ev": -217.566933,
           "heat_of_formation_kcal": 100.456,
           "dipole_debye": 2.172,
@@ -3483,7 +3509,7 @@
         "RM1": {
           "status": "CONVERGED",
           "iterations": 14,
-          "time_ms": 0.3,
+          "time_ms": 0.16,
           "total_energy_ev": -211.86187,
           "heat_of_formation_kcal": 111.699,
           "dipole_debye": 2.114,
@@ -3493,7 +3519,7 @@
         "PM3": {
           "status": "CONVERGED",
           "iterations": 11,
-          "time_ms": 0.25,
+          "time_ms": 0.14,
           "total_energy_ev": -212.689861,
           "heat_of_formation_kcal": 99.359,
           "dipole_debye": 1.889,
@@ -3503,7 +3529,7 @@
         "MNDO": {
           "status": "CONVERGED",
           "iterations": 15,
-          "time_ms": 0.28,
+          "time_ms": 0.17,
           "total_energy_ev": -250.715466,
           "heat_of_formation_kcal": 150.068,
           "dipole_debye": 1.612,
@@ -3514,7 +3540,7 @@
       "features": {
         "COSMO": {
           "converged": true,
-          "time_ms": 0.69,
+          "time_ms": 0.43,
           "solv_energy_ev": -195.780953,
           "diel_stabilization_kcal": -8.585,
           "gas_dipole": 3.071,
@@ -3538,25 +3564,20 @@
       ],
       "methods": {
         "PM6": {
-          "status": "CONVERGED",
-          "iterations": 59,
-          "time_ms": 599.37,
-          "total_energy_ev": -2632.829544,
-          "heat_of_formation_kcal": -4988.897,
-          "dipole_debye": 10.37,
-          "max_grad_ev_a": 25.8362,
-          "homo_lumo_gap_ev": 4.325
+          "status": "NOT_CONVERGED",
+          "iterations": 60,
+          "time_ms": 605.35
         },
         "AM1": {
           "status": "NOT_CONVERGED",
           "iterations": 60,
-          "time_ms": 599.31
+          "time_ms": 591.93
         },
         "RM1": {
           "status": "CONVERGED",
-          "iterations": 41,
-          "time_ms": 456.99,
-          "total_energy_ev": -2777.445805,
+          "iterations": 43,
+          "time_ms": 469.94,
+          "total_energy_ev": -2777.445803,
           "heat_of_formation_kcal": -6079.387,
           "dipole_debye": 12.021,
           "max_grad_ev_a": 37.4229,
@@ -3564,9 +3585,9 @@
         },
         "PM3": {
           "status": "CONVERGED",
-          "iterations": 33,
-          "time_ms": 392.76,
-          "total_energy_ev": -2672.040615,
+          "iterations": 32,
+          "time_ms": 377.45,
+          "total_energy_ev": -2672.040611,
           "heat_of_formation_kcal": -6223.517,
           "dipole_debye": 8.486,
           "max_grad_ev_a": 36.7822,
@@ -3574,30 +3595,16 @@
         },
         "MNDO": {
           "status": "CONVERGED",
-          "iterations": 38,
-          "time_ms": 437.84,
-          "total_energy_ev": -2820.241005,
+          "iterations": 43,
+          "time_ms": 472.38,
+          "total_energy_ev": -2820.241007,
           "heat_of_formation_kcal": -6030.631,
           "dipole_debye": 10.316,
           "max_grad_ev_a": 39.4095,
           "homo_lumo_gap_ev": 4.75
         }
       },
-      "features": {
-        "COSMO": {
-          "converged": true,
-          "time_ms": 564.05,
-          "solv_energy_ev": -2636.05698,
-          "diel_stabilization_kcal": -74.426,
-          "gas_dipole": 10.37,
-          "solv_dipole": 18.27
-        },
-        "Dispersion_PM6_DH+": {
-          "converged": true,
-          "heat_of_formation_kcal": -4993.665,
-          "disp_delta_kcal": -4.768
-        }
-      }
+      "features": {}
     },
     "imidazole": {
       "name": "imidazole",
@@ -3612,7 +3619,7 @@
         "PM6": {
           "status": "CONVERGED",
           "iterations": 17,
-          "time_ms": 7.5,
+          "time_ms": 8.15,
           "total_energy_ev": -835.742977,
           "heat_of_formation_kcal": -1249.382,
           "dipole_debye": 4.354,
@@ -3622,7 +3629,7 @@
         "AM1": {
           "status": "CONVERGED",
           "iterations": 22,
-          "time_ms": 8.73,
+          "time_ms": 9.32,
           "total_energy_ev": -920.769513,
           "heat_of_formation_kcal": -1556.166,
           "dipole_debye": 3.259,
@@ -3632,7 +3639,7 @@
         "RM1": {
           "status": "CONVERGED",
           "iterations": 20,
-          "time_ms": 8.34,
+          "time_ms": 8.68,
           "total_energy_ev": -916.119252,
           "heat_of_formation_kcal": -1462.731,
           "dipole_debye": 3.718,
@@ -3642,7 +3649,7 @@
         "PM3": {
           "status": "CONVERGED",
           "iterations": 24,
-          "time_ms": 9.64,
+          "time_ms": 9.58,
           "total_energy_ev": -801.746295,
           "heat_of_formation_kcal": -1371.331,
           "dipole_debye": 1.738,
@@ -3652,7 +3659,7 @@
         "MNDO": {
           "status": "CONVERGED",
           "iterations": 27,
-          "time_ms": 10.23,
+          "time_ms": 11.5,
           "total_energy_ev": -917.250085,
           "heat_of_formation_kcal": -1427.945,
           "dipole_debye": 2.382,
@@ -3663,7 +3670,7 @@
       "features": {
         "COSMO": {
           "converged": true,
-          "time_ms": 12.45,
+          "time_ms": 11.2,
           "solv_energy_ev": -836.536868,
           "diel_stabilization_kcal": -18.308,
           "gas_dipole": 4.354,
@@ -3689,7 +3696,7 @@
         "PM6": {
           "status": "CONVERGED",
           "iterations": 20,
-          "time_ms": 21.95,
+          "time_ms": 26.36,
           "total_energy_ev": -1118.427659,
           "heat_of_formation_kcal": -1521.729,
           "dipole_debye": 7.388,
@@ -3699,7 +3706,7 @@
         "AM1": {
           "status": "CONVERGED",
           "iterations": 26,
-          "time_ms": 25.02,
+          "time_ms": 24.27,
           "total_energy_ev": -1266.356686,
           "heat_of_formation_kcal": -1862.122,
           "dipole_debye": 8.079,
@@ -3709,8 +3716,8 @@
         "RM1": {
           "status": "CONVERGED",
           "iterations": 27,
-          "time_ms": 25.07,
-          "total_energy_ev": -1147.659501,
+          "time_ms": 25.18,
+          "total_energy_ev": -1147.659499,
           "heat_of_formation_kcal": -1736.286,
           "dipole_debye": 11.908,
           "max_grad_ev_a": 33.1516,
@@ -3719,12 +3726,12 @@
         "PM3": {
           "status": "NOT_CONVERGED",
           "iterations": 60,
-          "time_ms": 50.41
+          "time_ms": 50.52
         },
         "MNDO": {
           "status": "CONVERGED",
           "iterations": 24,
-          "time_ms": 23.35,
+          "time_ms": 22.94,
           "total_energy_ev": -1251.712996,
           "heat_of_formation_kcal": -1653.748,
           "dipole_debye": 6.42,
@@ -3735,7 +3742,7 @@
       "features": {
         "COSMO": {
           "converged": true,
-          "time_ms": 33.72,
+          "time_ms": 35.4,
           "solv_energy_ev": -1120.835907,
           "diel_stabilization_kcal": -55.536,
           "gas_dipole": 7.388,
@@ -3771,7 +3778,7 @@
         "AM1": {
           "status": "CONVERGED",
           "iterations": 11,
-          "time_ms": 0.7,
+          "time_ms": 0.68,
           "total_energy_ev": -512.450783,
           "heat_of_formation_kcal": 108.7,
           "dipole_debye": 1.972,
@@ -3780,9 +3787,9 @@
         },
         "RM1": {
           "status": "CONVERGED",
-          "iterations": 30,
-          "time_ms": 1.13,
-          "total_energy_ev": -413.534899,
+          "iterations": 32,
+          "time_ms": 1.21,
+          "total_energy_ev": -413.534896,
           "heat_of_formation_kcal": 92.309,
           "dipole_debye": 3.014,
           "max_grad_ev_a": 5.412,
@@ -3791,7 +3798,7 @@
         "PM3": {
           "status": "CONVERGED",
           "iterations": 19,
-          "time_ms": 0.86,
+          "time_ms": 0.85,
           "total_energy_ev": -444.316247,
           "heat_of_formation_kcal": 224.72,
           "dipole_debye": 6.807,
@@ -3801,7 +3808,7 @@
         "MNDO": {
           "status": "CONVERGED",
           "iterations": 11,
-          "time_ms": 0.69,
+          "time_ms": 0.7,
           "total_energy_ev": -507.265204,
           "heat_of_formation_kcal": 111.791,
           "dipole_debye": 2.375,
@@ -3812,7 +3819,7 @@
       "features": {
         "COSMO": {
           "converged": true,
-          "time_ms": 1.4,
+          "time_ms": 1.39,
           "solv_energy_ev": -407.783211,
           "diel_stabilization_kcal": -5.688,
           "gas_dipole": 2.93,
@@ -3837,7 +3844,7 @@
         "PM6": {
           "status": "CONVERGED",
           "iterations": 8,
-          "time_ms": 0.34,
+          "time_ms": 0.33,
           "total_energy_ev": -177.266746,
           "heat_of_formation_kcal": -14.515,
           "dipole_debye": 0.133,
@@ -3847,7 +3854,7 @@
         "AM1": {
           "status": "CONVERGED",
           "iterations": 8,
-          "time_ms": 0.36,
+          "time_ms": 0.34,
           "total_energy_ev": -183.297632,
           "heat_of_formation_kcal": -10.336,
           "dipole_debye": 0.146,
@@ -3857,7 +3864,7 @@
         "RM1": {
           "status": "CONVERGED",
           "iterations": 8,
-          "time_ms": 0.36,
+          "time_ms": 0.35,
           "total_energy_ev": -182.862671,
           "heat_of_formation_kcal": -16.251,
           "dipole_debye": 0.144,
@@ -3867,7 +3874,7 @@
         "PM3": {
           "status": "CONVERGED",
           "iterations": 8,
-          "time_ms": 0.35,
+          "time_ms": 0.33,
           "total_energy_ev": -180.674335,
           "heat_of_formation_kcal": -16.217,
           "dipole_debye": 0.182,
@@ -3877,7 +3884,7 @@
         "MNDO": {
           "status": "CONVERGED",
           "iterations": 9,
-          "time_ms": 0.37,
+          "time_ms": 0.36,
           "total_energy_ev": -185.165739,
           "heat_of_formation_kcal": -13.654,
           "dipole_debye": 0.138,
@@ -3888,7 +3895,7 @@
       "features": {
         "COSMO": {
           "converged": true,
-          "time_ms": 0.65,
+          "time_ms": 0.63,
           "solv_energy_ev": -177.282781,
           "diel_stabilization_kcal": -0.37,
           "gas_dipole": 0.133,
@@ -3914,7 +3921,7 @@
         "PM6": {
           "status": "CONVERGED",
           "iterations": 12,
-          "time_ms": 1.02,
+          "time_ms": 1.12,
           "total_energy_ev": -348.404593,
           "heat_of_formation_kcal": 65.841,
           "dipole_debye": 1.799,
@@ -3924,7 +3931,7 @@
         "AM1": {
           "status": "CONVERGED",
           "iterations": 12,
-          "time_ms": 1.03,
+          "time_ms": 1.04,
           "total_energy_ev": -375.964674,
           "heat_of_formation_kcal": 34.506,
           "dipole_debye": 2.022,
@@ -3934,7 +3941,7 @@
         "RM1": {
           "status": "CONVERGED",
           "iterations": 13,
-          "time_ms": 1.06,
+          "time_ms": 1.1,
           "total_energy_ev": -369.85225,
           "heat_of_formation_kcal": 13.173,
           "dipole_debye": 1.381,
@@ -3965,7 +3972,7 @@
       "features": {
         "COSMO": {
           "converged": true,
-          "time_ms": 1.83,
+          "time_ms": 1.78,
           "solv_energy_ev": -348.517568,
           "diel_stabilization_kcal": -2.605,
           "gas_dipole": 1.799,
@@ -3991,7 +3998,7 @@
         "PM6": {
           "status": "CONVERGED",
           "iterations": 11,
-          "time_ms": 1.02,
+          "time_ms": 1.01,
           "total_energy_ev": -469.667256,
           "heat_of_formation_kcal": -76.561,
           "dipole_debye": 2.199,
@@ -4001,7 +4008,7 @@
         "AM1": {
           "status": "CONVERGED",
           "iterations": 11,
-          "time_ms": 1.77,
+          "time_ms": 1.04,
           "total_energy_ev": -505.128341,
           "heat_of_formation_kcal": -82.941,
           "dipole_debye": 1.844,
@@ -4011,7 +4018,7 @@
         "RM1": {
           "status": "CONVERGED",
           "iterations": 11,
-          "time_ms": 1.79,
+          "time_ms": 1.18,
           "total_energy_ev": -500.318916,
           "heat_of_formation_kcal": -81.585,
           "dipole_debye": 1.868,
@@ -4021,7 +4028,7 @@
         "PM3": {
           "status": "CONVERGED",
           "iterations": 11,
-          "time_ms": 1.67,
+          "time_ms": 1.69,
           "total_energy_ev": -474.986799,
           "heat_of_formation_kcal": -71.274,
           "dipole_debye": 1.804,
@@ -4031,7 +4038,7 @@
         "MNDO": {
           "status": "CONVERGED",
           "iterations": 11,
-          "time_ms": 1.62,
+          "time_ms": 1.82,
           "total_energy_ev": -508.509335,
           "heat_of_formation_kcal": -80.354,
           "dipole_debye": 1.744,
@@ -4042,7 +4049,7 @@
       "features": {
         "COSMO": {
           "converged": true,
-          "time_ms": 2.8,
+          "time_ms": 3.0,
           "solv_energy_ev": -469.861691,
           "diel_stabilization_kcal": -4.484,
           "gas_dipole": 2.199,
@@ -4068,7 +4075,7 @@
         "PM6": {
           "status": "CONVERGED",
           "iterations": 24,
-          "time_ms": 15.88,
+          "time_ms": 14.16,
           "total_energy_ev": -1051.439524,
           "heat_of_formation_kcal": -533.749,
           "dipole_debye": 3.957,
@@ -4078,7 +4085,7 @@
         "AM1": {
           "status": "CONVERGED",
           "iterations": 29,
-          "time_ms": 13.64,
+          "time_ms": 13.87,
           "total_energy_ev": -1141.913653,
           "heat_of_formation_kcal": -874.816,
           "dipole_debye": 4.729,
@@ -4088,7 +4095,7 @@
         "RM1": {
           "status": "CONVERGED",
           "iterations": 22,
-          "time_ms": 12.3,
+          "time_ms": 11.82,
           "total_energy_ev": -1127.802196,
           "heat_of_formation_kcal": -862.518,
           "dipole_debye": 1.661,
@@ -4098,12 +4105,12 @@
         "PM3": {
           "status": "NOT_CONVERGED",
           "iterations": 60,
-          "time_ms": 24.7
+          "time_ms": 23.65
         },
         "MNDO": {
           "status": "CONVERGED",
           "iterations": 21,
-          "time_ms": 11.67,
+          "time_ms": 11.68,
           "total_energy_ev": -1148.861728,
           "heat_of_formation_kcal": -904.716,
           "dipole_debye": 1.469,
@@ -4114,7 +4121,7 @@
       "features": {
         "COSMO": {
           "converged": true,
-          "time_ms": 23.87,
+          "time_ms": 24.14,
           "solv_energy_ev": -1052.161807,
           "diel_stabilization_kcal": -16.656,
           "gas_dipole": 3.957,
@@ -4140,7 +4147,7 @@
         "PM6": {
           "status": "CONVERGED",
           "iterations": 11,
-          "time_ms": 1.39,
+          "time_ms": 1.32,
           "total_energy_ev": -372.13344,
           "heat_of_formation_kcal": -49.308,
           "dipole_debye": 2.05,
@@ -4150,7 +4157,7 @@
         "AM1": {
           "status": "CONVERGED",
           "iterations": 11,
-          "time_ms": 1.37,
+          "time_ms": 1.29,
           "total_energy_ev": -405.65626,
           "heat_of_formation_kcal": -49.769,
           "dipole_debye": 1.865,
@@ -4160,7 +4167,7 @@
         "RM1": {
           "status": "CONVERGED",
           "iterations": 11,
-          "time_ms": 1.36,
+          "time_ms": 1.32,
           "total_energy_ev": -409.005294,
           "heat_of_formation_kcal": -60.868,
           "dipole_debye": 1.683,
@@ -4170,7 +4177,7 @@
         "PM3": {
           "status": "CONVERGED",
           "iterations": 11,
-          "time_ms": 1.48,
+          "time_ms": 1.34,
           "total_energy_ev": -359.905571,
           "heat_of_formation_kcal": -48.147,
           "dipole_debye": 1.335,
@@ -4180,7 +4187,7 @@
         "MNDO": {
           "status": "CONVERGED",
           "iterations": 11,
-          "time_ms": 1.4,
+          "time_ms": 1.35,
           "total_energy_ev": -407.865694,
           "heat_of_formation_kcal": -38.283,
           "dipole_debye": 1.462,
@@ -4191,7 +4198,7 @@
       "features": {
         "COSMO": {
           "converged": true,
-          "time_ms": 2.18,
+          "time_ms": 2.07,
           "solv_energy_ev": -372.323817,
           "diel_stabilization_kcal": -4.39,
           "gas_dipole": 2.05,
@@ -4216,33 +4223,28 @@
         "PM6": {
           "status": "NOT_CONVERGED",
           "iterations": 60,
-          "time_ms": 139.41
+          "time_ms": 138.51
         },
         "AM1": {
           "status": "NOT_CONVERGED",
           "iterations": 60,
-          "time_ms": 142.71
+          "time_ms": 143.77
         },
         "RM1": {
           "status": "NOT_CONVERGED",
           "iterations": 60,
-          "time_ms": 138.14
+          "time_ms": 137.17
         },
         "PM3": {
-          "status": "CONVERGED",
-          "iterations": 56,
-          "time_ms": 136.49,
-          "total_energy_ev": -1454.939725,
-          "heat_of_formation_kcal": -3363.939,
-          "dipole_debye": 0.001,
-          "max_grad_ev_a": 30.5457,
-          "homo_lumo_gap_ev": 3.884
+          "status": "NOT_CONVERGED",
+          "iterations": 60,
+          "time_ms": 143.47
         },
         "MNDO": {
           "status": "CONVERGED",
           "iterations": 26,
-          "time_ms": 75.41,
-          "total_energy_ev": -1539.087017,
+          "time_ms": 76.55,
+          "total_energy_ev": -1539.087018,
           "heat_of_formation_kcal": -3381.852,
           "dipole_debye": 0.002,
           "max_grad_ev_a": 27.7571,
@@ -4268,7 +4270,7 @@
         "AM1": {
           "status": "OPEN_SHELL_RADICAL",
           "error": "Open-shell radical detected (11 valence electrons). Closed-shell RHF requires an even number of valence electrons (requires UHF/ROHF).",
-          "time_ms": 0.01
+          "time_ms": 0.0
         },
         "RM1": {
           "status": "OPEN_SHELL_RADICAL",
@@ -4320,7 +4322,7 @@
         "MNDO": {
           "status": "OPEN_SHELL_RADICAL",
           "error": "Open-shell radical detected (17 valence electrons). Closed-shell RHF requires an even number of valence electrons (requires UHF/ROHF).",
-          "time_ms": 0.01
+          "time_ms": 0.0
         }
       },
       "features": {}
@@ -4339,8 +4341,8 @@
         "PM6": {
           "status": "CONVERGED",
           "iterations": 31,
-          "time_ms": 111.79,
-          "total_energy_ev": -1986.875484,
+          "time_ms": 110.81,
+          "total_energy_ev": -1986.875487,
           "heat_of_formation_kcal": -2886.042,
           "dipole_debye": 5.673,
           "max_grad_ev_a": 24.9393,
@@ -4349,7 +4351,7 @@
         "AM1": {
           "status": "CONVERGED",
           "iterations": 25,
-          "time_ms": 107.52,
+          "time_ms": 102.41,
           "total_energy_ev": -2146.668341,
           "heat_of_formation_kcal": -3542.069,
           "dipole_debye": 5.35,
@@ -4359,8 +4361,8 @@
         "RM1": {
           "status": "CONVERGED",
           "iterations": 30,
-          "time_ms": 124.75,
-          "total_energy_ev": -2115.412903,
+          "time_ms": 107.5,
+          "total_energy_ev": -2115.412899,
           "heat_of_formation_kcal": -3366.286,
           "dipole_debye": 3.213,
           "max_grad_ev_a": 29.4072,
@@ -4369,12 +4371,12 @@
         "PM3": {
           "status": "NOT_CONVERGED",
           "iterations": 60,
-          "time_ms": 195.62
+          "time_ms": 181.11
         },
         "MNDO": {
           "status": "CONVERGED",
           "iterations": 24,
-          "time_ms": 118.53,
+          "time_ms": 100.81,
           "total_energy_ev": -2142.660996,
           "heat_of_formation_kcal": -3309.482,
           "dipole_debye": 2.528,
@@ -4385,8 +4387,8 @@
       "features": {
         "COSMO": {
           "converged": true,
-          "time_ms": 230.64,
-          "solv_energy_ev": -1988.602561,
+          "time_ms": 154.01,
+          "solv_energy_ev": -1988.602562,
           "diel_stabilization_kcal": -39.827,
           "gas_dipole": 5.673,
           "solv_dipole": 24.918
@@ -4410,7 +4412,7 @@
         "PM6": {
           "status": "CONVERGED",
           "iterations": 8,
-          "time_ms": 0.24,
+          "time_ms": 0.28,
           "total_energy_ev": -173.454861,
           "heat_of_formation_kcal": 230.814,
           "dipole_debye": 2.512,
@@ -4420,7 +4422,7 @@
         "AM1": {
           "status": "CONVERGED",
           "iterations": 12,
-          "time_ms": 0.24,
+          "time_ms": 0.26,
           "total_energy_ev": -163.656541,
           "heat_of_formation_kcal": 115.872,
           "dipole_debye": 1.3,
@@ -4430,7 +4432,7 @@
         "RM1": {
           "status": "CONVERGED",
           "iterations": 12,
-          "time_ms": 0.26,
+          "time_ms": 0.3,
           "total_energy_ev": -165.411516,
           "heat_of_formation_kcal": 85.448,
           "dipole_debye": 0.535,
@@ -4440,7 +4442,7 @@
         "PM3": {
           "status": "CONVERGED",
           "iterations": 11,
-          "time_ms": 0.23,
+          "time_ms": 0.3,
           "total_energy_ev": -165.136387,
           "heat_of_formation_kcal": 48.377,
           "dipole_debye": 0.778,
@@ -4450,7 +4452,7 @@
         "MNDO": {
           "status": "CONVERGED",
           "iterations": 11,
-          "time_ms": 0.24,
+          "time_ms": 0.36,
           "total_energy_ev": -194.253044,
           "heat_of_formation_kcal": 103.331,
           "dipole_debye": 0.652,
@@ -4461,7 +4463,7 @@
       "features": {
         "COSMO": {
           "converged": true,
-          "time_ms": 0.55,
+          "time_ms": 0.78,
           "solv_energy_ev": -173.670341,
           "diel_stabilization_kcal": -4.969,
           "gas_dipole": 2.512,
@@ -4486,7 +4488,7 @@
         "PM6": {
           "status": "CONVERGED",
           "iterations": 12,
-          "time_ms": 4.97,
+          "time_ms": 5.3,
           "total_energy_ev": -483.856336,
           "heat_of_formation_kcal": -183.783,
           "dipole_debye": 0.336,
@@ -4496,7 +4498,7 @@
         "AM1": {
           "status": "CONVERGED",
           "iterations": 12,
-          "time_ms": 4.89,
+          "time_ms": 4.88,
           "total_energy_ev": -503.303271,
           "heat_of_formation_kcal": -216.265,
           "dipole_debye": 0.617,
@@ -4506,7 +4508,7 @@
         "RM1": {
           "status": "CONVERGED",
           "iterations": 13,
-          "time_ms": 5.07,
+          "time_ms": 5.24,
           "total_energy_ev": -498.009977,
           "heat_of_formation_kcal": -194.082,
           "dipole_debye": 0.543,
@@ -4516,7 +4518,7 @@
         "PM3": {
           "status": "CONVERGED",
           "iterations": 13,
-          "time_ms": 6.12,
+          "time_ms": 8.4,
           "total_energy_ev": -486.853864,
           "heat_of_formation_kcal": -190.739,
           "dipole_debye": 0.662,
@@ -4526,7 +4528,7 @@
         "MNDO": {
           "status": "CONVERGED",
           "iterations": 12,
-          "time_ms": 8.13,
+          "time_ms": 6.97,
           "total_energy_ev": -504.814921,
           "heat_of_formation_kcal": -178.871,
           "dipole_debye": 0.568,
@@ -4537,7 +4539,7 @@
       "features": {
         "COSMO": {
           "converged": true,
-          "time_ms": 11.26,
+          "time_ms": 7.4,
           "solv_energy_ev": -483.976421,
           "diel_stabilization_kcal": -2.769,
           "gas_dipole": 0.336,
@@ -4563,7 +4565,7 @@
         "PM6": {
           "status": "CONVERGED",
           "iterations": 18,
-          "time_ms": 22.53,
+          "time_ms": 14.4,
           "total_energy_ev": -928.241544,
           "heat_of_formation_kcal": -1563.46,
           "dipole_debye": 3.664,
@@ -4573,7 +4575,7 @@
         "AM1": {
           "status": "CONVERGED",
           "iterations": 24,
-          "time_ms": 20.05,
+          "time_ms": 16.96,
           "total_energy_ev": -999.424463,
           "heat_of_formation_kcal": -1914.515,
           "dipole_debye": 4.022,
@@ -4582,9 +4584,9 @@
         },
         "RM1": {
           "status": "CONVERGED",
-          "iterations": 31,
-          "time_ms": 21.59,
-          "total_energy_ev": -982.607217,
+          "iterations": 37,
+          "time_ms": 22.08,
+          "total_energy_ev": -982.607224,
           "heat_of_formation_kcal": -1732.541,
           "dipole_debye": 4.35,
           "max_grad_ev_a": 23.7043,
@@ -4593,7 +4595,7 @@
         "PM3": {
           "status": "CONVERGED",
           "iterations": 21,
-          "time_ms": 20.08,
+          "time_ms": 17.62,
           "total_energy_ev": -908.579753,
           "heat_of_formation_kcal": -1757.223,
           "dipole_debye": 3.142,
@@ -4603,7 +4605,7 @@
         "MNDO": {
           "status": "CONVERGED",
           "iterations": 21,
-          "time_ms": 17.94,
+          "time_ms": 16.97,
           "total_energy_ev": -994.937406,
           "heat_of_formation_kcal": -1777.678,
           "dipole_debye": 3.974,
@@ -4614,7 +4616,7 @@
       "features": {
         "COSMO": {
           "converged": true,
-          "time_ms": 26.54,
+          "time_ms": 25.05,
           "solv_energy_ev": -929.28462,
           "diel_stabilization_kcal": -24.054,
           "gas_dipole": 3.664,
@@ -4640,7 +4642,7 @@
         "PM6": {
           "status": "CONVERGED",
           "iterations": 23,
-          "time_ms": 15.22,
+          "time_ms": 13.64,
           "total_energy_ev": -972.583799,
           "heat_of_formation_kcal": -1577.505,
           "dipole_debye": 1.768,
@@ -4649,9 +4651,9 @@
         },
         "AM1": {
           "status": "CONVERGED",
-          "iterations": 31,
-          "time_ms": 19.92,
-          "total_energy_ev": -1065.650657,
+          "iterations": 33,
+          "time_ms": 17.87,
+          "total_energy_ev": -1065.650659,
           "heat_of_formation_kcal": -1940.236,
           "dipole_debye": 1.216,
           "max_grad_ev_a": 33.453,
@@ -4659,9 +4661,9 @@
         },
         "RM1": {
           "status": "CONVERGED",
-          "iterations": 31,
-          "time_ms": 20.65,
-          "total_energy_ev": -1056.305829,
+          "iterations": 32,
+          "time_ms": 23.62,
+          "total_energy_ev": -1056.30583,
           "heat_of_formation_kcal": -1806.535,
           "dipole_debye": 2.047,
           "max_grad_ev_a": 26.9814,
@@ -4670,8 +4672,8 @@
         "PM3": {
           "status": "CONVERGED",
           "iterations": 27,
-          "time_ms": 15.84,
-          "total_energy_ev": -936.922602,
+          "time_ms": 15.47,
+          "total_energy_ev": -936.9226,
           "heat_of_formation_kcal": -1752.657,
           "dipole_debye": 0.292,
           "max_grad_ev_a": 25.3548,
@@ -4679,9 +4681,9 @@
         },
         "MNDO": {
           "status": "CONVERGED",
-          "iterations": 32,
-          "time_ms": 18.14,
-          "total_energy_ev": -1060.221544,
+          "iterations": 38,
+          "time_ms": 19.99,
+          "total_energy_ev": -1060.221546,
           "heat_of_formation_kcal": -1775.246,
           "dipole_debye": 1.746,
           "max_grad_ev_a": 30.2244,
@@ -4691,7 +4693,7 @@
       "features": {
         "COSMO": {
           "converged": true,
-          "time_ms": 21.14,
+          "time_ms": 19.83,
           "solv_energy_ev": -973.222951,
           "diel_stabilization_kcal": -14.739,
           "gas_dipole": 1.768,
@@ -4717,7 +4719,7 @@
         "PM6": {
           "status": "CONVERGED",
           "iterations": 12,
-          "time_ms": 12.01,
+          "time_ms": 9.56,
           "total_energy_ev": -794.801192,
           "heat_of_formation_kcal": -1313.753,
           "dipole_debye": 3.619,
@@ -4727,7 +4729,7 @@
         "AM1": {
           "status": "CONVERGED",
           "iterations": 15,
-          "time_ms": 8.89,
+          "time_ms": 11.39,
           "total_energy_ev": -848.534105,
           "heat_of_formation_kcal": -1391.869,
           "dipole_debye": 3.941,
@@ -4737,7 +4739,7 @@
         "RM1": {
           "status": "CONVERGED",
           "iterations": 14,
-          "time_ms": 8.41,
+          "time_ms": 8.48,
           "total_energy_ev": -842.725017,
           "heat_of_formation_kcal": -1395.756,
           "dipole_debye": 4.123,
@@ -4747,7 +4749,7 @@
         "PM3": {
           "status": "CONVERGED",
           "iterations": 18,
-          "time_ms": 9.5,
+          "time_ms": 9.54,
           "total_energy_ev": -766.263726,
           "heat_of_formation_kcal": -1211.25,
           "dipole_debye": 3.172,
@@ -4757,7 +4759,7 @@
         "MNDO": {
           "status": "CONVERGED",
           "iterations": 15,
-          "time_ms": 8.64,
+          "time_ms": 10.23,
           "total_energy_ev": -845.255982,
           "heat_of_formation_kcal": -1275.642,
           "dipole_debye": 4.022,
@@ -4768,7 +4770,7 @@
       "features": {
         "COSMO": {
           "converged": true,
-          "time_ms": 11.61,
+          "time_ms": 12.16,
           "solv_energy_ev": -795.480068,
           "diel_stabilization_kcal": -15.655,
           "gas_dipole": 3.619,
@@ -4793,12 +4795,12 @@
         "PM6": {
           "status": "UNSUPPORTED_ELEMENT",
           "error": "Unsupported element Z=14 for semi-empirical method 'PM6'",
-          "time_ms": 0.03
+          "time_ms": 0.02
         },
         "AM1": {
           "status": "UNSUPPORTED_ELEMENT",
           "error": "Unsupported element Z=14 for semi-empirical method 'AM1'",
-          "time_ms": 0.01
+          "time_ms": 0.0
         },
         "RM1": {
           "status": "UNSUPPORTED_ELEMENT",
@@ -4840,7 +4842,7 @@
         "AM1": {
           "status": "CONVERGED",
           "iterations": 10,
-          "time_ms": 0.15,
+          "time_ms": 0.12,
           "total_energy_ev": -310.45116,
           "heat_of_formation_kcal": 819.633,
           "dipole_debye": 1.442,
@@ -4850,7 +4852,7 @@
         "RM1": {
           "status": "CONVERGED",
           "iterations": 9,
-          "time_ms": 0.16,
+          "time_ms": 0.11,
           "total_energy_ev": -305.639431,
           "heat_of_formation_kcal": 863.011,
           "dipole_debye": 1.441,
@@ -4860,7 +4862,7 @@
         "PM3": {
           "status": "CONVERGED",
           "iterations": 10,
-          "time_ms": 0.17,
+          "time_ms": 0.14,
           "total_energy_ev": -275.535196,
           "heat_of_formation_kcal": 1085.116,
           "dipole_debye": 1.069,
@@ -4870,7 +4872,7 @@
         "MNDO": {
           "status": "CONVERGED",
           "iterations": 9,
-          "time_ms": 0.16,
+          "time_ms": 0.12,
           "total_energy_ev": -308.936824,
           "heat_of_formation_kcal": 918.863,
           "dipole_debye": 1.381,
@@ -4881,7 +4883,7 @@
       "features": {
         "COSMO": {
           "converged": true,
-          "time_ms": 0.35,
+          "time_ms": 0.32,
           "solv_energy_ev": -322.073747,
           "diel_stabilization_kcal": -3.302,
           "gas_dipole": 1.497,
@@ -4906,7 +4908,7 @@
         "PM6": {
           "status": "CONVERGED",
           "iterations": 12,
-          "time_ms": 0.64,
+          "time_ms": 0.67,
           "total_energy_ev": -768.849492,
           "heat_of_formation_kcal": -341.462,
           "dipole_debye": 7.397,
@@ -4916,7 +4918,7 @@
         "AM1": {
           "status": "CONVERGED",
           "iterations": 11,
-          "time_ms": 0.69,
+          "time_ms": 0.88,
           "total_energy_ev": -852.619162,
           "heat_of_formation_kcal": -476.041,
           "dipole_debye": 5.397,
@@ -4926,7 +4928,7 @@
         "RM1": {
           "status": "CONVERGED",
           "iterations": 13,
-          "time_ms": 0.75,
+          "time_ms": 1.09,
           "total_energy_ev": -840.415473,
           "heat_of_formation_kcal": -528.174,
           "dipole_debye": 6.54,
@@ -4936,7 +4938,7 @@
         "PM3": {
           "status": "CONVERGED",
           "iterations": 11,
-          "time_ms": 0.66,
+          "time_ms": 0.92,
           "total_energy_ev": -798.416728,
           "heat_of_formation_kcal": -651.086,
           "dipole_debye": 5.813,
@@ -4946,7 +4948,7 @@
         "MNDO": {
           "status": "CONVERGED",
           "iterations": 13,
-          "time_ms": 0.69,
+          "time_ms": 0.76,
           "total_energy_ev": -880.988367,
           "heat_of_formation_kcal": -258.143,
           "dipole_debye": 3.93,
@@ -4957,7 +4959,7 @@
       "features": {
         "COSMO": {
           "converged": true,
-          "time_ms": 1.54,
+          "time_ms": 1.49,
           "solv_energy_ev": -771.295222,
           "diel_stabilization_kcal": -56.4,
           "gas_dipole": 7.397,
@@ -4983,7 +4985,7 @@
         "PM6": {
           "status": "CONVERGED",
           "iterations": 14,
-          "time_ms": 13.92,
+          "time_ms": 15.76,
           "total_energy_ev": -943.612775,
           "heat_of_formation_kcal": -1277.647,
           "dipole_debye": 1.835,
@@ -4993,7 +4995,7 @@
         "AM1": {
           "status": "CONVERGED",
           "iterations": 15,
-          "time_ms": 16.22,
+          "time_ms": 13.06,
           "total_energy_ev": -1020.262211,
           "heat_of_formation_kcal": -1831.666,
           "dipole_debye": 0.737,
@@ -5003,7 +5005,7 @@
         "RM1": {
           "status": "CONVERGED",
           "iterations": 16,
-          "time_ms": 15.97,
+          "time_ms": 21.58,
           "total_energy_ev": -998.605832,
           "heat_of_formation_kcal": -1593.741,
           "dipole_debye": 0.642,
@@ -5013,7 +5015,7 @@
         "PM3": {
           "status": "CONVERGED",
           "iterations": 15,
-          "time_ms": 14.93,
+          "time_ms": 13.69,
           "total_energy_ev": -968.147344,
           "heat_of_formation_kcal": -1821.769,
           "dipole_debye": 0.396,
@@ -5023,7 +5025,7 @@
         "MNDO": {
           "status": "CONVERGED",
           "iterations": 16,
-          "time_ms": 14.23,
+          "time_ms": 14.75,
           "total_energy_ev": -1015.459508,
           "heat_of_formation_kcal": -1615.134,
           "dipole_debye": 0.731,
@@ -5034,7 +5036,7 @@
       "features": {
         "COSMO": {
           "converged": true,
-          "time_ms": 19.06,
+          "time_ms": 17.53,
           "solv_energy_ev": -944.371992,
           "diel_stabilization_kcal": -17.508,
           "gas_dipole": 1.835,
@@ -5060,7 +5062,7 @@
         "PM6": {
           "status": "CONVERGED",
           "iterations": 14,
-          "time_ms": 9.07,
+          "time_ms": 8.15,
           "total_energy_ev": -762.657502,
           "heat_of_formation_kcal": -1004.553,
           "dipole_debye": 1.609,
@@ -5070,7 +5072,7 @@
         "AM1": {
           "status": "CONVERGED",
           "iterations": 14,
-          "time_ms": 11.18,
+          "time_ms": 8.15,
           "total_energy_ev": -821.801221,
           "heat_of_formation_kcal": -1375.824,
           "dipole_debye": 1.36,
@@ -5080,7 +5082,7 @@
         "RM1": {
           "status": "CONVERGED",
           "iterations": 14,
-          "time_ms": 7.38,
+          "time_ms": 8.14,
           "total_energy_ev": -799.973277,
           "heat_of_formation_kcal": -1238.727,
           "dipole_debye": 1.433,
@@ -5090,7 +5092,7 @@
         "PM3": {
           "status": "CONVERGED",
           "iterations": 15,
-          "time_ms": 7.42,
+          "time_ms": 11.06,
           "total_energy_ev": -772.028045,
           "heat_of_formation_kcal": -1148.475,
           "dipole_debye": 1.218,
@@ -5100,7 +5102,7 @@
         "MNDO": {
           "status": "CONVERGED",
           "iterations": 14,
-          "time_ms": 9.09,
+          "time_ms": 6.87,
           "total_energy_ev": -849.695781,
           "heat_of_formation_kcal": -1210.612,
           "dipole_debye": 1.775,
@@ -5111,7 +5113,7 @@
       "features": {
         "COSMO": {
           "converged": true,
-          "time_ms": 10.47,
+          "time_ms": 10.34,
           "solv_energy_ev": -763.131553,
           "diel_stabilization_kcal": -10.932,
           "gas_dipole": 1.609,
@@ -5135,29 +5137,29 @@
       "methods": {
         "PM6": {
           "status": "CONVERGED",
-          "iterations": 41,
-          "time_ms": 52.49,
-          "total_energy_ev": -1039.551114,
+          "iterations": 55,
+          "time_ms": 59.93,
+          "total_energy_ev": -1039.551115,
           "heat_of_formation_kcal": -1688.403,
           "dipole_debye": 1.81,
-          "max_grad_ev_a": 24.3408,
+          "max_grad_ev_a": 24.3407,
           "homo_lumo_gap_ev": 5.141
         },
         "AM1": {
           "status": "CONVERGED",
-          "iterations": 46,
-          "time_ms": 52.8,
-          "total_energy_ev": -1094.055312,
-          "heat_of_formation_kcal": -2011.457,
+          "iterations": 50,
+          "time_ms": 59.17,
+          "total_energy_ev": -1094.055341,
+          "heat_of_formation_kcal": -2011.458,
           "dipole_debye": 2.408,
-          "max_grad_ev_a": 32.1553,
-          "homo_lumo_gap_ev": 4.169
+          "max_grad_ev_a": 32.1555,
+          "homo_lumo_gap_ev": 4.168
         },
         "RM1": {
           "status": "CONVERGED",
           "iterations": 36,
-          "time_ms": 50.55,
-          "total_energy_ev": -1071.970093,
+          "time_ms": 43.47,
+          "total_energy_ev": -1071.970103,
           "heat_of_formation_kcal": -1874.015,
           "dipole_debye": 6.279,
           "max_grad_ev_a": 27.9316,
@@ -5166,8 +5168,8 @@
         "PM3": {
           "status": "CONVERGED",
           "iterations": 27,
-          "time_ms": 35.25,
-          "total_energy_ev": -1032.567271,
+          "time_ms": 39.66,
+          "total_energy_ev": -1032.567272,
           "heat_of_formation_kcal": -1831.538,
           "dipole_debye": 0.436,
           "max_grad_ev_a": 29.2406,
@@ -5176,13 +5178,13 @@
         "MNDO": {
           "status": "NOT_CONVERGED",
           "iterations": 60,
-          "time_ms": 69.68
+          "time_ms": 65.68
         }
       },
       "features": {
         "COSMO": {
           "converged": true,
-          "time_ms": 67.12,
+          "time_ms": 60.77,
           "solv_energy_ev": -1041.511321,
           "diel_stabilization_kcal": -45.203,
           "gas_dipole": 1.81,
@@ -5209,7 +5211,7 @@
         "PM6": {
           "status": "CONVERGED",
           "iterations": 17,
-          "time_ms": 47.26,
+          "time_ms": 40.96,
           "total_energy_ev": -1843.76418,
           "heat_of_formation_kcal": -1212.671,
           "dipole_debye": 4.845,
@@ -5219,7 +5221,7 @@
         "AM1": {
           "status": "CONVERGED",
           "iterations": 21,
-          "time_ms": 48.0,
+          "time_ms": 51.13,
           "total_energy_ev": -2032.936468,
           "heat_of_formation_kcal": -2834.435,
           "dipole_debye": 5.233,
@@ -5229,7 +5231,7 @@
         "RM1": {
           "status": "CONVERGED",
           "iterations": 21,
-          "time_ms": 54.26,
+          "time_ms": 46.05,
           "total_energy_ev": -1998.882843,
           "heat_of_formation_kcal": -2539.426,
           "dipole_debye": 5.189,
@@ -5239,7 +5241,7 @@
         "PM3": {
           "status": "CONVERGED",
           "iterations": 21,
-          "time_ms": 48.29,
+          "time_ms": 50.08,
           "total_energy_ev": -1887.857507,
           "heat_of_formation_kcal": -2421.502,
           "dipole_debye": 3.02,
@@ -5249,7 +5251,7 @@
         "MNDO": {
           "status": "CONVERGED",
           "iterations": 22,
-          "time_ms": 53.85,
+          "time_ms": 47.01,
           "total_energy_ev": -2071.562626,
           "heat_of_formation_kcal": -2820.23,
           "dipole_debye": 4.557,
@@ -5260,7 +5262,7 @@
       "features": {
         "COSMO": {
           "converged": true,
-          "time_ms": 63.46,
+          "time_ms": 67.65,
           "solv_energy_ev": -1844.740222,
           "diel_stabilization_kcal": -22.508,
           "gas_dipole": 4.845,
@@ -5286,7 +5288,7 @@
         "PM6": {
           "status": "CONVERGED",
           "iterations": 13,
-          "time_ms": 12.48,
+          "time_ms": 9.56,
           "total_energy_ev": -699.294633,
           "heat_of_formation_kcal": -692.969,
           "dipole_debye": 4.258,
@@ -5296,7 +5298,7 @@
         "AM1": {
           "status": "CONVERGED",
           "iterations": 14,
-          "time_ms": 9.89,
+          "time_ms": 9.68,
           "total_energy_ev": -753.600251,
           "heat_of_formation_kcal": -899.971,
           "dipole_debye": 4.564,
@@ -5306,7 +5308,7 @@
         "RM1": {
           "status": "CONVERGED",
           "iterations": 15,
-          "time_ms": 10.3,
+          "time_ms": 14.08,
           "total_energy_ev": -749.948231,
           "heat_of_formation_kcal": -833.561,
           "dipole_debye": 3.728,
@@ -5316,7 +5318,7 @@
         "PM3": {
           "status": "CONVERGED",
           "iterations": 14,
-          "time_ms": 10.33,
+          "time_ms": 10.07,
           "total_energy_ev": -692.471826,
           "heat_of_formation_kcal": -831.162,
           "dipole_debye": 3.779,
@@ -5326,7 +5328,7 @@
         "MNDO": {
           "status": "CONVERGED",
           "iterations": 14,
-          "time_ms": 11.88,
+          "time_ms": 9.75,
           "total_energy_ev": -753.43495,
           "heat_of_formation_kcal": -801.23,
           "dipole_debye": 4.058,
@@ -5337,7 +5339,7 @@
       "features": {
         "COSMO": {
           "converged": true,
-          "time_ms": 20.27,
+          "time_ms": 12.82,
           "solv_energy_ev": -699.906936,
           "diel_stabilization_kcal": -14.12,
           "gas_dipole": 4.258,
@@ -5363,7 +5365,7 @@
         "PM6": {
           "status": "CONVERGED",
           "iterations": 12,
-          "time_ms": 14.61,
+          "time_ms": 9.5,
           "total_energy_ev": -644.554317,
           "heat_of_formation_kcal": -281.715,
           "dipole_debye": 3.954,
@@ -5373,7 +5375,7 @@
         "AM1": {
           "status": "CONVERGED",
           "iterations": 15,
-          "time_ms": 13.48,
+          "time_ms": 10.55,
           "total_energy_ev": -664.74962,
           "heat_of_formation_kcal": -679.245,
           "dipole_debye": 4.296,
@@ -5383,7 +5385,7 @@
         "RM1": {
           "status": "CONVERGED",
           "iterations": 15,
-          "time_ms": 10.72,
+          "time_ms": 10.33,
           "total_energy_ev": -659.028399,
           "heat_of_formation_kcal": -663.17,
           "dipole_debye": 2.259,
@@ -5393,7 +5395,7 @@
         "PM3": {
           "status": "CONVERGED",
           "iterations": 14,
-          "time_ms": 10.29,
+          "time_ms": 9.97,
           "total_energy_ev": -645.087127,
           "heat_of_formation_kcal": -690.331,
           "dipole_debye": 2.2,
@@ -5403,7 +5405,7 @@
         "MNDO": {
           "status": "CONVERGED",
           "iterations": 14,
-          "time_ms": 10.36,
+          "time_ms": 13.81,
           "total_energy_ev": -697.034534,
           "heat_of_formation_kcal": -681.983,
           "dipole_debye": 5.224,
@@ -5414,7 +5416,7 @@
       "features": {
         "COSMO": {
           "converged": true,
-          "time_ms": 13.3,
+          "time_ms": 15.44,
           "solv_energy_ev": -645.028901,
           "diel_stabilization_kcal": -10.944,
           "gas_dipole": 3.954,
@@ -5441,7 +5443,7 @@
         "PM6": {
           "status": "CONVERGED",
           "iterations": 13,
-          "time_ms": 5.37,
+          "time_ms": 4.03,
           "total_energy_ev": -859.199562,
           "heat_of_formation_kcal": -764.437,
           "dipole_debye": 4.997,
@@ -5451,7 +5453,7 @@
         "AM1": {
           "status": "CONVERGED",
           "iterations": 14,
-          "time_ms": 4.41,
+          "time_ms": 4.1,
           "total_energy_ev": -947.483267,
           "heat_of_formation_kcal": -737.15,
           "dipole_debye": 4.198,
@@ -5461,7 +5463,7 @@
         "RM1": {
           "status": "CONVERGED",
           "iterations": 14,
-          "time_ms": 4.46,
+          "time_ms": 3.99,
           "total_energy_ev": -951.44875,
           "heat_of_formation_kcal": -800.02,
           "dipole_debye": 3.878,
@@ -5471,7 +5473,7 @@
         "PM3": {
           "status": "CONVERGED",
           "iterations": 14,
-          "time_ms": 4.23,
+          "time_ms": 3.97,
           "total_energy_ev": -825.638361,
           "heat_of_formation_kcal": -662.172,
           "dipole_debye": 2.901,
@@ -5481,7 +5483,7 @@
         "MNDO": {
           "status": "CONVERGED",
           "iterations": 15,
-          "time_ms": 4.42,
+          "time_ms": 4.18,
           "total_energy_ev": -948.906805,
           "heat_of_formation_kcal": -667.586,
           "dipole_debye": 3.525,
@@ -5492,7 +5494,7 @@
       "features": {
         "COSMO": {
           "converged": true,
-          "time_ms": 5.56,
+          "time_ms": 5.58,
           "solv_energy_ev": -860.057981,
           "diel_stabilization_kcal": -19.796,
           "gas_dipole": 4.997,
@@ -5517,7 +5519,7 @@
         "PM6": {
           "status": "CONVERGED",
           "iterations": 9,
-          "time_ms": 0.17,
+          "time_ms": 0.15,
           "total_energy_ev": -319.010922,
           "heat_of_formation_kcal": -52.771,
           "dipole_debye": 2.227,
@@ -5537,7 +5539,7 @@
         "RM1": {
           "status": "CONVERGED",
           "iterations": 10,
-          "time_ms": 0.14,
+          "time_ms": 0.17,
           "total_energy_ev": -344.968898,
           "heat_of_formation_kcal": -43.948,
           "dipole_debye": 2.179,
@@ -5547,7 +5549,7 @@
         "PM3": {
           "status": "CONVERGED",
           "iterations": 11,
-          "time_ms": 0.14,
+          "time_ms": 0.16,
           "total_energy_ev": -323.838853,
           "heat_of_formation_kcal": -28.793,
           "dipole_debye": 2.166,
@@ -5557,7 +5559,7 @@
         "MNDO": {
           "status": "CONVERGED",
           "iterations": 10,
-          "time_ms": 0.14,
+          "time_ms": 0.15,
           "total_energy_ev": -350.715769,
           "heat_of_formation_kcal": -44.582,
           "dipole_debye": 2.098,
@@ -5568,7 +5570,7 @@
       "features": {
         "COSMO": {
           "converged": true,
-          "time_ms": 0.44,
+          "time_ms": 0.39,
           "solv_energy_ev": -319.311448,
           "diel_stabilization_kcal": -6.93,
           "gas_dipole": 2.227,
@@ -5593,7 +5595,7 @@
         "PM6": {
           "status": "CONVERGED",
           "iterations": 10,
-          "time_ms": 1.06,
+          "time_ms": 0.9,
           "total_energy_ev": -639.08149,
           "heat_of_formation_kcal": -129.977,
           "dipole_debye": 3.499,
@@ -5603,7 +5605,7 @@
         "AM1": {
           "status": "CONVERGED",
           "iterations": 11,
-          "time_ms": 1.01,
+          "time_ms": 0.95,
           "total_energy_ev": -696.805228,
           "heat_of_formation_kcal": -111.097,
           "dipole_debye": 3.381,
@@ -5613,7 +5615,7 @@
         "RM1": {
           "status": "CONVERGED",
           "iterations": 11,
-          "time_ms": 0.96,
+          "time_ms": 0.92,
           "total_energy_ev": -690.973818,
           "heat_of_formation_kcal": -111.787,
           "dipole_debye": 3.445,
@@ -5633,7 +5635,7 @@
         "MNDO": {
           "status": "CONVERGED",
           "iterations": 11,
-          "time_ms": 1.03,
+          "time_ms": 0.95,
           "total_energy_ev": -701.992805,
           "heat_of_formation_kcal": -102.108,
           "dipole_debye": 3.235,
@@ -5644,7 +5646,7 @@
       "features": {
         "COSMO": {
           "converged": true,
-          "time_ms": 1.85,
+          "time_ms": 1.65,
           "solv_energy_ev": -639.500291,
           "diel_stabilization_kcal": -9.658,
           "gas_dipole": 3.499,

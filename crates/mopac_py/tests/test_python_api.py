@@ -149,6 +149,63 @@ class TestMopacPyBindings(unittest.TestCase):
         with self.assertRaises(ValueError):
             mopac_py.calculate([1], [[0.0, 0.0, 0.0]], method="NONEXISTENT")
 
+    def test_silicon_sih4(self):
+        """Verify Silicon (Z=14) converges in PM6, AM1, PM3, MNDO and is rejected in RM1."""
+        si_atoms = [14, 1, 1, 1, 1]
+        si_coords = [
+            [0.0, 0.0, 0.0],
+            [0.85, 0.85, 0.85],
+            [-0.85, -0.85, 0.85],
+            [-0.85, 0.85, -0.85],
+            [0.85, -0.85, -0.85],
+        ]
+        for m in ["PM6", "AM1", "PM3", "MNDO"]:
+            res = mopac_py.calculate(si_atoms, si_coords, method=m)
+            self.assertTrue(res.converged)
+            self.assertLess(res.total_energy_ev, -100.0)
+
+        with self.assertRaises(ValueError):
+            mopac_py.calculate(si_atoms, si_coords, method="RM1")
+
+    def test_grimme_d3_bj(self):
+        """Verify Grimme D3-BJ empirical dispersion stabilizes methane dimer."""
+        ch4_coords = [
+            [0.0, 0.0, 0.0],
+            [0.629118, 0.629118, 0.629118],
+            [-0.629118, -0.629118, 0.629118],
+            [-0.629118, 0.629118, -0.629118],
+            [0.629118, -0.629118, -0.629118],
+            [0.0, 0.0, 3.8],
+            [0.629118, 0.629118, 4.429118],
+            [-0.629118, -0.629118, 4.429118],
+            [-0.629118, 0.629118, 3.170882],
+            [0.629118, -0.629118, 3.170882],
+        ]
+        ch4_atoms = [6, 1, 1, 1, 1, 6, 1, 1, 1, 1]
+        res_plain = mopac_py.calculate(ch4_atoms, ch4_coords, method="PM6")
+        res_d3 = mopac_py.calculate(ch4_atoms, ch4_coords, method="PM6", dispersion="D3-BJ")
+        self.assertTrue(res_d3.converged)
+        delta_disp = res_d3.heat_of_formation_kcal - res_plain.heat_of_formation_kcal
+        self.assertLess(delta_disp, -0.5, "D3-BJ must provide attractive dispersion stabilization")
+
+    def test_rdkit_and_ase_interop(self):
+        """Verify RDKit and ASE helper bridges."""
+        self.assertTrue(hasattr(mopac_py, "from_rdkit"))
+        self.assertTrue(hasattr(mopac_py, "from_ase"))
+        self.assertTrue(hasattr(mopac_py, "MopacASECalculator"))
+
+        try:
+            from rdkit import Chem
+            from rdkit.Chem import AllChem
+            mol = Chem.AddHs(Chem.MolFromSmiles("CO"))
+            AllChem.EmbedMolecule(mol, randomSeed=1)
+            atoms, coords = mopac_py.from_rdkit(mol)
+            self.assertEqual(atoms, [6, 8, 1, 1, 1, 1])
+            res = mopac_py.calculate(atoms, coords, method="PM6")
+            self.assertTrue(res.converged)
+        except ImportError:
+            pass
+
 
 if __name__ == "__main__":
     unittest.main(verbosity=2)

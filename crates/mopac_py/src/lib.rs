@@ -192,7 +192,7 @@ fn run_calculation_internal(
     }
 
     let nelec = total_valence_elecs.round() as usize;
-    if nelec % 2 != 0 {
+    if !nelec.is_multiple_of(2) {
         return Err(PyValueError::new_err(format!(
             "Open-shell radical detected ({} valence electrons). Closed-shell RHF requires an even number of valence electrons (requires UHF/ROHF).",
             nelec
@@ -244,9 +244,10 @@ fn run_calculation_internal(
         let dm = match dm_name.to_uppercase().as_str() {
             "PM6-DH+" | "DH+" | "PM6_DH+" => DispersionModel::Pm6DhPlus,
             "PM7" => DispersionModel::Pm7,
+            "D3" | "D3BJ" | "D3-BJ" | "PM6-D3" | "AM1-D3" => DispersionModel::D3Bj,
             other => {
                 return Err(PyValueError::new_err(format!(
-                    "Unknown dispersion model '{}'. Supported: 'PM6-DH+', 'PM7'",
+                    "Unknown dispersion model '{}'. Supported: 'PM6-DH+', 'PM7', 'D3-BJ'",
                     other
                 )))
             }
@@ -302,7 +303,7 @@ fn run_calculation_internal(
     let lumo = scf_res.lumo_energy_ev;
 
     Ok(CalculationResult {
-        total_energy_ev: scf_res.total_energy_ev,
+        total_energy_ev: scf_res.total_energy_ev + (non_cov_kcal / EV_TO_KCAL_MOL),
         electronic_energy_ev: scf_res.electronic_energy_ev,
         nuclear_repulsion_ev: scf_res.nuclear_repulsion_ev,
         binding_energy_ev,
@@ -431,7 +432,7 @@ pub fn optimize(
     }
 
     let nelec = total_valence_elecs.round() as usize;
-    if nelec % 2 != 0 {
+    if !nelec.is_multiple_of(2) {
         return Err(PyValueError::new_err(format!(
             "Open-shell radical detected ({} valence electrons). Closed-shell RHF requires an even number of valence electrons (requires UHF/ROHF).",
             nelec
@@ -587,5 +588,61 @@ fn mopac_py(m: &Bound<'_, PyModule>) -> PyResult<()> {
     m.add_class::<MopacCalculator>()?;
     m.add_function(wrap_pyfunction!(calculate, m)?)?;
     m.add_function(wrap_pyfunction!(optimize, m)?)?;
+
+    let py = m.py();
+    let py_code = r#"
+def from_rdkit(mol, conf_id=-1):
+    """Extract atomic numbers and 3D Cartesian coordinates from an RDKit Mol object."""
+    conf = mol.GetConformer(conf_id)
+    atomic_numbers = [atom.GetAtomicNum() for atom in mol.GetAtoms()]
+    coords = [list(conf.GetAtomPosition(i)) for i in range(len(atomic_numbers))]
+    return atomic_numbers, coords
+
+def from_ase(atoms):
+    """Extract atomic numbers and 3D Cartesian coordinates from an ASE Atoms object."""
+    atomic_numbers = atoms.get_atomic_numbers().tolist()
+    coords = atoms.get_positions().tolist()
+    return atomic_numbers, coords
+
+try:
+    from ase.calculators.calculator import Calculator, all_changes
+    import numpy as np
+
+    class MopacASECalculator(Calculator):
+        """Atomic Simulation Environment (ASE) Calculator backed by MOPAC_RS."""
+        implemented_properties = ['energy', 'forces', 'dipole', 'charges']
+
+        def __init__(self, method='PM6', dispersion=None, cosmo_eps=None, use_nddo=True, **kwargs):
+            super().__init__(**kwargs)
+            self.method = method
+            self.dispersion = dispersion
+            self.cosmo_eps = cosmo_eps
+            self.use_nddo = use_nddo
+
+        def calculate(self, atoms=None, properties=['energy'], system_changes=all_changes):
+            super().calculate(atoms, properties, system_changes)
+            atomic_numbers = atoms.get_atomic_numbers().tolist()
+            coordinates = atoms.get_positions().tolist()
+            calc_res = calculate(
+                atomic_numbers,
+                coordinates,
+                method=self.method,
+                dispersion=self.dispersion,
+                cosmo_eps=self.cosmo_eps,
+                use_nddo=self.use_nddo
+            )
+            self.results['energy'] = calc_res.total_energy_ev
+            self.results['forces'] = -np.array(calc_res.gradients_ev_angstrom)
+            self.results['dipole'] = np.array(calc_res.dipole_debye[:3])
+            self.results['charges'] = np.array(calc_res.mulliken_charges)
+except ImportError:
+    class MopacASECalculator:
+        def __init__(self, *args, **kwargs):
+            raise ImportError("ase and numpy are required to instantiate MopacASECalculator")
+"#;
+
+    let dict = m.dict();
+    py.run_bound(py_code, Some(&dict), Some(&dict))?;
+
     Ok(())
 }
