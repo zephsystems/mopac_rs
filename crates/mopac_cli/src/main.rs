@@ -5,6 +5,10 @@
 
 use clap::Parser;
 use mopac_core::constants::codata2018::EV_TO_KCAL_MOL;
+use mopac_core::corrections::{
+    compute_dispersion_energy, compute_h4_energy, compute_hh_repulsion_energy_and_gradients,
+    DispersionModel, H4Parameters,
+};
 use mopac_core::gradients::GradientWorkspace;
 use mopac_core::opt::{optimize_geometry_lbfgs, OptimizationOptions};
 use mopac_core::parameters::am1::Am1Model;
@@ -31,58 +35,68 @@ use std::time::Instant;
 #[derive(Parser, Debug)]
 #[command(
     name = "mopac",
-    author = "zeph.sys",
-    version = "0.1.0",
-    about = "Canonical MOPAC Semi-Empirical Engine in Rust with Vulkan GPU Acceleration"
+    version = "0.1.0-alpha",
+    about = "MOPAC_RS: Modern Data-Oriented Semi-Empirical Quantum Chemistry Engine"
 )]
 struct Cli {
-    /// Input file path (.mop or .dat)
-    #[arg(value_name = "INPUT")]
+    /// Input file path (.mop)
     input: PathBuf,
 
-    /// Semi-empirical method / Hamiltonian (AM1, PM6, RM1)
+    /// Force calculation mode (1SCF or OPT)
+    #[arg(short, long)]
+    mode: Option<String>,
+
+    /// Semi-empirical method override (PM6, PM3, RM1, AM1, MNDO)
     #[arg(long)]
     method: Option<String>,
 
-    /// Enable full NDDO 22-multipole two-center electron repulsion integrals
-    #[arg(long, default_value_t = false)]
+    /// Enable full NDDO diatomic 22-multipole integrals & 3D rotation frame
+    #[arg(long)]
     nddo: bool,
 
-    /// Enable Vulkan GPU acceleration
-    #[arg(long, default_value_t = false)]
-    gpu: bool,
-
-    /// Use FP32 precision on GPU (default: FP64)
-    #[arg(long, default_value_t = false)]
-    fp32: bool,
-
-    /// Force geometry optimization (L-BFGS)
-    #[arg(long, default_value_t = false)]
+    /// Enable geometry optimization (L-BFGS)
+    #[arg(long)]
     opt: bool,
 
-    /// Force vibrational frequency and thermodynamic analysis (FORCE / THERMO)
-    #[arg(long, default_value_t = false)]
+    /// Enable Cartesian Hessian, mass-weighting and normal mode vibrational analysis
+    #[arg(long)]
     force: bool,
 
-    /// Calculate and print bond orders and valencies (BONDS)
-    #[arg(long, default_value_t = false)]
+    /// Enable Mayer bond orders and atomic valencies calculation
+    #[arg(long)]
     bonds: bool,
-
-    /// Perform Mulliken population analysis (MULLIK)
-    #[arg(long, default_value_t = false)]
-    mulliken: bool,
 
     /// Force single-point calculation (1SCF)
     #[arg(long = "1scf", default_value_t = false)]
     one_scf: bool,
 
-    /// Number of CPU worker threads
+    /// Enable Mulliken population analysis and Löwdin de-orthogonalization
+    #[arg(long, alias = "mulliken")]
+    mullik: bool,
+
+    /// Enable Vulkan GPU compute acceleration
+    #[arg(long)]
+    gpu: bool,
+
+    /// Use FP32 single-precision GPU pipeline (faster on consumer gaming GPUs)
+    #[arg(long)]
+    fp32: bool,
+
+    /// Number of Rayon worker threads
     #[arg(long)]
     threads: Option<usize>,
 
     /// Solvent dielectric constant for COSMO implicit solvation (e.g. --eps 78.4)
     #[arg(long)]
     eps: Option<f64>,
+
+    /// Non-covalent empirical dispersion model (e.g. --disp pm6-dh+ or --disp pm7)
+    #[arg(long)]
+    disp: Option<String>,
+
+    /// Enable D3H4 composite correction (dispersion, H4 hydrogen bonding, and H-H repulsion)
+    #[arg(long)]
+    d3h4: bool,
 
     /// Custom output file path (.out)
     #[arg(short, long)]
@@ -91,6 +105,13 @@ struct Cli {
     /// Custom archive file path (.arc)
     #[arg(long)]
     arc: Option<PathBuf>,
+}
+
+#[derive(Debug, Clone, Copy, Default)]
+struct NonCovalentBreakdown {
+    dispersion_kcal: f64,
+    h4_kcal: f64,
+    hh_repulsion_kcal: f64,
 }
 
 #[derive(Debug, Clone)]
@@ -123,6 +144,9 @@ struct ParsedInput {
     is_bonds_requested: bool,
     is_mullik_requested: bool,
     eps: Option<f64>,
+    dispersion: Option<DispersionModel>,
+    use_h4: bool,
+    use_hh: bool,
 }
 
 fn symbol_to_atomic_number(sym: &str) -> Option<u8> {
@@ -256,6 +280,9 @@ fn parse_mopac_input(content: &str) -> io::Result<ParsedInput> {
     let mut is_bonds_requested = false;
     let mut is_mullik_requested = false;
     let mut eps = None;
+    let mut dispersion = None;
+    let mut use_h4 = false;
+    let mut use_hh = false;
 
     for kw in &keywords {
         let u = kw.to_uppercase();
@@ -275,6 +302,19 @@ fn parse_mopac_input(content: &str) -> io::Result<ParsedInput> {
             is_gpu = true;
         } else if u == "FP32" {
             is_fp32 = true;
+        } else if u == "PM6-D3H4" || u == "D3H4" {
+            method = Some("PM6".to_string());
+            dispersion = Some(DispersionModel::Pm6DhPlus);
+            use_h4 = true;
+            use_hh = true;
+        } else if u == "PM6-DH+" || u == "PM6-DH2" || u == "DH+" || u == "DISP" {
+            method = Some("PM6".to_string());
+            dispersion = Some(DispersionModel::Pm6DhPlus);
+        } else if u == "PM7" {
+            method = Some("PM7".to_string());
+            dispersion = Some(DispersionModel::Pm7);
+        } else if u == "H4" {
+            use_h4 = true;
         } else if u == "PM6" {
             method = Some("PM6".to_string());
         } else if u == "PM3" {
@@ -370,6 +410,9 @@ fn parse_mopac_input(content: &str) -> io::Result<ParsedInput> {
         is_bonds_requested,
         is_mullik_requested,
         eps,
+        dispersion,
+        use_h4,
+        use_hh,
     })
 }
 
@@ -391,7 +434,16 @@ fn compute_wavefunction_properties(
     model: &dyn ParameterModel,
     ws: &ScfWorkspace,
     scf: &ScfResult,
-) -> (f64, Vec<f64>, Vec<[f64; 3]>, DipoleResult) {
+    disp_model: Option<DispersionModel>,
+    use_h4: bool,
+    use_hh: bool,
+) -> (
+    f64,
+    Vec<f64>,
+    Vec<[f64; 3]>,
+    DipoleResult,
+    NonCovalentBreakdown,
+) {
     let mut sum_eisol = 0.0;
     let mut sum_eheat = 0.0;
     for &z in &batch.atomic_numbers {
@@ -400,8 +452,22 @@ fn compute_wavefunction_properties(
         sum_eheat += eheat;
     }
 
+    let mut non_cov = NonCovalentBreakdown::default();
+    if let Some(dm) = disp_model {
+        non_cov.dispersion_kcal = compute_dispersion_energy(batch, dm);
+    }
+    if use_h4 {
+        let params = H4Parameters::default();
+        non_cov.h4_kcal = compute_h4_energy(batch, &params);
+    }
+    if use_hh {
+        let (e_hh, _) = compute_hh_repulsion_energy_and_gradients(batch);
+        non_cov.hh_repulsion_kcal = e_hh;
+    }
+    let non_cov_total = non_cov.dispersion_kcal + non_cov.h4_kcal + non_cov.hh_repulsion_kcal;
+
     let binding_energy_ev = scf.total_energy_ev - sum_eisol;
-    let heat_of_formation_kcal = binding_energy_ev * EV_TO_KCAL_MOL + sum_eheat;
+    let heat_of_formation_kcal = binding_energy_ev * EV_TO_KCAL_MOL + sum_eheat + non_cov_total;
 
     let dipole = compute_dipole_moment(batch, model, &ws.density);
     let charges = dipole.atomic_charges.clone();
@@ -419,7 +485,13 @@ fn compute_wavefunction_properties(
         populations.push([s_pop, p_pop, s_pop + p_pop]);
     }
 
-    (heat_of_formation_kcal, charges, populations, dipole)
+    (
+        heat_of_formation_kcal,
+        charges,
+        populations,
+        dipole,
+        non_cov,
+    )
 }
 
 fn main() -> Result<(), Box<dyn std::error::Error>> {
@@ -648,8 +720,23 @@ fn main() -> Result<(), Box<dyn std::error::Error>> {
     };
 
     let elapsed = start_time.elapsed();
-    let (hof_kcal, charges, pops, dipole) =
-        compute_wavefunction_properties(&batch, model.as_ref(), &ws, &scf_final);
+    let disp_model = match cli.disp.as_deref() {
+        Some("pm6-dh+") | Some("pm6-dh2") | Some("dh+") => Some(DispersionModel::Pm6DhPlus),
+        Some("pm7") => Some(DispersionModel::Pm7),
+        _ => parsed.dispersion,
+    };
+    let use_h4 = cli.d3h4 || parsed.use_h4;
+    let use_hh = cli.d3h4 || parsed.use_hh;
+
+    let (hof_kcal, charges, pops, dipole, non_cov) = compute_wavefunction_properties(
+        &batch,
+        model.as_ref(),
+        &ws,
+        &scf_final,
+        disp_model,
+        use_h4,
+        use_hh,
+    );
 
     println!("-------------------------------------------------------------------------------");
     println!("                             FINAL SCF RESULTS                                 ");
@@ -659,6 +746,24 @@ fn main() -> Result<(), Box<dyn std::error::Error>> {
         hof_kcal,
         hof_kcal * 4.184
     );
+    if non_cov.dispersion_kcal.abs() > 1e-6 {
+        println!(
+            " Dispersion Energy (D3)  : {:15.5} kcal/mol",
+            non_cov.dispersion_kcal
+        );
+    }
+    if non_cov.h4_kcal.abs() > 1e-6 {
+        println!(
+            " H4 Hydrogen Bond Energy : {:15.5} kcal/mol",
+            non_cov.h4_kcal
+        );
+    }
+    if non_cov.hh_repulsion_kcal.abs() > 1e-6 {
+        println!(
+            " H-H Repulsion Energy    : {:15.5} kcal/mol",
+            non_cov.hh_repulsion_kcal
+        );
+    }
     println!(
         " Total SCF Energy        : {:15.6} eV",
         scf_final.total_energy_ev
@@ -792,7 +897,7 @@ fn main() -> Result<(), Box<dyn std::error::Error>> {
         }
     }
 
-    let is_mullik = cli.mulliken || parsed.is_mullik_requested;
+    let is_mullik = cli.mullik || parsed.is_mullik_requested;
     let mullik_result = if is_mullik {
         let n_electrons: usize = batch
             .atomic_numbers
@@ -895,6 +1000,27 @@ fn main() -> Result<(), Box<dyn std::error::Error>> {
         hof_kcal,
         hof_kcal * 4.184
     )?;
+    if non_cov.dispersion_kcal.abs() > 1e-6 {
+        writeln!(
+            out,
+            " DISPERSION ENERGY       = {:17.5} KCAL/MOL",
+            non_cov.dispersion_kcal
+        )?;
+    }
+    if non_cov.h4_kcal.abs() > 1e-6 {
+        writeln!(
+            out,
+            " H4 HYDROGEN BOND ENERGY = {:17.5} KCAL/MOL",
+            non_cov.h4_kcal
+        )?;
+    }
+    if non_cov.hh_repulsion_kcal.abs() > 1e-6 {
+        writeln!(
+            out,
+            " H-H REPULSION ENERGY    = {:17.5} KCAL/MOL",
+            non_cov.hh_repulsion_kcal
+        )?;
+    }
     writeln!(
         out,
         " TOTAL ENERGY            = {:17.6} EV",
