@@ -7,7 +7,7 @@
 [![Language: Rust](https://img.shields.io/badge/Language-Rust%201.85%2B-orange.svg)]()
 [![SIMD: AVX2 / AVX-512](https://img.shields.io/badge/Acceleration-AVX2%20%7C%20AVX--512-red.svg)]()
 [![GPU: Vulkan Compute](https://img.shields.io/badge/Compute-Vulkan%20%7C%20GDDR6%20VRAM-green.svg)]()
-[![Scrutiny Tests](https://img.shields.io/badge/Automated%20Tests-71%2F71%20Passed-brightgreen.svg)]()
+[![Scrutiny Tests](https://img.shields.io/badge/Automated%20Tests-78%2F78%20Passed-brightgreen.svg)]()
 [![Python Bindings](https://img.shields.io/badge/PyO3-Python%203.8--3.14-blue.svg)]()
 
 ---
@@ -27,7 +27,7 @@ Every single module, parameter table, and integral calculation is empirically ve
 * **Dual Compute Backend:**
   - **CPU SIMD:** Vectorized AVX2 / FMA kernels with Rayon multi-threaded parallelism.
   - **Universal GPU (Vulkan Compute):** Cross-vendor hardware acceleration supporting NVIDIA RTX, AMD Radeon, Intel Arc, and Apple Silicon (via MoltenVK) with dedicated DMA host-to-device GDDR6 VRAM batch management.
-* **Axiomatic Verification:** 71 automated scrutiny, unit, quantum theorem, and differential oracle tests validating physical invariance, rotation orthonormality, translational symmetry, and exact numerical parity against OpenMOPAC.
+* **Axiomatic Verification:** 78 automated scrutiny, unit, quantum theorem, and differential oracle tests validating physical invariance, rotation orthonormality, translational symmetry, and exact numerical parity against OpenMOPAC.
 
 ---
 
