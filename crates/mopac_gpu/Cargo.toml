@@ -8,7 +8,8 @@ repository.workspace = true
 homepage.workspace = true
 documentation.workspace = true
 description = "High-Performance Direct Vulkan GPU Compute Acceleration for MOPAC_RS"
+readme = "../../README.md"
 
 [dependencies]
 ash = "0.38"
-mopac_core = { path = "../mopac_core" }
+mopac_core = { path = "../mopac_core", version = "0.1.0" }

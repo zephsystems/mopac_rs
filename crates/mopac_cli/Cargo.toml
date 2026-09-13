@@ -1,5 +1,5 @@
 [package]
-name = "mopac_cli"
+name = "mopac"
 version.workspace = true
 edition.workspace = true
 authors.workspace = true
@@ -8,13 +8,14 @@ repository.workspace = true
 homepage.workspace = true
 documentation.workspace = true
 description = "Canonical Command-Line Interface (CLI) binary for MOPAC_RS"
+readme = "../../README.md"
 
 [[bin]]
 name = "mopac"
 path = "src/main.rs"
 
 [dependencies]
-mopac_core = { path = "../mopac_core" }
-mopac_gpu = { path = "../mopac_gpu" }
+mopac_core = { path = "../mopac_core", version = "0.1.0" }
+mopac_gpu = { path = "../mopac_gpu", version = "0.1.0" }
 clap = { version = "4.5", features = ["derive"] }
 rayon = "1.10"

@@ -8,6 +8,7 @@ repository.workspace = true
 homepage.workspace = true
 documentation.workspace = true
 description = "PyO3 Python bindings for MOPAC_RS quantum chemistry engine"
+publish = false
 
 [lib]
 name = "mopac_py"

@@ -8,6 +8,7 @@ repository.workspace = true
 homepage.workspace = true
 documentation.workspace = true
 description = "High-performance Data-Oriented semi-empirical quantum chemistry core engine in Rust"
+readme = "../../README.md"
 
 [dependencies]
 
