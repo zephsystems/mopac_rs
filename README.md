@@ -3,6 +3,8 @@
 > **Modern High-Performance Data-Oriented Semi-Empirical Quantum Chemistry Engine in Rust**
 
 [![License: Apache 2.0](https://img.shields.io/badge/License-Apache_2.0-blue.svg)](https://opensource.org/licenses/Apache-2.0)
+[![Crates.io](https://img.shields.io/crates/v/mopac.svg)](https://crates.io/crates/mopac)
+[![DOI](https://zenodo.org/badge/DOI/10.5281/zenodo.22731254.svg)](https://doi.org/10.5281/zenodo.22731254)
 [![CI Status](https://github.com/zephsystems/mopac_rs/actions/workflows/ci.yml/badge.svg)](https://github.com/zephsystems/mopac_rs/actions/workflows/ci.yml)
 [![Language: Rust](https://img.shields.io/badge/Language-Rust%201.85%2B-orange.svg)]()
 [![SIMD: AVX2 / AVX-512](https://img.shields.io/badge/Acceleration-AVX2%20%7C%20AVX--512-red.svg)]()
