@@ -8,6 +8,8 @@
 
 pub mod drc;
 pub mod irc;
+pub mod saddle;
 
 pub use drc::*;
 pub use irc::*;
+pub use saddle::*;

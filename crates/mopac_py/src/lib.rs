@@ -10,7 +10,7 @@
 
 use pyo3::exceptions::PyValueError;
 use pyo3::prelude::*;
-use pyo3::types::PyDict;
+use pyo3::types::{PyDict, PyList};
 
 use mopac_core::ci::meci::{run_meci, CiActiveSpace, MeciOptions, MeciWorkspace};
 use mopac_core::ci::spectrum::{
@@ -40,8 +40,9 @@ use mopac_core::properties::{
     compute_mulliken_population, EspOptions,
 };
 use mopac_core::reactions::{
-    run_dynamic_reaction_coordinate, trace_intrinsic_reaction_coordinate, DrcEnsemble, DrcOptions,
-    DrcWorkspace, InitialVelocities, IrcDirection, IrcOptions, IrcWorkspace,
+    run_dynamic_reaction_coordinate, run_saddle, trace_intrinsic_reaction_coordinate, DrcEnsemble,
+    DrcOptions, DrcWorkspace, InitialVelocities, IrcDirection, IrcOptions, IrcWorkspace,
+    SaddleOptions,
 };
 use mopac_core::scf::scf_loop::{run_rhf_scf_with_options, ScfOptions};
 use mopac_core::solvation::CosmoParams;
@@ -592,6 +593,119 @@ impl DrcPyResult {
             frames_list.append(f.to_dict(py)?)?;
         }
         dict.set_item("frames", frames_list)?;
+        Ok(dict)
+    }
+}
+
+/// A discrete point along the two-ended reaction barrier ascent in SADDLE.
+#[pyclass(get_all)]
+#[derive(Debug, Clone)]
+pub struct SaddlePointPy {
+    /// Macro cycle iteration index
+    pub cycle: usize,
+    /// Which structure was relaxed (1 = reactant side, 2 = product side)
+    pub moving_structure: usize,
+    /// Inter-structure distance in Angstroms
+    pub distance: f64,
+    /// Standard heat of formation in kcal/mol
+    pub heat_of_formation_kcal: f64,
+    /// Electronic total energy in eV
+    pub total_energy_ev: f64,
+    /// RMS gradient norm in kcal/(mol * A)
+    pub grad_rms: f64,
+    /// Cartesian coordinates
+    pub coordinates: Vec<[f64; 3]>,
+}
+
+#[pymethods]
+impl SaddlePointPy {
+    fn __repr__(&self) -> String {
+        format!(
+            "<SaddlePointPy cycle={} moving_structure={} dist={:.3} A, dHf={:.3} kcal/mol, grad_rms={:.4}>",
+            self.cycle, self.moving_structure, self.distance, self.heat_of_formation_kcal, self.grad_rms
+        )
+    }
+
+    fn to_dict<'py>(&self, py: Python<'py>) -> PyResult<Bound<'py, PyDict>> {
+        let dict = PyDict::new_bound(py);
+        dict.set_item("cycle", self.cycle)?;
+        dict.set_item("moving_structure", self.moving_structure)?;
+        dict.set_item("distance", self.distance)?;
+        dict.set_item("heat_of_formation_kcal", self.heat_of_formation_kcal)?;
+        dict.set_item("total_energy_ev", self.total_energy_ev)?;
+        dict.set_item("grad_rms", self.grad_rms)?;
+        dict.set_item("coordinates", &self.coordinates)?;
+        Ok(dict)
+    }
+}
+
+/// Outcome of two-ended SADDLE transition state search.
+#[pyclass(get_all)]
+#[derive(Debug, Clone)]
+pub struct SaddlePyResult {
+    /// Whether the two endpoints converged within the distance threshold
+    pub converged: bool,
+    /// Number of completed SADDLE macro cycles
+    pub num_cycles: usize,
+    /// Final distance between endpoint structures in Angstroms
+    pub final_distance: f64,
+    /// Transition state Cartesian coordinates in Angstroms
+    pub transition_state_coordinates: Vec<[f64; 3]>,
+    /// Transition state total energy in eV
+    pub transition_state_energy_ev: f64,
+    /// Standard heat of formation at transition state in kcal/mol
+    pub transition_state_heat_of_formation_kcal: f64,
+    /// Forward reaction barrier height in kcal/mol (TS - Reactant)
+    pub barrier_forward_kcal: f64,
+    /// Reverse reaction barrier height in kcal/mol (TS - Product)
+    pub barrier_reverse_kcal: f64,
+    /// Trajectory of SADDLE relaxation points
+    pub trajectory: Vec<SaddlePointPy>,
+    /// Final single-point calculation result at the transition state
+    pub final_result: CalculationResult,
+    /// Optional eigenvector-following refinement result
+    pub ts_refinement: Option<TransitionStatePyResult>,
+}
+
+#[pymethods]
+impl SaddlePyResult {
+    fn __repr__(&self) -> String {
+        format!(
+            "<SaddlePyResult converged={} cycles={} final_dist={:.4} A, TS dHf={:.3} kcal/mol, barrier_fwd={:.3} kcal/mol>",
+            self.converged, self.num_cycles, self.final_distance, self.transition_state_heat_of_formation_kcal, self.barrier_forward_kcal
+        )
+    }
+
+    fn to_dict<'py>(&self, py: Python<'py>) -> PyResult<Bound<'py, PyDict>> {
+        let dict = PyDict::new_bound(py);
+        dict.set_item("converged", self.converged)?;
+        dict.set_item("num_cycles", self.num_cycles)?;
+        dict.set_item("final_distance", self.final_distance)?;
+        dict.set_item(
+            "transition_state_coordinates",
+            &self.transition_state_coordinates,
+        )?;
+        dict.set_item(
+            "transition_state_energy_ev",
+            self.transition_state_energy_ev,
+        )?;
+        dict.set_item(
+            "transition_state_heat_of_formation_kcal",
+            self.transition_state_heat_of_formation_kcal,
+        )?;
+        dict.set_item("barrier_forward_kcal", self.barrier_forward_kcal)?;
+        dict.set_item("barrier_reverse_kcal", self.barrier_reverse_kcal)?;
+        let traj_list = PyList::empty_bound(py);
+        for pt in &self.trajectory {
+            traj_list.append(pt.to_dict(py)?)?;
+        }
+        dict.set_item("trajectory", traj_list)?;
+        dict.set_item("final_result", self.final_result.to_dict(py)?)?;
+        if let Some(ref ref_res) = self.ts_refinement {
+            dict.set_item("ts_refinement", ref_res.to_dict(py)?)?;
+        } else {
+            dict.set_item("ts_refinement", py.None())?;
+        }
         Ok(dict)
     }
 }
@@ -1521,6 +1635,149 @@ pub fn drc(
     })
 }
 
+/// Locate a transition state between two geometries using two-ended SADDLE reaction search.
+///
+/// Port of canonical OpenMOPAC `react1.F90`.
+///
+/// Parameters:
+/// - `atomic_numbers`: list of integer atomic numbers (e.g. `[7, 1, 1, 1]`)
+/// - `reactant_coords`: 3D coordinates in Angstroms of the reactant state
+/// - `product_coords`: 3D coordinates in Angstroms of the product state
+/// - `method`: Semi-empirical Hamiltonian ("PM6", "AM1", "RM1", "PM3", "MNDO"; default: "PM6")
+/// - `max_cycles`: Maximum SADDLE macro stepping cycles (default: 60)
+/// - `step_size`: Distance decrement step size in Angstroms (default: 0.10)
+/// - `convergence_distance`: Endpoint convergence distance in Angstroms (default: 0.12)
+/// - `inner_max_steps`: Maximum transverse relaxation steps per cycle (default: 12)
+/// - `inner_grad_tol`: RMS gradient tolerance for transverse relaxation in kcal/(mol*A) (default: 3.0)
+/// - `use_nddo`: Enable full NDDO multipole integrals (default: true)
+/// - `refine_with_ts`: Refine candidate TS with eigenvector-following Baker P-RFO (default: true)
+#[pyfunction]
+#[pyo3(signature = (
+    atomic_numbers,
+    reactant_coords,
+    product_coords,
+    method = None,
+    max_cycles = None,
+    step_size = None,
+    convergence_distance = None,
+    inner_max_steps = None,
+    inner_grad_tol = None,
+    use_nddo = None,
+    refine_with_ts = None,
+))]
+pub fn saddle(
+    atomic_numbers: Vec<u8>,
+    reactant_coords: Vec<[f64; 3]>,
+    product_coords: Vec<[f64; 3]>,
+    method: Option<&str>,
+    max_cycles: Option<usize>,
+    step_size: Option<f64>,
+    convergence_distance: Option<f64>,
+    inner_max_steps: Option<usize>,
+    inner_grad_tol: Option<f64>,
+    use_nddo: Option<bool>,
+    refine_with_ts: Option<bool>,
+) -> PyResult<SaddlePyResult> {
+    let natoms = atomic_numbers.len();
+    if natoms == 0 {
+        return Err(PyValueError::new_err("atomic_numbers cannot be empty"));
+    }
+    if reactant_coords.len() != natoms {
+        return Err(PyValueError::new_err(format!(
+            "Mismatch between atomic_numbers ({}) and reactant_coords ({})",
+            natoms,
+            reactant_coords.len()
+        )));
+    }
+    if product_coords.len() != natoms {
+        return Err(PyValueError::new_err(format!(
+            "Mismatch between atomic_numbers ({}) and product_coords ({})",
+            natoms,
+            product_coords.len()
+        )));
+    }
+
+    let m_name = method.unwrap_or("PM6");
+    let model = get_model(m_name)?;
+
+    let opts = SaddleOptions {
+        max_cycles: max_cycles.unwrap_or(60),
+        step_size: step_size.unwrap_or(0.10),
+        convergence_distance: convergence_distance.unwrap_or(0.12),
+        inner_max_steps: inner_max_steps.unwrap_or(12),
+        inner_grad_tol: inner_grad_tol.unwrap_or(3.0),
+        use_nddo: use_nddo.unwrap_or(true),
+        refine_with_ts: refine_with_ts.unwrap_or(true),
+    };
+
+    let saddle_res = run_saddle(
+        atomic_numbers.clone(),
+        &reactant_coords,
+        &product_coords,
+        model.as_ref(),
+        &opts,
+    );
+
+    let final_calc = run_calculation_internal(
+        &atomic_numbers,
+        &saddle_res.transition_state_coordinates,
+        m_name,
+        None,
+        None,
+        false,
+        opts.use_nddo,
+        60,
+        1e-7,
+        1e-6,
+        0.0,
+        0.5,
+    )?;
+
+    let py_traj: Vec<SaddlePointPy> = saddle_res
+        .trajectory
+        .into_iter()
+        .map(|pt| SaddlePointPy {
+            cycle: pt.cycle,
+            moving_structure: pt.moving_structure,
+            distance: pt.distance,
+            heat_of_formation_kcal: pt.heat_of_formation_kcal,
+            total_energy_ev: pt.total_energy_ev,
+            grad_rms: pt.grad_rms,
+            coordinates: pt.coordinates,
+        })
+        .collect();
+
+    let py_ts_refinement = saddle_res
+        .ts_refinement
+        .map(|ts_res| TransitionStatePyResult {
+            converged: ts_res.converged,
+            cycles: ts_res.cycles,
+            final_energy_ev: ts_res.final_energy_ev,
+            final_heat_of_formation_kcal: ts_res.heat_of_formation_kcal,
+            initial_grad_rms: ts_res.initial_grad_rms,
+            final_grad_rms: ts_res.final_grad_rms,
+            final_grad_max: ts_res.final_grad_max,
+            ts_mode_eigenvalue: ts_res.ts_mode_eigenvalue,
+            ts_mode_index: ts_res.ts_mode_index,
+            coordinates: saddle_res.transition_state_coordinates.clone(),
+            final_result: final_calc.clone(),
+        });
+
+    Ok(SaddlePyResult {
+        converged: saddle_res.converged,
+        num_cycles: saddle_res.num_cycles,
+        final_distance: saddle_res.final_distance,
+        transition_state_coordinates: saddle_res.transition_state_coordinates,
+        transition_state_energy_ev: saddle_res.transition_state_energy_ev,
+        transition_state_heat_of_formation_kcal: saddle_res.transition_state_heat_of_formation_kcal,
+        barrier_forward_kcal: saddle_res.barrier_forward_kcal,
+        barrier_reverse_kcal: saddle_res.barrier_reverse_kcal,
+        trajectory: py_traj,
+        final_result: final_calc,
+        ts_refinement: py_ts_refinement,
+    })
+}
+
 /// Single CI electronic state result exposed to Python.
 #[pyclass(get_all)]
 #[derive(Debug, Clone)]
@@ -1569,6 +1826,8 @@ pub struct MeciPyResult {
     pub total_energy_ev: f64,
     /// Heat of formation in kcal/mol
     pub heat_of_formation_kcal: f64,
+    /// Cartesian nuclear gradients for the target root in kcal/(mol * A)
+    pub gradients_kcal_mol_angstrom: Vec<[f64; 3]>,
 }
 
 /// Simulated UV-Vis spectrum exposed to Python.
@@ -1620,7 +1879,7 @@ pub fn meci(
     }
 
     let model = get_model(method.unwrap_or("PM6"))?;
-    let batch = MolecularBatch::new_for_model(atomic_numbers, &coordinates, model.as_ref());
+    let mut batch = MolecularBatch::new_for_model(atomic_numbers, &coordinates, model.as_ref());
     let mut scf_ws = ScfWorkspace::allocate(batch.norbs);
     let nddo = use_nddo.unwrap_or(true);
 
@@ -1695,6 +1954,27 @@ pub fn meci(
         })
         .collect();
 
+    let mut grad_ws = GradientWorkspace::allocate(batch.norbs);
+    let mut grads_ev = vec![[0.0f64; 3]; natoms];
+    mopac_core::ci::compute_meci_nuclear_gradients(
+        &mut batch,
+        model.as_ref(),
+        &meci_res.state_density,
+        &mut grad_ws,
+        &mut grads_ev,
+        nddo,
+    );
+    let gradients_kcal_mol_angstrom: Vec<[f64; 3]> = grads_ev
+        .iter()
+        .map(|g| {
+            [
+                g[0] * EV_TO_KCAL_MOL,
+                g[1] * EV_TO_KCAL_MOL,
+                g[2] * EV_TO_KCAL_MOL,
+            ]
+        })
+        .collect();
+
     Ok(MeciPyResult {
         states,
         num_microstates: meci_res.microstates.len(),
@@ -1703,6 +1983,7 @@ pub fn meci(
         electronic_energy_ev: meci_res.electronic_energy_ev,
         total_energy_ev: meci_res.total_energy_ev,
         heat_of_formation_kcal: meci_res.heat_of_formation_kcal,
+        gradients_kcal_mol_angstrom,
     })
 }
 
@@ -2168,6 +2449,8 @@ fn mopac_py(m: &Bound<'_, PyModule>) -> PyResult<()> {
     m.add_class::<IrcPyResult>()?;
     m.add_class::<DrcFramePy>()?;
     m.add_class::<DrcPyResult>()?;
+    m.add_class::<SaddlePointPy>()?;
+    m.add_class::<SaddlePyResult>()?;
     m.add_class::<CiStatePy>()?;
     m.add_class::<MeciPyResult>()?;
     m.add_class::<UvVisSpectrumPy>()?;
@@ -2181,6 +2464,7 @@ fn mopac_py(m: &Bound<'_, PyModule>) -> PyResult<()> {
     m.add_function(wrap_pyfunction!(esp_charges, m)?)?;
     m.add_function(wrap_pyfunction!(irc, m)?)?;
     m.add_function(wrap_pyfunction!(drc, m)?)?;
+    m.add_function(wrap_pyfunction!(saddle, m)?)?;
     m.add_function(wrap_pyfunction!(meci, m)?)?;
     m.add_function(wrap_pyfunction!(uv_vis_spectrum, m)?)?;
     m.add_function(wrap_pyfunction!(pbc, m)?)?;

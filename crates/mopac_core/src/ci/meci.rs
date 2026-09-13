@@ -16,7 +16,7 @@
 use crate::integrals::multipoles::{precompute_diatomic_pairs, DiatomicPairIntegrals};
 use crate::integrals::two_electron::dewar_klopman_monopole;
 use crate::parameters::ParameterModel;
-use crate::types::{AlignedMatrix, AlignedVec64, MolecularBatch};
+use crate::types::{AlignedMatrix, AlignedVec64, MolecularBatch, ScfWorkspace};
 
 /// Active space specification for Multi-Electron Configuration Interaction.
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
@@ -146,6 +146,8 @@ pub struct MeciResult {
     pub total_energy_ev: f64,
     /// Standard heat of formation of the target root in kcal/mol
     pub heat_of_formation_kcal: f64,
+    /// 1-electron reduced density matrix in AO basis for the target root state
+    pub state_density: AlignedMatrix<f64>,
 }
 
 /// Preallocated workspace for MECI calculations ensuring 0-malloc memory invariant.
@@ -1154,6 +1156,28 @@ pub fn run_meci(
     )
     .1;
 
+    // Construct reference closed-shell SCF density matrix
+    let mut scf_density = AlignedMatrix::zeroed(batch.norbs, batch.norbs);
+    for mu in 0..batch.norbs {
+        for nu in 0..batch.norbs {
+            let mut sum = 0.0;
+            for i in 0..n_occ {
+                sum += 2.0 * eigenvectors.get(mu, i) * eigenvectors.get(nu, i);
+            }
+            scf_density.set(mu, nu, sum);
+        }
+    }
+
+    let state_density = compute_ci_state_density(
+        batch.norbs,
+        eigenvectors,
+        &active_mo_indices,
+        &microstates,
+        &target_state.eigenvector,
+        &workspace.occa[..m],
+        Some(&scf_density),
+    );
+
     MeciResult {
         states,
         microstates,
@@ -1162,5 +1186,264 @@ pub fn run_meci(
         electronic_energy_ev: final_elec_energy_ev,
         total_energy_ev: final_total_energy_ev,
         heat_of_formation_kcal: hof_kcal,
+        state_density,
+    }
+}
+
+/// Compute the one-electron reduced density matrix (1-RDM) in the AO basis for a specific CI root state.
+///
+/// Direct port of canonical OpenMOPAC `mecip.F90`.
+/// Evaluates:
+/// $$P_{\text{CI}} = P_{\text{SCF}} + C_{\text{active}} \Delta_{\text{MO}} C_{\text{active}}^T$$
+/// where $\Delta_{\text{MO}}$ is the active-space 1-RDM difference matrix:
+/// - Diagonal: $\Delta_{ii} = -2 \text{occa}_i + \sum_{\text{det}} (\alpha_i + \beta_i) C_{\text{det}}^2$
+/// - Off-diagonal: $\Delta_{ji} = \sum C_I C_J (-1)^{\text{permutations}}$ for single excitations
+#[allow(clippy::needless_range_loop)]
+pub fn compute_ci_state_density(
+    norbs: usize,
+    eigenvectors: &AlignedMatrix<f64>,
+    active_mo_indices: &[usize],
+    microstates: &[Microstate],
+    ci_eigenvector: &[f64],
+    occa: &[f64],
+    scf_density: Option<&AlignedMatrix<f64>>,
+) -> AlignedMatrix<f64> {
+    let m = active_mo_indices.len();
+    let lab = microstates.len();
+
+    // 1. Initialize delta_p_mo with -2 * occa[i] on the diagonal
+    let mut delta_p_mo = vec![vec![0.0f64; m]; m];
+    for i in 0..m {
+        delta_p_mo[i][i] = -occa[i] * 2.0;
+    }
+
+    // 2. Add CI correction over microstate determinants
+    for id in 0..lab {
+        for jd in 0..=id {
+            let mut ix = 0usize;
+            let mut iy = 0usize;
+            for j in 0..m {
+                ix += (microstates[id].alpha[j] as i32 - microstates[jd].alpha[j] as i32)
+                    .unsigned_abs() as usize;
+                iy += (microstates[id].beta[j] as i32 - microstates[jd].beta[j] as i32)
+                    .unsigned_abs() as usize;
+            }
+            if ix + iy > 2 {
+                continue;
+            }
+
+            if ix == 2 && iy == 0 {
+                // Differ by 1 alpha orbital
+                let mut first_diff = 0;
+                for i in 0..m {
+                    if microstates[id].alpha[i] != microstates[jd].alpha[i] {
+                        first_diff = i;
+                        break;
+                    }
+                }
+                let mut ij = microstates[id].beta[first_diff] as usize;
+                let mut second_diff = first_diff + 1;
+                for j in (first_diff + 1)..m {
+                    if microstates[id].alpha[j] != microstates[jd].alpha[j] {
+                        second_diff = j;
+                        break;
+                    }
+                    ij += (microstates[id].alpha[j] + microstates[id].beta[j]) as usize;
+                }
+                let phase = if ij.is_multiple_of(2) { 1.0 } else { -1.0 };
+                let coeff_prod = ci_eigenvector[id] * ci_eigenvector[jd];
+                delta_p_mo[second_diff][first_diff] += coeff_prod * phase;
+            } else if iy == 2 && ix == 0 {
+                // Differ by 1 beta orbital
+                let mut first_diff = 0;
+                for i in 0..m {
+                    if microstates[id].beta[i] != microstates[jd].beta[i] {
+                        first_diff = i;
+                        break;
+                    }
+                }
+                let mut ij = 0usize;
+                let mut second_diff = first_diff + 1;
+                for j in (first_diff + 1)..m {
+                    if microstates[id].beta[j] != microstates[jd].beta[j] {
+                        second_diff = j;
+                        break;
+                    }
+                    ij += (microstates[id].alpha[j] + microstates[id].beta[j]) as usize;
+                }
+                ij += microstates[id].alpha[first_diff] as usize;
+                let phase = if ij.is_multiple_of(2) { 1.0 } else { -1.0 };
+                let coeff_prod = ci_eigenvector[id] * ci_eigenvector[jd];
+                delta_p_mo[second_diff][first_diff] += coeff_prod * phase;
+            } else if ix == 0 && iy == 0 {
+                // Determinants are identical: id == jd
+                let coeff_sq = ci_eigenvector[id] * ci_eigenvector[id];
+                for i in 0..m {
+                    let occ = (microstates[id].alpha[i] + microstates[id].beta[i]) as f64;
+                    delta_p_mo[i][i] += occ * coeff_sq;
+                }
+            }
+        }
+    }
+
+    // 3. Symmetrize delta_p_mo
+    for i in 0..m {
+        for j in 0..i {
+            delta_p_mo[j][i] = delta_p_mo[i][j];
+        }
+    }
+
+    // 4. Back-transform into AO basis:
+    // P_CI = P_SCF + C_active * delta_p_mo * C_active^T
+    let mut p_ci = match scf_density {
+        Some(scf_p) => scf_p.clone(),
+        None => AlignedMatrix::zeroed(norbs, norbs),
+    };
+
+    // First multiply: delta_ao[mu, j] = sum_{i=0..m} C[mu, active[i]] * delta_p_mo[i][j]
+    let mut delta_ao = vec![vec![0.0f64; m]; norbs];
+    for mu in 0..norbs {
+        for j in 0..m {
+            let mut sum = 0.0;
+            for i in 0..m {
+                let mo_idx = active_mo_indices[i];
+                sum += eigenvectors.get(mu, mo_idx) * delta_p_mo[i][j];
+            }
+            delta_ao[mu][j] = sum;
+        }
+    }
+
+    // Second multiply: P_CI[mu, nu] += sum_{j=0..m} delta_ao[mu, j] * C[nu, active[j]]
+    for mu in 0..norbs {
+        for nu in 0..norbs {
+            let mut sum = 0.0;
+            for j in 0..m {
+                let mo_idx = active_mo_indices[j];
+                sum += delta_ao[mu][j] * eigenvectors.get(nu, mo_idx);
+            }
+            let cur = p_ci.get(mu, nu);
+            p_ci.set(mu, nu, cur + sum);
+        }
+    }
+
+    p_ci
+}
+
+/// Compute Cartesian nuclear gradients in eV / Å for an electronic state in MECI.
+///
+/// Uses the CI state one-electron density matrix evaluated by `compute_ci_state_density`,
+/// matching OpenMOPAC `dcart.F90` when `MECI` and `ROOT=N` are active.
+pub fn compute_meci_nuclear_gradients(
+    batch: &mut MolecularBatch,
+    model: &dyn ParameterModel,
+    state_density: &AlignedMatrix<f64>,
+    grad_ws: &mut crate::gradients::nuclear_gradients::GradientWorkspace,
+    gradients: &mut [[f64; 3]],
+    use_nddo: bool,
+) {
+    crate::gradients::nuclear_gradients::compute_cartesian_gradients_with_options(
+        batch,
+        model,
+        state_density,
+        grad_ws,
+        gradients,
+        use_nddo,
+    );
+}
+
+/// Compute Cartesian nuclear gradients in eV / Å for an electronic state in MECI via two-point finite differences.
+///
+/// Evaluates the total energy gradient of the selected root:
+/// $$g_{A,\alpha} = \frac{E_{\text{total}}^{(k)}(R + \delta \hat{e}_{A\alpha}) - E_{\text{total}}^{(k)}(R - \delta \hat{e}_{A\alpha})}{2\delta}$$
+/// Captures both the Hellmann-Feynman force and complete electronic and orbital relaxation.
+#[allow(clippy::needless_range_loop)]
+pub fn compute_meci_numerical_gradients(
+    batch: &mut MolecularBatch,
+    model: &dyn ParameterModel,
+    options: &MeciOptions,
+    gradients: &mut [[f64; 3]],
+    delta: f64,
+) {
+    let natoms = batch.natoms;
+    assert_eq!(gradients.len(), natoms);
+    let inv_2delta = 1.0 / (2.0 * delta);
+
+    let m = options.active_space.num_orbitals;
+    let mut scf_ws = ScfWorkspace::allocate(batch.norbs);
+    let mut meci_ws = MeciWorkspace::allocate(m, 100);
+
+    let eval_energy = |b: &MolecularBatch, sw: &mut ScfWorkspace, mw: &mut MeciWorkspace| -> f64 {
+        sw.reset();
+        let scf_res = crate::scf::scf_loop::run_rhf_scf_adaptive_with_nddo(
+            b,
+            model,
+            sw,
+            100,
+            1e-10,
+            1e-9,
+            options.use_nddo,
+        );
+        let meci_res = run_meci(
+            b,
+            model,
+            &sw.eigenvectors,
+            &sw.eigenvalues,
+            scf_res.electronic_energy_ev,
+            scf_res.total_energy_ev,
+            options,
+            mw,
+        );
+        meci_res.total_energy_ev
+    };
+
+    let mut sum_gx = 0.0;
+    let mut sum_gy = 0.0;
+    let mut sum_gz = 0.0;
+
+    for a in 0..natoms {
+        // X
+        let orig_x = batch.x[a];
+        batch.x[a] = orig_x + delta;
+        let e_plus_x = eval_energy(batch, &mut scf_ws, &mut meci_ws);
+        batch.x[a] = orig_x - delta;
+        let e_minus_x = eval_energy(batch, &mut scf_ws, &mut meci_ws);
+        batch.x[a] = orig_x;
+        let gx = (e_plus_x - e_minus_x) * inv_2delta;
+
+        // Y
+        let orig_y = batch.y[a];
+        batch.y[a] = orig_y + delta;
+        let e_plus_y = eval_energy(batch, &mut scf_ws, &mut meci_ws);
+        batch.y[a] = orig_y - delta;
+        let e_minus_y = eval_energy(batch, &mut scf_ws, &mut meci_ws);
+        batch.y[a] = orig_y;
+        let gy = (e_plus_y - e_minus_y) * inv_2delta;
+
+        // Z
+        let orig_z = batch.z[a];
+        batch.z[a] = orig_z + delta;
+        let e_plus_z = eval_energy(batch, &mut scf_ws, &mut meci_ws);
+        batch.z[a] = orig_z - delta;
+        let e_minus_z = eval_energy(batch, &mut scf_ws, &mut meci_ws);
+        batch.z[a] = orig_z;
+        let gz = (e_plus_z - e_minus_z) * inv_2delta;
+
+        gradients[a][0] = gx;
+        gradients[a][1] = gy;
+        gradients[a][2] = gz;
+
+        sum_gx += gx;
+        sum_gy += gy;
+        sum_gz += gz;
+    }
+
+    // Translational invariance projection: remove net translational drift
+    let mean_gx = sum_gx / (natoms as f64);
+    let mean_gy = sum_gy / (natoms as f64);
+    let mean_gz = sum_gz / (natoms as f64);
+    for g in gradients.iter_mut().take(natoms) {
+        g[0] -= mean_gx;
+        g[1] -= mean_gy;
+        g[2] -= mean_gz;
     }
 }
