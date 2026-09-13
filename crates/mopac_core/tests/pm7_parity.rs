@@ -226,6 +226,7 @@ fn test_pm7_organic_set_parity() {
         damping: 0.5,
         use_nddo: true,
         cosmo: None,
+        ..Default::default()
     };
 
     for (name, z, coords) in &molecules {
@@ -301,6 +302,7 @@ fn test_zinc_complex_parity() {
         damping: 0.5,
         use_nddo: true,
         cosmo: None,
+        ..Default::default()
     };
 
     let mut ws = ScfWorkspace::allocate(batch.norbs);

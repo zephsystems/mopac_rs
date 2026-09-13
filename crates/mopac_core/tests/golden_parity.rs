@@ -226,6 +226,7 @@ fn test_golden_parity_water_am1() {
         damping: 0.5,
         use_nddo: true,
         cosmo: None,
+        ..Default::default()
     };
 
     let scf_res = run_rhf_scf_with_options(&batch, &model, &mut ws, &scf_opts);
@@ -289,6 +290,7 @@ fn test_golden_parity_methane_am1() {
         damping: 0.5,
         use_nddo: true,
         cosmo: None,
+        ..Default::default()
     };
 
     let scf_res = run_rhf_scf_with_options(&batch, &model, &mut ws, &scf_opts);
@@ -351,6 +353,7 @@ fn test_golden_parity_formaldehyde_am1() {
         damping: 0.5,
         use_nddo: true,
         cosmo: None,
+        ..Default::default()
     };
 
     let scf_res = run_rhf_scf_with_options(&batch, &model, &mut ws, &scf_opts);
@@ -483,6 +486,7 @@ fn test_golden_parity_water_pm7() {
         damping: 0.5,
         use_nddo: true,
         cosmo: None,
+        ..Default::default()
     };
 
     let scf_res = run_rhf_scf_with_options(&batch, &model, &mut ws, &scf_opts);
@@ -571,6 +575,7 @@ fn test_golden_parity_zinc_hydride_pm7() {
         damping: 0.5,
         use_nddo: true,
         cosmo: None,
+        ..Default::default()
     };
 
     let scf_res = run_rhf_scf_with_options(&batch, &model, &mut ws, &scf_opts);
@@ -636,6 +641,7 @@ fn test_golden_parity_hydrogen_sulfide_pm7() {
         damping: 0.5,
         use_nddo: true,
         cosmo: None,
+        ..Default::default()
     };
 
     let scf_res = run_rhf_scf_with_options(&batch, &model, &mut ws, &scf_opts);

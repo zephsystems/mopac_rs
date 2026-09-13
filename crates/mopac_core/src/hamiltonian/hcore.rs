@@ -242,3 +242,94 @@ pub fn build_hcore_nddo(
         }
     }
 }
+
+/// Apply external electric field perturbation to H_core and return nuclear interaction energy.
+///
+/// Direct port of OpenMOPAC electric field coupling in `static_polarizability.F90`.
+///
+/// $$H_{\mu\mu} \gets H_{\mu\mu} + \vec{E} \cdot (\vec{R}_A - \vec{R}_{\text{cm}})$$
+/// $$H_{s, p_\alpha} \gets H_{s, p_\alpha} + E_\alpha D_{1, A}$$
+/// $$E_{\text{nuc\_field}} = -\sum_A Z_A \vec{E} \cdot (\vec{R}_A - \vec{R}_{\text{cm}})$$
+#[allow(clippy::needless_range_loop)]
+pub fn apply_electric_field_to_hcore(
+    batch: &MolecularBatch,
+    model: &dyn ParameterModel,
+    h_core: &mut AlignedMatrix<f64>,
+    efield: [f64; 3], // in eV / Angstrom
+) -> f64 {
+    let natoms = batch.natoms;
+    if natoms == 0 {
+        return 0.0;
+    }
+
+    // 1. Center of mass
+    let mut com = [0.0; 3];
+    let mut total_mass = 0.0;
+    for a in 0..natoms {
+        let m = crate::constants::standard_atomic_mass(batch.atomic_numbers[a]);
+        total_mass += m;
+        com[0] += m * batch.x[a];
+        com[1] += m * batch.y[a];
+        com[2] += m * batch.z[a];
+    }
+    if total_mass > 0.0 {
+        let inv_m = 1.0 / total_mass;
+        com[0] *= inv_m;
+        com[1] *= inv_m;
+        com[2] *= inv_m;
+    }
+
+    let mut e_nuc_field = 0.0f64;
+
+    for a in 0..natoms {
+        let z = batch.atomic_numbers[a];
+        let elem = match model.get_element(z) {
+            Some(e) => e,
+            None => continue,
+        };
+        let core_charge = elem.core_charge;
+        let rx = batch.x[a] - com[0];
+        let ry = batch.y[a] - com[1];
+        let rz = batch.z[a] - com[2];
+
+        // Nuclear coupling: - Z_A * (E . r_A)
+        e_nuc_field -= core_charge * (efield[0] * rx + efield[1] * ry + efield[2] * rz);
+
+        let orb_start = batch.orbital_offsets[a];
+        let norbs = batch.basis_types[a].num_orbitals();
+
+        // Diagonal shift: + (E . r_A)
+        let diag_shift = efield[0] * rx + efield[1] * ry + efield[2] * rz;
+        for o in 0..norbs {
+            let idx = orb_start + o;
+            let cur = h_core.get(idx, idx);
+            h_core.set(idx, idx, cur + diag_shift);
+        }
+
+        // On-atom hybridization shift: s-p transition dipole elements
+        if norbs >= 4 {
+            let d1 = crate::integrals::multipoles::DerivedMultipoleParams::from_element(&elem).dd;
+            let d1_a = d1 * crate::constants::codata2018::BOHR_RADIUS_ANGSTROMS;
+
+            let s = orb_start;
+            let px = orb_start + 1;
+            let py = orb_start + 2;
+            let pz = orb_start + 3;
+
+            let hx = efield[0] * d1_a;
+            let hy = efield[1] * d1_a;
+            let hz = efield[2] * d1_a;
+
+            h_core.set(s, px, h_core.get(s, px) + hx);
+            h_core.set(px, s, h_core.get(px, s) + hx);
+
+            h_core.set(s, py, h_core.get(s, py) + hy);
+            h_core.set(py, s, h_core.get(py, s) + hy);
+
+            h_core.set(s, pz, h_core.get(s, pz) + hz);
+            h_core.set(pz, s, h_core.get(pz, s) + hz);
+        }
+    }
+
+    e_nuc_field
+}

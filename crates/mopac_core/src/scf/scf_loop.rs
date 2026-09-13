@@ -44,6 +44,8 @@ pub struct ScfOptions {
     pub use_nddo: bool,
     /// COSMO implicit solvation model parameters (default: None)
     pub cosmo: Option<crate::solvation::CosmoParams>,
+    /// Optional external electric field vector in eV / Angstrom (default: None)
+    pub electric_field_ev_angstrom: Option<[f64; 3]>,
 }
 
 impl Default for ScfOptions {
@@ -56,6 +58,7 @@ impl Default for ScfOptions {
             damping: 0.5,
             use_nddo: false,
             cosmo: None,
+            electric_field_ev_angstrom: None,
         }
     }
 }
@@ -145,6 +148,16 @@ pub fn run_rhf_scf_with_options(
 
     if let Some(ref cs) = cosmo_state {
         cs.apply_nuclear_reaction_field_to_hcore(&mut ws.h_core);
+    }
+
+    if let Some(efield) = options.electric_field_ev_angstrom {
+        let e_nuc_field = crate::hamiltonian::hcore::apply_electric_field_to_hcore(
+            batch,
+            model,
+            &mut ws.h_core,
+            efield,
+        );
+        enuc += e_nuc_field;
     }
 
     // 4. Initial guess: diagonalize H_core to generate initial density P^(0)
@@ -297,6 +310,7 @@ pub fn run_rhf_scf(
             damping: 0.5,
             use_nddo: false,
             cosmo: None,
+            electric_field_ev_angstrom: None,
         },
     )
 }
@@ -372,6 +386,7 @@ pub fn run_rhf_scf_adaptive_with_nddo_and_cosmo(
             damping: 0.5,
             use_nddo,
             cosmo,
+            electric_field_ev_angstrom: None,
         },
         ScfOptions {
             max_iter: max_iter_per_stage * 2,
@@ -381,6 +396,7 @@ pub fn run_rhf_scf_adaptive_with_nddo_and_cosmo(
             damping: 0.5,
             use_nddo,
             cosmo,
+            electric_field_ev_angstrom: None,
         },
         ScfOptions {
             max_iter: max_iter_per_stage * 2,
@@ -390,6 +406,7 @@ pub fn run_rhf_scf_adaptive_with_nddo_and_cosmo(
             damping: 0.7,
             use_nddo,
             cosmo,
+            electric_field_ev_angstrom: None,
         },
         ScfOptions {
             max_iter: max_iter_per_stage * 2,
@@ -399,6 +416,87 @@ pub fn run_rhf_scf_adaptive_with_nddo_and_cosmo(
             damping: 0.7,
             use_nddo,
             cosmo,
+            electric_field_ev_angstrom: None,
+        },
+    ];
+
+    let mut last_res = ScfResult {
+        converged: false,
+        iterations: 0,
+        total_energy_ev: 0.0,
+        electronic_energy_ev: 0.0,
+        nuclear_repulsion_ev: 0.0,
+        homo_energy_ev: 0.0,
+        lumo_energy_ev: 0.0,
+        dielectric_energy_ev: None,
+    };
+
+    for (stage_idx, opts) in stages.iter().enumerate() {
+        if stage_idx > 0 {
+            ws.reset();
+        }
+        let res = run_rhf_scf_with_options(batch, model, ws, opts);
+        last_res = res;
+        if last_res.converged {
+            break;
+        }
+    }
+
+    last_res
+}
+
+/// Run an adaptive multi-tier SCF calculation under an external electric field.
+#[allow(clippy::too_many_arguments)]
+pub fn run_rhf_scf_adaptive_with_field(
+    batch: &MolecularBatch,
+    model: &dyn ParameterModel,
+    ws: &mut ScfWorkspace,
+    max_iter_per_stage: usize,
+    energy_tol_ev: f64,
+    density_tol: f64,
+    use_nddo: bool,
+    efield_ev_angstrom: [f64; 3],
+) -> ScfResult {
+    let stages = [
+        ScfOptions {
+            max_iter: max_iter_per_stage,
+            energy_tol_ev,
+            density_tol,
+            level_shift_ev: 0.0,
+            damping: 0.5,
+            use_nddo,
+            cosmo: None,
+            electric_field_ev_angstrom: Some(efield_ev_angstrom),
+        },
+        ScfOptions {
+            max_iter: max_iter_per_stage * 2,
+            energy_tol_ev,
+            density_tol,
+            level_shift_ev: 8.0,
+            damping: 0.5,
+            use_nddo,
+            cosmo: None,
+            electric_field_ev_angstrom: Some(efield_ev_angstrom),
+        },
+        ScfOptions {
+            max_iter: max_iter_per_stage * 2,
+            energy_tol_ev,
+            density_tol,
+            level_shift_ev: 4.44,
+            damping: 0.7,
+            use_nddo,
+            cosmo: None,
+            electric_field_ev_angstrom: Some(efield_ev_angstrom),
+        },
+        ScfOptions {
+            max_iter: max_iter_per_stage * 2,
+            energy_tol_ev,
+            density_tol,
+            level_shift_ev: 8.0,
+            damping: 0.7,
+            use_nddo,
+            cosmo: None,
+            electric_field_ev_angstrom: Some(efield_ev_angstrom),
         },
     ];
 

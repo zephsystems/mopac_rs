@@ -37,7 +37,7 @@ use mopac_core::parameters::{
 use mopac_core::pbc::{run_pbc_scf, PbcOptions, PbcWorkspace, UnitCell};
 use mopac_core::properties::{
     compute_dipole_moment, compute_esp_charges, compute_heat_of_formation,
-    compute_mulliken_population, EspOptions,
+    compute_mulliken_population, compute_polarizability, EspOptions, PolarizabilityOptions,
 };
 use mopac_core::reactions::{
     run_dynamic_reaction_coordinate, run_saddle, trace_intrinsic_reaction_coordinate, DrcEnsemble,
@@ -776,6 +776,7 @@ fn run_calculation_internal(
         damping,
         use_nddo,
         cosmo,
+        ..Default::default()
     };
 
     let scf_res = run_rhf_scf_with_options(&batch, model.as_ref(), &mut scf_ws, &opts);
@@ -2436,6 +2437,147 @@ pub fn pbc(
     })
 }
 
+/// Comprehensive polarizability and NLO tensor calculation results for Python.
+#[pyclass(get_all)]
+#[derive(Debug, Clone)]
+pub struct PolarizabilityPyResult {
+    /// 3x3 polarizability tensor \alpha in atomic units (a_0^3)
+    pub alpha_tensor: Vec<Vec<f64>>,
+    /// Isotropic average polarizability in atomic units
+    pub alpha_isotropic_au: f64,
+    /// Isotropic average polarizability in \AA^3
+    pub alpha_isotropic_angstrom3: f64,
+    /// Polarizability anisotropy in atomic units
+    pub alpha_anisotropy_au: f64,
+    /// Principal polarizability eigenvalues in ascending order in a.u.
+    pub alpha_eigenvalues: Vec<f64>,
+    /// Principal polarizability eigenvectors (shape: [3, 3])
+    pub alpha_eigenvectors: Vec<Vec<f64>>,
+    /// Raw uncorrected CP-SCF polarizability tensor in a.u.
+    pub alpha_raw_tensor: Vec<Vec<f64>>,
+    /// Raw uncorrected isotropic polarizability in a.u.
+    pub alpha_raw_isotropic_au: f64,
+    /// Raw uncorrected isotropic polarizability in \AA^3
+    pub alpha_raw_isotropic_angstrom3: f64,
+    /// Vector components of first hyperpolarizability \beta_i in a.u.
+    pub beta_vector: Vec<f64>,
+    /// Total norm of first hyperpolarizability vector in a.u.
+    pub beta_total_au: f64,
+    /// Total norm of first hyperpolarizability vector in 10^-33 esu
+    pub beta_total_esu: f64,
+    /// Diagonal components of second hyperpolarizability [\gamma_xxxx, \gamma_yyyy, \gamma_zzzz] in a.u.
+    pub gamma_diag: Vec<f64>,
+    /// Average second hyperpolarizability in a.u.
+    pub gamma_average_au: f64,
+    /// Average second hyperpolarizability in 10^-36 esu
+    pub gamma_average_esu: f64,
+    /// Unperturbed permanent dipole moment [x, y, z, total] in Debye
+    pub dipole_debye: Vec<f64>,
+    /// Unperturbed total SCF energy in eV
+    pub unperturbed_energy_ev: f64,
+}
+
+/// Compute molecular polarizability and NLO hyperpolarizability tensors.
+#[pyfunction]
+#[pyo3(signature = (
+    atomic_numbers,
+    coordinates,
+    method="PM6",
+    field_step_au=0.002,
+    use_nddo=true,
+    reorient=true,
+    apply_empirical_scaling=true,
+    compute_hyperpolarizabilities=true,
+    scf_max_iter=80,
+    energy_tol_ev=1e-9,
+    density_tol=1e-8
+))]
+pub fn polarizability(
+    atomic_numbers: Vec<u8>,
+    coordinates: Vec<Vec<f64>>,
+    method: &str,
+    field_step_au: f64,
+    use_nddo: bool,
+    reorient: bool,
+    apply_empirical_scaling: bool,
+    compute_hyperpolarizabilities: bool,
+    scf_max_iter: usize,
+    energy_tol_ev: f64,
+    density_tol: f64,
+) -> PyResult<PolarizabilityPyResult> {
+    if atomic_numbers.len() != coordinates.len() {
+        return Err(PyValueError::new_err(format!(
+            "Mismatch: {} atomic numbers but {} coordinates",
+            atomic_numbers.len(),
+            coordinates.len()
+        )));
+    }
+
+    let mut coords_flat = Vec::with_capacity(coordinates.len());
+    for (i, c) in coordinates.iter().enumerate() {
+        if c.len() != 3 {
+            return Err(PyValueError::new_err(format!(
+                "Atom {} coordinate must be [x, y, z], got {} elements",
+                i,
+                c.len()
+            )));
+        }
+        coords_flat.push([c[0], c[1], c[2]]);
+    }
+
+    let model = get_model(method)?;
+    let batch = MolecularBatch::new_for_model(atomic_numbers, &coords_flat, model.as_ref());
+
+    let options = PolarizabilityOptions {
+        field_step_au,
+        scf_max_iter,
+        energy_tol_ev,
+        density_tol,
+        use_nddo,
+        reorient,
+        apply_empirical_scaling,
+        compute_hyperpolarizabilities,
+    };
+
+    let res = compute_polarizability(&batch, model.as_ref(), &options);
+
+    let alpha_tensor = res
+        .alpha_tensor
+        .iter()
+        .map(|row| row.to_vec())
+        .collect::<Vec<_>>();
+    let alpha_eigenvectors = res
+        .alpha_eigenvectors
+        .iter()
+        .map(|row| row.to_vec())
+        .collect::<Vec<_>>();
+    let alpha_raw_tensor = res
+        .alpha_raw_tensor
+        .iter()
+        .map(|row| row.to_vec())
+        .collect::<Vec<_>>();
+
+    Ok(PolarizabilityPyResult {
+        alpha_tensor,
+        alpha_isotropic_au: res.alpha_isotropic_au,
+        alpha_isotropic_angstrom3: res.alpha_isotropic_angstrom3,
+        alpha_anisotropy_au: res.alpha_anisotropy_au,
+        alpha_eigenvalues: res.alpha_eigenvalues.to_vec(),
+        alpha_eigenvectors,
+        alpha_raw_tensor,
+        alpha_raw_isotropic_au: res.alpha_raw_isotropic_au,
+        alpha_raw_isotropic_angstrom3: res.alpha_raw_isotropic_angstrom3,
+        beta_vector: res.beta_vector.to_vec(),
+        beta_total_au: res.beta_total_au,
+        beta_total_esu: res.beta_total_esu,
+        gamma_diag: res.gamma_diag.to_vec(),
+        gamma_average_au: res.gamma_average_au,
+        gamma_average_esu: res.gamma_average_esu,
+        dipole_debye: res.dipole_debye.to_vec(),
+        unperturbed_energy_ev: res.unperturbed_energy_ev,
+    })
+}
+
 /// MOPAC_RS Python Module
 #[pymodule]
 fn mopac_py(m: &Bound<'_, PyModule>) -> PyResult<()> {
@@ -2456,6 +2598,7 @@ fn mopac_py(m: &Bound<'_, PyModule>) -> PyResult<()> {
     m.add_class::<UvVisSpectrumPy>()?;
     m.add_class::<PbcResultPy>()?;
     m.add_class::<EspResultPy>()?;
+    m.add_class::<PolarizabilityPyResult>()?;
     m.add_class::<MopacCalculator>()?;
     m.add_function(wrap_pyfunction!(calculate, m)?)?;
     m.add_function(wrap_pyfunction!(optimize, m)?)?;
@@ -2468,6 +2611,7 @@ fn mopac_py(m: &Bound<'_, PyModule>) -> PyResult<()> {
     m.add_function(wrap_pyfunction!(meci, m)?)?;
     m.add_function(wrap_pyfunction!(uv_vis_spectrum, m)?)?;
     m.add_function(wrap_pyfunction!(pbc, m)?)?;
+    m.add_function(wrap_pyfunction!(polarizability, m)?)?;
 
     let py = m.py();
     let py_code = r#"

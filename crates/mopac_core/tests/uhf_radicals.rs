@@ -138,6 +138,7 @@ fn test_closed_shell_uhf_rhf_equivalence() {
         damping: 0.5,
         use_nddo: true,
         cosmo: None,
+        ..Default::default()
     };
     let rhf_res = run_rhf_scf_with_options(&batch, &model, &mut rhf_ws, &rhf_options);
     assert!(rhf_res.converged);

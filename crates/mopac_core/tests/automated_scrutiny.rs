@@ -773,6 +773,7 @@ fn test_scrutiny_virtual_orbital_level_shifting_invariants() {
             damping: 0.5,
             use_nddo: false,
             cosmo: None,
+            ..Default::default()
         },
     );
 
@@ -789,6 +790,7 @@ fn test_scrutiny_virtual_orbital_level_shifting_invariants() {
             damping: 0.5,
             use_nddo: false,
             cosmo: None,
+            ..Default::default()
         },
     );
 
@@ -1163,6 +1165,7 @@ fn test_scrutiny_analytical_gradients_vs_finite_difference() {
             damping: 0.5,
             use_nddo: false,
             cosmo: None,
+            ..Default::default()
         },
     );
 
@@ -1181,6 +1184,7 @@ fn test_scrutiny_analytical_gradients_vs_finite_difference() {
             damping: 0.5,
             use_nddo: false,
             cosmo: None,
+            ..Default::default()
         },
     );
 
@@ -1292,6 +1296,7 @@ fn test_scrutiny_full_nddo_scf_water_parity() {
         damping: 0.5,
         use_nddo: true,
         cosmo: None,
+        ..Default::default()
     };
 
     let res = run_rhf_scf_with_options(&batch, &am1, &mut ws, &opts);
@@ -1340,6 +1345,7 @@ fn test_scrutiny_rm1_and_pm6_convergence() {
         damping: 0.5,
         use_nddo: false,
         cosmo: None,
+        ..Default::default()
     };
 
     // 1. Verify RM1 on H2
@@ -1400,6 +1406,7 @@ fn test_scrutiny_pm3_and_extended_elements_convergence() {
         damping: 0.5,
         use_nddo: true,
         cosmo: None,
+        ..Default::default()
     };
 
     // 1. Verify PM3 on Water (H2O)
@@ -1482,6 +1489,7 @@ fn test_scrutiny_hybridization_dipole_exact_parity() {
         damping: 0.5,
         use_nddo: true,
         cosmo: None,
+        ..Default::default()
     };
 
     let res = run_rhf_scf_with_options(&batch, &am1, &mut ws, &opts);
@@ -1685,6 +1693,7 @@ fn test_scrutiny_mndo_hamiltonian_convergence() {
         damping: 0.5,
         use_nddo: true,
         cosmo: None,
+        ..Default::default()
     };
 
     // 1. Water (H2O)
@@ -1760,6 +1769,7 @@ fn test_scrutiny_harmonic_vibrational_frequencies_and_thermodynamics() {
         damping: 0.5,
         use_nddo: true,
         cosmo: None,
+        ..Default::default()
     };
 
     // 1. Optimize geometry with L-BFGS to a true stationary minimum
@@ -1947,6 +1957,7 @@ fn test_scrutiny_properties_dipole_bonds_and_mulliken_parity() {
         damping: 0.5,
         use_nddo: true,
         cosmo: None,
+        ..Default::default()
     };
 
     let res = run_rhf_scf_with_options(&batch, &am1, &mut ws, &opts);
@@ -2572,6 +2583,7 @@ fn test_scrutiny_halogens_and_heteroatoms_extension() {
         damping: 0.5,
         use_nddo: true,
         cosmo: None,
+        ..Default::default()
     };
 
     // 1. Methyl Bromide (CH3Br) under AM1, PM6, RM1

@@ -27,7 +27,8 @@ use mopac_core::parameters::rm1::Rm1Model;
 use mopac_core::parameters::ParameterModel;
 use mopac_core::pbc::{run_pbc_scf, PbcOptions, PbcWorkspace, UnitCell};
 use mopac_core::properties::{
-    compute_bond_orders, compute_dipole_moment, compute_mulliken_population, DipoleResult,
+    compute_bond_orders, compute_dipole_moment, compute_mulliken_population,
+    compute_polarizability, DipoleResult, PolarizabilityOptions,
 };
 use mopac_core::reactions::{
     run_dynamic_reaction_coordinate, trace_intrinsic_reaction_coordinate, DrcEnsemble, DrcOptions,
@@ -152,6 +153,10 @@ struct Cli {
     /// Custom archive file path (.arc)
     #[arg(long)]
     arc: Option<PathBuf>,
+
+    /// Calculate finite-field polarizability and NLO hyperpolarizability tensors (STATIC/POLAR)
+    #[arg(long = "static", alias = "polar")]
+    polar: bool,
 }
 
 #[derive(Debug, Clone, Copy, Default)]
@@ -196,6 +201,7 @@ struct ParsedInput {
     is_meci_requested: bool,
     ci_active_orbitals: Option<usize>,
     is_uv_vis_requested: bool,
+    is_static_requested: bool,
     eps: Option<f64>,
     dispersion: Option<DispersionModel>,
     use_h4: bool,
@@ -327,6 +333,7 @@ fn parse_mopac_input(content: &str) -> io::Result<ParsedInput> {
     let mut is_meci_requested = false;
     let mut ci_active_orbitals = None;
     let mut is_uv_vis_requested = false;
+    let mut is_static_requested = false;
     let mut eps = None;
     let mut dispersion = None;
     let mut use_h4 = false;
@@ -403,6 +410,8 @@ fn parse_mopac_input(content: &str) -> io::Result<ParsedInput> {
             is_meci_requested = true;
         } else if u == "UV-VIS" || u == "UVVIS" || u == "SPECTRUM" {
             is_uv_vis_requested = true;
+        } else if u == "STATIC" || u == "POLAR" {
+            is_static_requested = true;
         } else if let Some(stripped) = u.strip_prefix("EPS=") {
             if let Ok(v) = stripped.parse::<f64>() {
                 eps = Some(v);
@@ -502,6 +511,7 @@ fn parse_mopac_input(content: &str) -> io::Result<ParsedInput> {
         is_meci_requested,
         ci_active_orbitals,
         is_uv_vis_requested,
+        is_static_requested,
         eps,
         dispersion,
         use_h4,
@@ -1145,6 +1155,7 @@ fn main() -> Result<(), Box<dyn std::error::Error>> {
             damping: 0.5,
             use_nddo,
             cosmo: cosmo_params,
+            ..Default::default()
         };
 
         let hess_opts = HessianOptions {
@@ -1453,6 +1464,62 @@ fn main() -> Result<(), Box<dyn std::error::Error>> {
                 m_res.net_charges[i]
             );
         }
+    }
+
+    let is_static = cli.polar || parsed.is_static_requested;
+    if is_static {
+        println!("-------------------------------------------------------------------------------");
+        println!(" ******************** FINITE-FIELD POLARIZABILITIES ********************");
+        println!();
+        println!("    THE F-F METHOD IS PERFORMED USING BOTH AN ENERGY");
+        println!("    AND DIPOLE MOMENT EXPANSION.  THESE RESULTS ARE");
+        println!("    LISTED BELOW AS \"H.o.F.\" AND \"Dipole\", RESPECTIVELY.");
+        println!();
+
+        let pol_opts = PolarizabilityOptions {
+            use_nddo,
+            ..Default::default()
+        };
+        let pol_res = compute_polarizability(&batch, model.as_ref(), &pol_opts);
+
+        println!(" ****************************** POLARIZABILITY ********************");
+        println!();
+        println!(" Polarizability Tensor from Dipole Moment (atomic units):");
+        println!("            X           Y           Z");
+        for (i, ax) in ["X", "Y", "Z"].iter().enumerate() {
+            println!(
+                "   *={}:   {:10.4}  {:10.4}  {:10.4}",
+                ax,
+                pol_res.alpha_tensor[i][0],
+                pol_res.alpha_tensor[i][1],
+                pol_res.alpha_tensor[i][2]
+            );
+        }
+        println!();
+        println!(
+            "  ISOTROPIC AVERAGE ALPHA = {:12.5} A.U. = {:12.5} ANG.**3",
+            pol_res.alpha_isotropic_au, pol_res.alpha_isotropic_angstrom3
+        );
+        println!(
+            "  ANISOTROPY              = {:12.5} A.U.",
+            pol_res.alpha_anisotropy_au
+        );
+        println!(
+            "  PRINCIPAL EIGENVALUES   = [{:9.4}, {:9.4}, {:9.4}] A.U.",
+            pol_res.alpha_eigenvalues[0],
+            pol_res.alpha_eigenvalues[1],
+            pol_res.alpha_eigenvalues[2]
+        );
+        println!();
+        println!(
+            " First Hyperpolarizability Vector |beta| = {:10.4} a.u. = {:12.4e} esu",
+            pol_res.beta_total_au, pol_res.beta_total_esu
+        );
+        println!(
+            " Second Hyperpolarizability gamma_avg   = {:10.4} a.u. = {:12.4e} esu",
+            pol_res.gamma_average_au, pol_res.gamma_average_esu
+        );
+        println!("-------------------------------------------------------------------------------");
     }
 
     if let Some((ref meci_res, _)) = meci_result {

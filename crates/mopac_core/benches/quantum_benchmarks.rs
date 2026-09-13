@@ -37,6 +37,7 @@ fn bench_rhf_scf(c: &mut Criterion) {
         damping: 0.5,
         use_nddo: true,
         cosmo: None,
+        ..Default::default()
     };
 
     c.bench_function("scf/rhf_am1_water", |b| {
@@ -71,6 +72,7 @@ fn bench_boron_bh3(c: &mut Criterion) {
         damping: 0.5,
         use_nddo: true,
         cosmo: None,
+        ..Default::default()
     };
 
     c.bench_function("boron/bh3_pm6_scf", |b| {
@@ -145,6 +147,7 @@ fn bench_cosmo_gradients(c: &mut Criterion) {
         damping: 0.5,
         use_nddo: true,
         cosmo: Some(params),
+        ..Default::default()
     };
     let _ = run_rhf_scf_with_options(&batch, &model, &mut ws, &scf_opts);
     let mut grad_ws = GradientWorkspace::allocate(batch.norbs);

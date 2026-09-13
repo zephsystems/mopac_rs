@@ -43,6 +43,7 @@ fn test_cosmo_dielectric_gradients_translational_invariance() {
         damping: 0.5,
         use_nddo: true,
         cosmo: Some(params),
+        ..Default::default()
     };
 
     let scf_res = run_rhf_scf_with_options(&batch, &model, &mut ws, &options);
@@ -114,6 +115,7 @@ fn test_cosmo_dielectric_gradients_finite_difference() {
         damping: 0.5,
         use_nddo: true,
         cosmo: Some(params),
+        ..Default::default()
     };
 
     let scf_res = run_rhf_scf_with_options(&batch, &model, &mut ws, &options);
