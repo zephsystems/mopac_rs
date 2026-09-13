@@ -49,6 +49,8 @@ pub struct HessianOptions {
     pub pressure_atm: f64,
     /// Molecular rotational symmetry number $\sigma$ (default: 1.0)
     pub rotational_symmetry_number: f64,
+    /// Optional custom atomic masses in amu (length = natoms) for isotope substitution / KIE
+    pub custom_masses: Option<Vec<f64>>,
 }
 
 impl Default for HessianOptions {
@@ -61,6 +63,7 @@ impl Default for HessianOptions {
             temperature_k: 298.15,
             pressure_atm: 1.0,
             rotational_symmetry_number: 1.0,
+            custom_masses: None,
         }
     }
 }
@@ -144,12 +147,24 @@ pub fn compute_hessian_and_frequencies(
     let n3 = 3 * natoms;
     assert!(natoms >= 1, "MolecularBatch must contain at least 1 atom");
 
-    // 1. Fetch authentic IUPAC standard atomic masses for each atom
-    let masses: Vec<f64> = batch
-        .atomic_numbers
-        .iter()
-        .map(|&z| standard_atomic_mass(z))
-        .collect();
+    // 1. Fetch authentic IUPAC standard atomic masses or custom isotopic masses
+    let masses: Vec<f64> = if let Some(ref cm) = hess_opts.custom_masses {
+        if cm.len() == natoms {
+            cm.clone()
+        } else {
+            batch
+                .atomic_numbers
+                .iter()
+                .map(|&z| standard_atomic_mass(z))
+                .collect()
+        }
+    } else {
+        batch
+            .atomic_numbers
+            .iter()
+            .map(|&z| standard_atomic_mass(z))
+            .collect()
+    };
 
     // 2. Ensure initial SCF convergence
     let base_scf = run_rhf_scf_with_options(batch, model, ws, scf_opts);

@@ -242,9 +242,13 @@ fn symbol_to_atomic_number(sym: &str) -> Option<u8> {
         "AR" => Some(18),
         "K" => Some(19),
         "CA" => Some(20),
+        "FE" => Some(26),
+        "NI" => Some(28),
+        "CU" => Some(29),
+        "ZN" => Some(30),
         "BR" => Some(35),
         "I" => Some(53),
-        _ => None,
+        _ => sym.parse::<u8>().ok(),
     }
 }
 
@@ -270,6 +274,10 @@ fn atomic_number_to_symbol(z: u8) -> &'static str {
         18 => "Ar",
         19 => "K",
         20 => "Ca",
+        26 => "Fe",
+        28 => "Ni",
+        29 => "Cu",
+        30 => "Zn",
         35 => "Br",
         53 => "I",
         _ => "X",
@@ -1147,6 +1155,7 @@ fn main() -> Result<(), Box<dyn std::error::Error>> {
             temperature_k: 298.15,
             pressure_atm: 1.0,
             rotational_symmetry_number: 1.0,
+            custom_masses: None,
         };
         let h_res = compute_hessian_and_frequencies(
             &mut batch,

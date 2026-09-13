@@ -36,7 +36,8 @@ use mopac_core::parameters::{
 };
 use mopac_core::pbc::{run_pbc_scf, PbcOptions, PbcWorkspace, UnitCell};
 use mopac_core::properties::{
-    compute_dipole_moment, compute_heat_of_formation, compute_mulliken_population,
+    compute_dipole_moment, compute_esp_charges, compute_heat_of_formation,
+    compute_mulliken_population, EspOptions,
 };
 use mopac_core::reactions::{
     run_dynamic_reaction_coordinate, trace_intrinsic_reaction_coordinate, DrcEnsemble, DrcOptions,
@@ -375,6 +376,43 @@ impl VibrationalResultPy {
             modes_list.append(m.to_dict(py)?)?;
         }
         dict.set_item("normal_modes", modes_list)?;
+        Ok(dict)
+    }
+}
+
+/// Merz-Singh-Kollman Electrostatic Potential (ESP) fitting result.
+#[pyclass(get_all)]
+#[derive(Debug, Clone)]
+pub struct EspResultPy {
+    /// Fitted atom-centered partial charges in atomic units (e)
+    pub charges: Vec<f64>,
+    /// Cartesian electric dipole moment computed from fitted ESP charges in Debye [x, y, z]
+    pub dipole_debye: [f64; 3],
+    /// Total dipole moment magnitude in Debye
+    pub dipole_magnitude_debye: f64,
+    /// Root-mean-square fitting error of the electrostatic potential in eV
+    pub rms_error_ev: f64,
+    /// Total number of grid points retained on the solvent-accessible envelope
+    pub num_grid_points: usize,
+}
+
+#[pymethods]
+impl EspResultPy {
+    fn __repr__(&self) -> String {
+        format!(
+            "<EspResult charges={:?}, dipole={:.3} D, rms_err={:.4} eV, grid_pts={}>",
+            self.charges, self.dipole_magnitude_debye, self.rms_error_ev, self.num_grid_points
+        )
+    }
+
+    /// Convert ESP result to Python dictionary.
+    fn to_dict<'py>(&self, py: Python<'py>) -> PyResult<Bound<'py, PyDict>> {
+        let dict = PyDict::new_bound(py);
+        dict.set_item("charges", &self.charges)?;
+        dict.set_item("dipole_debye", self.dipole_debye)?;
+        dict.set_item("dipole_magnitude_debye", self.dipole_magnitude_debye)?;
+        dict.set_item("rms_error_ev", self.rms_error_ev)?;
+        dict.set_item("num_grid_points", self.num_grid_points)?;
         Ok(dict)
     }
 }
@@ -1057,6 +1095,7 @@ pub fn transition_state(
     step_size_angstrom = 0.005,
     project_external = true,
     use_nddo = false,
+    custom_masses = None,
 ))]
 pub fn frequencies(
     atomic_numbers: Vec<u8>,
@@ -1068,6 +1107,7 @@ pub fn frequencies(
     step_size_angstrom: Option<f64>,
     project_external: Option<bool>,
     use_nddo: Option<bool>,
+    custom_masses: Option<Vec<f64>>,
 ) -> PyResult<VibrationalResultPy> {
     let method_str = method.unwrap_or("PM6");
     let model = get_model(method_str)?;
@@ -1125,6 +1165,7 @@ pub fn frequencies(
         temperature_k: temperature_k.unwrap_or(298.15),
         pressure_atm: pressure_atm.unwrap_or(1.0),
         rotational_symmetry_number: rotational_symmetry_number.unwrap_or(1.0),
+        custom_masses,
     };
 
     let res =
@@ -1181,6 +1222,75 @@ pub fn frequencies(
         thermo,
         is_transition_state,
         cartesian_hessian,
+    })
+}
+
+/// Compute Merz-Singh-Kollman atom-centered Electrostatic Potential (ESP) partial charges.
+///
+/// Parameters:
+/// - `atomic_numbers`: list of integer atomic numbers
+/// - `coordinates`: 3D Cartesian coordinates in Angstroms
+/// - `method`: Semi-empirical Hamiltonian (default: "PM6")
+/// - `net_charge`: Molecular net charge constraint (default: 0.0)
+/// - `points_per_shell`: Fibonacci sampling points per atom per radial shell (default: 64)
+#[pyfunction]
+#[pyo3(signature = (
+    atomic_numbers,
+    coordinates,
+    method = "PM6",
+    net_charge = 0.0,
+    points_per_shell = 64
+))]
+pub fn esp_charges(
+    atomic_numbers: Vec<u8>,
+    coordinates: Vec<[f64; 3]>,
+    method: Option<&str>,
+    net_charge: Option<f64>,
+    points_per_shell: Option<usize>,
+) -> PyResult<EspResultPy> {
+    let method_str = method.unwrap_or("PM6");
+    let model = get_model(method_str)?;
+
+    let natoms = atomic_numbers.len();
+    if natoms == 0 {
+        return Err(PyValueError::new_err(
+            "Molecule must have at least one atom",
+        ));
+    }
+    if coordinates.len() != natoms {
+        return Err(PyValueError::new_err(format!(
+            "Mismatch between atomic_numbers ({}) and coordinates ({})",
+            natoms,
+            coordinates.len()
+        )));
+    }
+
+    let batch = MolecularBatch::new_for_model(atomic_numbers, &coordinates, model.as_ref());
+    let mut ws = ScfWorkspace::allocate(batch.norbs);
+    let scf_opts = ScfOptions::default();
+
+    let scf_res = run_rhf_scf_with_options(&batch, model.as_ref(), &mut ws, &scf_opts);
+    if !scf_res.converged {
+        return Err(PyValueError::new_err(
+            "Base SCF failed to converge for ESP calculation",
+        ));
+    }
+
+    let opts = EspOptions {
+        shell_multipliers: vec![1.4, 1.6, 1.8, 2.0],
+        points_per_shell: points_per_shell.unwrap_or(64),
+        net_charge: net_charge.unwrap_or(0.0),
+    };
+
+    let res = compute_esp_charges(&batch, model.as_ref(), &ws.density, &opts)
+        .map_err(PyValueError::new_err)?;
+
+    Ok(EspResultPy {
+        charges: res.charges,
+        dipole_debye: res.dipole_debye,
+        dipole_magnitude_debye: res.dipole_magnitude_debye,
+        rms_error_ev: res.rms_error_ev,
+        num_grid_points: res.num_grid_points,
     })
 }
 
@@ -1776,7 +1886,7 @@ impl MopacCalculator {
     }
 
     /// Compute harmonic vibrational frequencies, normal modes, and thermodynamics.
-    #[pyo3(signature = (atomic_numbers, coordinates, temperature_k = 298.15, pressure_atm = 1.0, rotational_symmetry_number = 1.0))]
+    #[pyo3(signature = (atomic_numbers, coordinates, temperature_k = 298.15, pressure_atm = 1.0, rotational_symmetry_number = 1.0, custom_masses = None))]
     fn frequencies(
         &self,
         atomic_numbers: Vec<u8>,
@@ -1784,6 +1894,7 @@ impl MopacCalculator {
         temperature_k: Option<f64>,
         pressure_atm: Option<f64>,
         rotational_symmetry_number: Option<f64>,
+        custom_masses: Option<Vec<f64>>,
     ) -> PyResult<VibrationalResultPy> {
         frequencies(
             atomic_numbers,
@@ -1795,6 +1906,7 @@ impl MopacCalculator {
             Some(0.005),
             Some(true),
             Some(self.use_nddo),
+            custom_masses,
         )
     }
 
@@ -2060,11 +2172,13 @@ fn mopac_py(m: &Bound<'_, PyModule>) -> PyResult<()> {
     m.add_class::<MeciPyResult>()?;
     m.add_class::<UvVisSpectrumPy>()?;
     m.add_class::<PbcResultPy>()?;
+    m.add_class::<EspResultPy>()?;
     m.add_class::<MopacCalculator>()?;
     m.add_function(wrap_pyfunction!(calculate, m)?)?;
     m.add_function(wrap_pyfunction!(optimize, m)?)?;
     m.add_function(wrap_pyfunction!(transition_state, m)?)?;
     m.add_function(wrap_pyfunction!(frequencies, m)?)?;
+    m.add_function(wrap_pyfunction!(esp_charges, m)?)?;
     m.add_function(wrap_pyfunction!(irc, m)?)?;
     m.add_function(wrap_pyfunction!(drc, m)?)?;
     m.add_function(wrap_pyfunction!(meci, m)?)?;
