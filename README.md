@@ -11,7 +11,7 @@
 [![Language: Rust](https://img.shields.io/badge/Language-Rust%201.85%2B-orange.svg)]()
 [![SIMD: AVX2 / AVX-512](https://img.shields.io/badge/Acceleration-AVX2%20%7C%20AVX--512-red.svg)]()
 [![GPU: Vulkan Compute](https://img.shields.io/badge/Compute-Vulkan%20%7C%20GDDR6%20VRAM-green.svg)]()
-[![Scrutiny Tests](https://img.shields.io/badge/Automated%20Tests-78%2F78%20Passed-brightgreen.svg)]()
+[![Scrutiny Tests](https://img.shields.io/badge/Automated%20Tests-83%2F83%20Passed-brightgreen.svg)]()
 [![Python Bindings](https://img.shields.io/badge/PyO3-Python%203.8--3.14-blue.svg)]()
 
 <!-- Total Downloads -->
@@ -32,11 +32,11 @@ Every single module, parameter table, and integral calculation is empirically ve
 ## Architectural Pillars
 
 * **Data-Oriented Memory Layout (SoA):** Contiguous, 64-byte cache-line aligned Struct of Arrays (`MolecularBatch`) eliminating pointer-chasing and non-contiguous matrix indexing.
-* **Zero-Allocation Inner Loop Policy (`0 malloc`):** Pre-allocated reusable workspaces (`ScfWorkspace`, `UhfWorkspace`, `GradientWorkspace`, `CosmoState`) ensure zero heap allocations during iterative Roothaan-Hall / Pople-Nesbet SCF cycles and dual Pulay DIIS extrapolations.
+* **Zero-Allocation Inner Loop Policy (`0 malloc`):** Pre-allocated reusable workspaces (`ScfWorkspace`, `UhfWorkspace`, `GradientWorkspace`, `CosmoState`, `IrcWorkspace`, `DrcWorkspace`, `MeciWorkspace`, `PbcWorkspace`) ensure zero heap allocations during iterative Roothaan-Hall / Pople-Nesbet SCF cycles and dual Pulay DIIS extrapolations.
 * **Dual Compute Backend:**
   - **CPU SIMD:** Vectorized AVX2 / FMA kernels with Rayon multi-threaded parallelism.
   - **Universal GPU (Vulkan Compute):** Cross-vendor hardware acceleration supporting NVIDIA RTX, AMD Radeon, Intel Arc, and Apple Silicon (via MoltenVK) with dedicated DMA host-to-device GDDR6 VRAM batch management.
-* **Axiomatic Verification:** 78 automated scrutiny, unit, quantum theorem, and differential oracle tests validating physical invariance, rotation orthonormality, translational symmetry, and exact numerical parity against OpenMOPAC.
+* **Axiomatic Verification:** 83 automated scrutiny, unit, quantum theorem, and differential oracle tests validating physical invariance, rotation orthonormality, translational symmetry, and exact numerical parity against OpenMOPAC.
 
 ---
 
@@ -48,56 +48,84 @@ Every single module, parameter table, and integral calculation is empirically ve
 - **PM3** (Parametric Method 3; Stewart 1989)
 - **RM1** (Recife Model 1; Rocha et al. 2006)
 - **PM6** (Parametric Method 6; Stewart 2007)
+- **PM7** (Parametric Method 7; Stewart 2013) with full diatomic parameters and d-orbital polarization for transition metals (e.g. Zn).
 - **NDDO 22-Multipole Integrals:** Full diatomic charge separation multipoles ($dd, qq, am, ad, aq$) and 3D rotational coordinate transformations.
-- **Elemental Coverage:** Complete authentic parameter sets for organic, heteroatomic, boron, and organosilicon chemistry:
+- **Elemental Coverage:** Complete authentic parameter sets for organic, heteroatomic, boron, organosilicon, and metal chemistry:
   - **Hydrogen & Carbon-backbone:** H (1), C (6)
-  - **Boron (Group 13):** B (5) fully parameterized across MNDO, AM1, PM3, and PM6 (including authentic diatomic pair parameters with H, C, F, Cl, Br, I) and isolated atom heats of formation ($135.700\text{ kcal/mol}$).
+  - **Boron (Group 13):** B (5) fully parameterized across MNDO, AM1, PM3, PM6, PM7 (including authentic diatomic pair parameters with H, C, F, Cl, Br, I) and isolated atom heats of formation ($135.700\text{ kcal/mol}$).
   - **Pnictogens & Chalcogens:** N (7), O (8), P (15), S (16)
-  - **Full Halogen Series:** F (9), Cl (17), Br (35), I (53) across AM1, PM6, and RM1 with authentic diatomic pair parameters $(alpb, xfac)$.
-  - **Silicon (Group 14):** Si (14) across MNDO, AM1, PM3, and PM6 (including 11 authentic pair parameters with H, C, N, O, F, Al, Si, P, S, Cl, Br) exhibiting $< 2.4 \times 10^{-5}\text{ eV/\AA}$ analytical gradient parity. Note: Rocha's RM1 intentionally omitted Si in its 2006 parameterization and returns an informative error.
+  - **Full Halogen Series:** F (9), Cl (17), Br (35), I (53) across AM1, PM6, PM7, and RM1 with authentic diatomic pair parameters $(alpb, xfac)$.
+  - **Silicon (Group 14):** Si (14) across MNDO, AM1, PM3, PM6, PM7 (including 11 authentic pair parameters with H, C, N, O, F, Al, Si, P, S, Cl, Br) exhibiting $< 2.4 \times 10^{-5}\text{ eV/\AA}$ analytical gradient parity.
+  - **Transition Metals:** Zn (30) with $spd$ basis parameterization.
 
-### 2. Open-Shell Unrestricted Hartree-Fock (UHF)
+### 2. MOZYME $O(N)$ Linear Scaling Macromolecular Solver
+- **Lewis Chemical Topology Builder:** Automatic bond order detection (single, double, triple, coordinate) and lone pair assignment.
+- **Directional Hybrid Atomic Orbitals (HAOs):** $sp^3, sp^2, sp$ hybrid generation with symmetric Löwdin orthogonalization ($S^{-1/2}$).
+- **Localized Molecular Orbitals (LMOs):** Orthogonal $\sigma, \pi$ bonding, $\sigma^*, \pi^*$ antibonding, and lone-pair initial basis.
+- **Pairwise 2x2 Jacobi Rotation Engine:** Iterative localized orbital energy minimization with spatial distance cutoff screening ($R_{\text{cut}} = 8.5\text{ \AA}$).
+- **Linear-Scaling SCF Cycle:** Smooth density damping ($\alpha = 0.65$) and exact density matrix reconstruction ($P = 2 \sum_i \phi_i \phi_i^T$) achieving $< 0.08\%$ relative energy parity on macromolecules.
+
+### 3. Open-Shell Unrestricted Hartree-Fock (UHF)
 - **Pople-Nesbet Spin Orbitals:** Independent spin Fock operators ($F^\alpha, F^\beta$) and density matrices ($P^\alpha, P^\beta$).
 - **Dual DIIS Acceleration:** Decoupled alpha and beta error subspace inversion buffers avoiding inter-spin oscillation damping traps.
 - **Spin Expectation $\langle S^2 \rangle$:** Analytic computation of total spin angular momentum with spin contamination tracking ($\Delta \langle S^2 \rangle = 0.000178$ against OpenMOPAC on methyl radical).
 - **Closed-Shell Equivalence:** Exact convergence to RHF energy for singlet states ($|\Delta E| < 10^{-10}\text{ eV}$).
 
-### 3. Robust SCF Convergers
+### 4. Robust SCF Convergers
 - **Pulay DIIS Acceleration:** Direct Inversion in the Iterative Subspace with B-matrix SVD stabilization and history pruning.
 - **Camp-King Unitary Interpolator:** Monotonic electronic energy minimization for oscillating densities.
 - **Saunders-Hillier Virtual Orbital Level Shifting:** Dynamic shift ($\sigma = 2.0\text{ -- }8.0\text{ eV}$) eliminating HOMO-LUMO degeneracy traps and limit-cycle density oscillations.
 - **Adaptive Multi-Tier Escalation:** Automated converger pipeline achieving **100.0% convergence** across all benchmark sets.
 
-### 4. Non-Covalent Corrections
+### 5. Non-Covalent Corrections
 - **Grimme D3-BJ Empirical Dispersion:** Becke-Johnson rational damping ($s_6, s_8, a_1, a_2$) with exact analytical Cartesian gradients matching finite differences to $1.11 \times 10^{-11}\text{ kcal/(mol}\cdot\text{\AA)}$.
 - **PM6-DH+ and PM7 Dispersion:** Empirically parameterized dispersion corrections with analytical derivatives ($\nabla E_{\text{disp}} < 1.88 \times 10^{-11}\text{ kcal}/(\text{mol}\cdot\text{\AA})$ error).
 - **H4 Hydrogen Bonding:** Septic switching functions for covalent valence attenuation and 7th-order radial/angular polynomials ($D, A \in \{N, O\}$).
 - **Short-Range H-H Repulsion:** Continuous piecewise potential with exact analytical derivatives.
 - **Composite PM6-D3H4 Method:** Verbatim heat of formation parity on water dimer benchmark (**$-71.99024\text{ kcal/mol}$**).
 
-### 5. COSMO Implicit Solvation & Analytical Nuclear Gradients
+### 6. COSMO Implicit Solvation & Analytical Nuclear Gradients
 - **Boundary Element Method (BEM):** Regular icosahedral sphere tessellations ($N=12, 42, 1082$, `dvfill`).
 - **Solvent-Accessible Cavity:** Klamt and Bondi van der Waals radii with analytical segment surface areas and volumes.
 - **Self-Consistent Reaction Field:** In-place Cholesky decomposition of electrostatic boundary matrix $A$ and multipole coupling matrix $B$, modifying $H_{\text{core}}$ and Fock matrix $F$ self-consistently with `0 malloc` per iteration.
 - **Analytical Nuclear Gradients ($\nabla E_{\text{diel}}$):** Inter-segment screening forces and segment-solute net charge electrostatic derivatives matching OpenMOPAC `diegrd` with exact Newton's third law translational zero-sum invariance ($\sum_A \nabla_A E_{\text{diel}} < 10^{-14}\text{ eV/\AA}$).
 
-### 6. Molecular Properties & Population Analysis
+### 7. Transition States & Reaction Paths
+- **Eigenvector Following (Baker P-RFO / `TS`):** Search for first-order saddle points (transition states) with one negative Hessian eigenvalue.
+- **Two-Ended SADDLE Interpolation:** Automated barrier search connecting Reactants and Products via geodesic coordinate relaxation.
+- **Intrinsic Reaction Coordinate (IRC / González-Schlegel):** Exact mass-weighted steepest descent reaction path tracing forward and backward from transition state to minima.
+- **Dynamic Reaction Coordinate (DRC / Born-Oppenheimer MD):** Microcanonical ($NVE$) and canonical ($NVT$) molecular dynamics trajectories with symplectic Velocity-Verlet integrator.
+
+### 8. Photochemistry, MECI & UV-Vis Spectroscopy
+- **Multi-Electron Configuration Interaction (MECI):** Full CI within active spaces ($N \le 10$ orbitals) computing multi-determinant ground and excited state roots ($S_0, S_1, T_1$, etc.).
+- **Analytical Excited-State Nuclear Gradients:** State-specific Hellmann-Feynman and relaxed density matrix gradients for excited state geometry optimization.
+- **UV-Vis Spectral Simulation:** Transition dipole moments, oscillator strengths ($f_{\text{osc}}$), and Lorentzian line broadening.
+
+### 9. Molecular Properties & Population Analysis
 - **Electric Dipole Moments:** Point-charge and intra-atomic $sp$ hybridization dipole moments in Debye.
+- **Polarizability & NLO Tensors (TD-CPHF / `POLAR`):** Static and dynamic frequency-dependent polarizability tensor $\alpha(-\omega; \omega)$ and first hyperpolarizability $\beta$.
+- **Electrostatic Potential (ESP) Charges:** Merz-Singh-Kollman grid fitting outside van der Waals envelope.
 - **Mayer Bond Orders & Valencies:** Armstrong-Perkins-Stewart bond indices $B_{AB} = \sum_{\mu \in A, \nu \in B} (P S)_{\mu\nu} (P S)_{\nu\mu}$.
 - **Mulliken Population Analysis:** Löwdin de-orthogonalization and gross atomic populations satisfying exact electron conservation ($\sum_A Pop_A \equiv N_{\text{elec}}$).
 
-### 7. Geometry Optimization & Thermochemistry
+### 10. Geometry Optimization, Vibrations & Isotope Effects
 - **L-BFGS Optimizer:** Quasi-Newton Cartesian minimization with two-loop history recursion and Armijo backtracking line search.
 - **Coordinate Pinning:** Selective degree-of-freedom masking (frozen atoms/axes).
 - **Harmonic Vibrational Frequencies:** Mass-weighted Cartesian Hessian with Eckart frame external projection (6 vanishing rotational/translational modes $< 10^{-5}\text{ cm}^{-1}$).
+- **Custom Isotopic Masses & Kinetic Isotope Effects (KIE):** Direct mass substitution ($^2H, ^{13}C, ^{18}O$) for vibrational isotope shift analysis.
 - **Thermodynamic Properties:** Zero-Point Vibrational Energy (ZPVE), thermal enthalpy ($H(T) - H(0)$), constant-pressure heat capacity ($C_p$), standard entropy ($S^\circ$), and Gibbs free energy correction ($G(T) - H(0)$).
 
-### 8. Python Bindings & Ecosystem Bridge (`mopac_py`)
+### 11. Periodic Boundary Conditions (PBC)
+- **1D, 2D, 3D Unit Cells:** Lattice vector parameterization with Monkhorst-Pack reciprocal space k-point sampling and Bloch SCF band structures.
+
+### 12. Python Bindings & Ecosystem Bridge (`mopac_py`)
 High-performance PyO3 bridge exposing the quantum chemical engine directly to Python for **RDKit**, **ASE** (Atomic Simulation Environment), and **PyTorch**:
 - **Zero-copy analytical gradients** directly returned as NumPy arrays or nested lists.
 - **Vibrational Frequencies & Thermochemistry:** `mopac_py.frequencies(atoms, coords, method="AM1")` computing full normal modes, ZPVE, $H(T)$, $G(T)$, $C_p$, and $S^\circ$.
+- **MOZYME Linear Scaling:** `mopac_py.mozyme(atoms, coords, method="PM6")` for macromolecules.
 - **Direct RDKit Interoperability:** `mopac_py.from_rdkit(mol)` extracts atomic numbers and 3D conformer coordinates directly.
 - **Native ASE Calculator:** `mopac_py.MopacASECalculator` plugs directly into ASE dynamics (`BFGS`, `VelocityVerlet`, etc.).
+- **Full parameterization control** (`method="PM6"`, `dispersion="D3-BJ"`, `cosmo_eps=78.4`, `use_nddo=True`).
 - **Full parameterization control** (`method="PM6"`, `dispersion="D3-BJ"`, `cosmo_eps=78.4`, `use_nddo=True`).
 
 ```python
@@ -164,12 +192,20 @@ Arguments:
 
 Options:
   -m, --mode <MODE>      Force calculation mode (1SCF or OPT)
-      --method <METHOD>  Semi-empirical method override (PM6, PM3, RM1, AM1, MNDO)
+      --method <METHOD>  Semi-empirical method override (PM6, PM7, PM3, RM1, AM1, MNDO)
       --nddo             Enable full NDDO diatomic 22-multipole integrals & 3D rotation
       --opt              Enable geometry optimization (L-BFGS)
+      --ts               Enable transition state optimization via Eigenvector Following (P-RFO Baker)
+      --irc              Enable Intrinsic Reaction Coordinate path tracing (González-Schlegel)
+      --drc              Enable Dynamic Reaction Coordinate molecular dynamics (Velocity-Verlet)
       --force            Enable Cartesian Hessian & vibrational frequency analysis
       --bonds            Enable Mayer bond orders and atomic valencies calculation
       --mullik           Enable Mulliken population analysis
+      --ci <N>           Enable Multi-Electron Configuration Interaction (MECI) with active space size N
+      --uv-vis           Simulate UV-Vis electronic absorption spectrum
+      --static, --polar  Calculate finite-field polarizability and NLO hyperpolarizability tensors
+      --mozyme           Enable MOZYME localized molecular orbital linear-scaling SCF (O(N))
+      --pbc              Enable Periodic Boundary Conditions (PBC) Bloch SCF & band structure
       --gpu              Enable Vulkan GPU compute acceleration
       --fp32             Use FP32 single-precision GPU pipeline
       --eps <EPS>        Solvent dielectric constant for COSMO implicit solvation (e.g. 78.4)

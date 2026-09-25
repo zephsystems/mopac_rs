@@ -14,6 +14,7 @@ use mopac_core::corrections::{
     DispersionModel, H4Parameters,
 };
 use mopac_core::gradients::GradientWorkspace;
+use mopac_core::mozyme::{run_mozyme_scf, MozymeOptions};
 use mopac_core::opt::{
     optimize_geometry_lbfgs, optimize_transition_state, EigenvectorFollowingWorkspace,
     HessianUpdateScheme, OptimizationOptions, TransitionStateOptions,
@@ -157,6 +158,10 @@ struct Cli {
     /// Calculate finite-field polarizability and NLO hyperpolarizability tensors (STATIC/POLAR)
     #[arg(long = "static", alias = "polar")]
     polar: bool,
+
+    /// Enable MOZYME localized molecular orbital linear-scaling SCF ($O(N)$)
+    #[arg(long = "mozyme")]
+    mozyme: bool,
 }
 
 #[derive(Debug, Clone, Copy, Default)]
@@ -192,6 +197,7 @@ struct ParsedInput {
     is_force_requested: bool,
     is_gpu_requested: bool,
     is_fp32_requested: bool,
+    is_mozyme_requested: bool,
     method: Option<String>,
     is_nddo_requested: bool,
     #[allow(dead_code)]
@@ -324,6 +330,7 @@ fn parse_mopac_input(content: &str) -> io::Result<ParsedInput> {
     let mut is_force_requested = false;
     let mut is_gpu = false;
     let mut is_fp32 = false;
+    let mut is_mozyme = false;
     let mut is_1scf = false;
     let mut method = None;
     let mut is_nddo_requested = false;
@@ -343,7 +350,9 @@ fn parse_mopac_input(content: &str) -> io::Result<ParsedInput> {
 
     for kw in &keywords {
         let u = kw.to_uppercase();
-        if u == "TS" {
+        if u == "MOZYME" || u == "MOZYM" {
+            is_mozyme = true;
+        } else if u == "TS" {
             is_ts_requested = true;
         } else if u == "IRC" || u.starts_with("IRC=") {
             is_irc_requested = true;
@@ -503,6 +512,7 @@ fn parse_mopac_input(content: &str) -> io::Result<ParsedInput> {
         is_force_requested,
         is_gpu_requested: is_gpu,
         is_fp32_requested: is_fp32,
+        is_mozyme_requested: is_mozyme,
         method,
         is_nddo_requested,
         is_dipole_requested,
@@ -626,11 +636,17 @@ fn main() -> Result<(), Box<dyn std::error::Error>> {
 
     let use_gpu = cli.gpu || parsed.is_gpu_requested;
     let use_fp32 = cli.fp32 || parsed.is_fp32_requested;
-    let is_irc = (cli.irc || parsed.is_irc_requested) && !cli.one_scf;
-    let is_drc = (cli.drc || parsed.is_drc_requested) && !cli.one_scf && !is_irc;
-    let is_ts = (cli.ts || parsed.is_ts_requested) && !cli.one_scf && !is_irc && !is_drc;
-    let is_opt =
-        (cli.opt || parsed.is_opt_requested) && !cli.one_scf && !is_ts && !is_irc && !is_drc;
+    let is_mozyme = cli.mozyme || parsed.is_mozyme_requested;
+    let is_irc = (cli.irc || parsed.is_irc_requested) && !cli.one_scf && !is_mozyme;
+    let is_drc = (cli.drc || parsed.is_drc_requested) && !cli.one_scf && !is_irc && !is_mozyme;
+    let is_ts =
+        (cli.ts || parsed.is_ts_requested) && !cli.one_scf && !is_irc && !is_drc && !is_mozyme;
+    let is_opt = (cli.opt || parsed.is_opt_requested)
+        && !cli.one_scf
+        && !is_ts
+        && !is_irc
+        && !is_drc
+        && !is_mozyme;
 
     let method_name = cli
         .method
@@ -665,7 +681,9 @@ fn main() -> Result<(), Box<dyn std::error::Error>> {
     );
     println!(
         " Calculation Mode      : {}",
-        if is_irc {
+        if is_mozyme {
+            "MOZYME Linear-Scaling Localized Orbitals (O(N))"
+        } else if is_irc {
             "Intrinsic Reaction Coordinate (IRC) Path Tracing"
         } else if is_drc {
             "Dynamic Reaction Coordinate (DRC) Molecular Dynamics"
@@ -865,6 +883,185 @@ fn main() -> Result<(), Box<dyn std::error::Error>> {
         writeln!(f, " JOB TERMINATED NORMALLY")?;
 
         println!(" [Output] Results written to {}", out_file.display());
+        return Ok(());
+    }
+
+    if is_mozyme {
+        println!(" [MOZYME] Starting Linear Scaling Localized Molecular Orbital (LMO) SCF...");
+        let mozyme_opts = MozymeOptions {
+            max_iter: 200,
+            max_jacobi_sweeps: 50,
+            energy_tol: 1.0e-7,
+            jacobi_tol: 1.0e-4,
+            cutoff_distance: 8.5,
+            damping: 1.0,
+            verbose: false,
+        };
+
+        let disp_model = match cli.disp.as_deref() {
+            Some("pm6-dh+") | Some("pm6-dh2") | Some("dh+") => Some(DispersionModel::Pm6DhPlus),
+            Some("pm7") => Some(DispersionModel::Pm7),
+            _ => parsed.dispersion,
+        };
+
+        let mozyme_res = run_mozyme_scf(&batch, model.as_ref(), disp_model, &mozyme_opts);
+        let elapsed = start_time.elapsed();
+
+        println!("-------------------------------------------------------------------------------");
+        println!("                    MOZYME LINEAR SCALING SCF RESULTS                          ");
+        println!("-------------------------------------------------------------------------------");
+        println!(
+            " SCF Status                   : {}",
+            if mozyme_res.converged {
+                "CONVERGED"
+            } else {
+                "NOT CONVERGED"
+            }
+        );
+        println!(" SCF Iterations               : {}", mozyme_res.iterations);
+        println!(
+            " Wall Clock Time              : {:.4} s",
+            elapsed.as_secs_f64()
+        );
+        println!(
+            " Total Energy                 : {:15.6} eV",
+            mozyme_res.total_energy_ev
+        );
+        println!(
+            " Electronic Energy            : {:15.6} eV",
+            mozyme_res.electronic_energy_ev
+        );
+        println!(
+            " Nuclear Repulsion            : {:15.6} eV",
+            mozyme_res.core_repulsion_ev
+        );
+        println!(
+            " Final Heat of Formation      : {:15.5} kcal/mol ({:12.5} kJ/mol)",
+            mozyme_res.heat_of_formation_kcal,
+            mozyme_res.heat_of_formation_kcal * 4.184
+        );
+        println!(" Total Localized Orbitals     : {}", mozyme_res.lmos.len());
+        let n_occ = mozyme_res.lmos.iter().filter(|l| l.is_occupied).count();
+        let n_virt = mozyme_res.lmos.len() - n_occ;
+        println!("   Occupied LMOs              : {}", n_occ);
+        println!("   Virtual LMOs               : {}", n_virt);
+        println!("-------------------------------------------------------------------------------");
+        println!("                  LOCALIZED MOLECULAR ORBITALS (LMOs)                          ");
+        println!("-------------------------------------------------------------------------------");
+        println!("  NO.   TYPE                 OCC    ATOMS         ENERGY (EV)");
+        for lmo in &mozyme_res.lmos {
+            let at_str = lmo
+                .atom_indices
+                .iter()
+                .map(|&a| {
+                    format!(
+                        "{}{}",
+                        atomic_number_to_symbol(batch.atomic_numbers[a]),
+                        a + 1
+                    )
+                })
+                .collect::<Vec<_>>()
+                .join("-");
+            println!(
+                "  {:3}   {:20}  {:3}    {:12}  {:10.4}",
+                lmo.index + 1,
+                format!("{:?}", lmo.lmo_type),
+                if lmo.is_occupied { "2.0" } else { "0.0" },
+                at_str,
+                lmo.energy
+            );
+        }
+        println!("-------------------------------------------------------------------------------");
+        println!("              NET ATOMIC CHARGES (MULLIKEN POPULATION)                         ");
+        println!("-------------------------------------------------------------------------------");
+        println!("  ATOM NO.   TYPE          CHARGE");
+        for i in 0..batch.natoms {
+            let sym = atomic_number_to_symbol(batch.atomic_numbers[i]);
+            println!(
+                "   {:4}       {:2}         {:10.6}",
+                i + 1,
+                sym,
+                mozyme_res.atomic_charges[i]
+            );
+        }
+        println!("===============================================================================");
+
+        let mut out = File::create(&out_file)?;
+        writeln!(
+            out,
+            " *******************************************************************************"
+        )?;
+        writeln!(
+            out,
+            " **                 MOPAC_RS MOZYME LINEAR SCALING RESULTS                    **"
+        )?;
+        writeln!(
+            out,
+            " *******************************************************************************"
+        )?;
+        writeln!(out)?;
+        writeln!(out, " KEYWORDS: {}", parsed.keywords.join(" "))?;
+        writeln!(out, " TITLE:    {}", parsed.title)?;
+        writeln!(out, " METHOD:   {}", model.name())?;
+        writeln!(out)?;
+        writeln!(
+            out,
+            " FINAL HEAT OF FORMATION = {:17.5} KCAL/MOL",
+            mozyme_res.heat_of_formation_kcal
+        )?;
+        writeln!(
+            out,
+            " TOTAL ENERGY            = {:17.6} EV",
+            mozyme_res.total_energy_ev
+        )?;
+        writeln!(
+            out,
+            " ELECTRONIC ENERGY       = {:17.6} EV",
+            mozyme_res.electronic_energy_ev
+        )?;
+        writeln!(
+            out,
+            " NUCLEAR REPULSION       = {:17.6} EV",
+            mozyme_res.core_repulsion_ev
+        )?;
+        writeln!(out, " SCF ITERATIONS          = {}", mozyme_res.iterations)?;
+        writeln!(
+            out,
+            " WALL CLOCK TIME         = {:.4} SECONDS",
+            elapsed.as_secs_f64()
+        )?;
+        writeln!(out)?;
+        writeln!(out, "              NET ATOMIC CHARGES")?;
+        for i in 0..batch.natoms {
+            let sym = atomic_number_to_symbol(batch.atomic_numbers[i]);
+            writeln!(
+                out,
+                "   {:4}       {:2}         {:10.6}",
+                i + 1,
+                sym,
+                mozyme_res.atomic_charges[i]
+            )?;
+        }
+        writeln!(out, " == MOPAC_RS MOZYME DONE ==")?;
+
+        let mut arc = File::create(&arc_file)?;
+        writeln!(arc, "{} MOZYME 1SCF", model.name())?;
+        writeln!(arc, "{}", parsed.title)?;
+        writeln!(
+            arc,
+            "Final Heat of Formation: {:12.5} kcal/mol",
+            mozyme_res.heat_of_formation_kcal
+        )?;
+        for i in 0..batch.natoms {
+            let sym = atomic_number_to_symbol(batch.atomic_numbers[i]);
+            let (x, y, z) = (batch.x[i], batch.y[i], batch.z[i]);
+            writeln!(arc, " {:2}   {:14.8} 1  {:14.8} 1  {:14.8} 1", sym, x, y, z)?;
+        }
+
+        println!(" Output files written to:");
+        println!("   .out Report : {}", out_file.display());
+        println!("   .arc Archive: {}", arc_file.display());
+        println!(" Done.");
         return Ok(());
     }
 

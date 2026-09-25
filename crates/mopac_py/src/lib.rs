@@ -26,6 +26,7 @@ use mopac_core::corrections::h_bonds4::{
 use mopac_core::gradients::nuclear_gradients::{
     compute_cartesian_gradients_with_options, GradientWorkspace,
 };
+use mopac_core::mozyme::{run_mozyme_scf, MozymeOptions};
 use mopac_core::opt::eigenvector_following::{
     optimize_transition_state, EigenvectorFollowingWorkspace, TransitionStateOptions,
 };
@@ -2578,6 +2579,196 @@ pub fn polarizability(
     })
 }
 
+/// Localized Molecular Orbital (LMO) representation for Python.
+#[pyclass(get_all)]
+#[derive(Debug, Clone)]
+pub struct MozymeLmoPy {
+    /// 0-indexed LMO identifier
+    pub index: usize,
+    /// Classification string (e.g. "BondingSigma", "LonePair", "AntibondingSigma")
+    pub lmo_type: String,
+    /// Occupancy flag: true if occupied (2 electrons), false if virtual
+    pub is_occupied: bool,
+    /// Indices of atoms on which this LMO is localized
+    pub atom_indices: Vec<usize>,
+    /// Participating atomic orbital basis function indices
+    pub ao_indices: Vec<usize>,
+    /// Expansion coefficients
+    pub coeffs: Vec<f64>,
+    /// Orbital expectation energy <phi | F | phi> in eV
+    pub energy_ev: f64,
+}
+
+#[pymethods]
+impl MozymeLmoPy {
+    fn __repr__(&self) -> String {
+        format!(
+            "<MozymeLmo index={} type='{}' occ={} atoms={:?} E={:.3} eV>",
+            self.index, self.lmo_type, self.is_occupied, self.atom_indices, self.energy_ev
+        )
+    }
+
+    fn to_dict<'py>(&self, py: Python<'py>) -> PyResult<Bound<'py, PyDict>> {
+        let dict = PyDict::new_bound(py);
+        dict.set_item("index", self.index)?;
+        dict.set_item("lmo_type", &self.lmo_type)?;
+        dict.set_item("is_occupied", self.is_occupied)?;
+        dict.set_item("atom_indices", &self.atom_indices)?;
+        dict.set_item("ao_indices", &self.ao_indices)?;
+        dict.set_item("coeffs", &self.coeffs)?;
+        dict.set_item("energy_ev", self.energy_ev)?;
+        Ok(dict)
+    }
+}
+
+/// MOZYME O(N) linear-scaling localized molecular orbital SCF results for Python.
+#[pyclass(get_all)]
+#[derive(Debug, Clone)]
+pub struct MozymePyResult {
+    /// Whether Jacobi LMO rotation minimization converged
+    pub converged: bool,
+    /// Number of completed SCF iterations
+    pub iterations: usize,
+    /// Total electronic energy in eV
+    pub electronic_energy_ev: f64,
+    /// Core-core nuclear repulsion energy in eV
+    pub nuclear_repulsion_ev: f64,
+    /// Total energy in eV (E_elec + E_nuc)
+    pub total_energy_ev: f64,
+    /// Standard heat of formation \Delta H_f^\circ in kcal/mol
+    pub heat_of_formation_kcal: f64,
+    /// Net Mulliken partial atomic charges (shape: [natoms])
+    pub atomic_charges: Vec<f64>,
+    /// Converged localized molecular orbitals
+    pub lmos: Vec<MozymeLmoPy>,
+}
+
+#[pymethods]
+impl MozymePyResult {
+    fn __repr__(&self) -> String {
+        format!(
+            "<MozymePyResult converged={} iter={} E_tot={:.6} eV, dHf={:.3} kcal/mol, num_lmos={}>",
+            self.converged,
+            self.iterations,
+            self.total_energy_ev,
+            self.heat_of_formation_kcal,
+            self.lmos.len()
+        )
+    }
+
+    fn to_dict<'py>(&self, py: Python<'py>) -> PyResult<Bound<'py, PyDict>> {
+        let dict = PyDict::new_bound(py);
+        dict.set_item("converged", self.converged)?;
+        dict.set_item("iterations", self.iterations)?;
+        dict.set_item("electronic_energy_ev", self.electronic_energy_ev)?;
+        dict.set_item("nuclear_repulsion_ev", self.nuclear_repulsion_ev)?;
+        dict.set_item("total_energy_ev", self.total_energy_ev)?;
+        dict.set_item("heat_of_formation_kcal", self.heat_of_formation_kcal)?;
+        dict.set_item("atomic_charges", &self.atomic_charges)?;
+        let lmo_list = PyList::empty_bound(py);
+        for l in &self.lmos {
+            lmo_list.append(l.to_dict(py)?)?;
+        }
+        dict.set_item("lmos", lmo_list)?;
+        Ok(dict)
+    }
+}
+
+/// Perform O(N) linear-scaling localized molecular orbital calculation via MOZYME.
+#[pyfunction]
+#[pyo3(signature = (
+    atomic_numbers,
+    coordinates,
+    method="PM6",
+    dispersion=None,
+    max_iter=200,
+    max_jacobi_sweeps=50,
+    energy_tol=1e-7,
+    jacobi_tol=1e-4,
+    cutoff_distance=8.5,
+    damping=1.0,
+    verbose=false
+))]
+pub fn mozyme(
+    atomic_numbers: Vec<u8>,
+    coordinates: Vec<Vec<f64>>,
+    method: &str,
+    dispersion: Option<&str>,
+    max_iter: usize,
+    max_jacobi_sweeps: usize,
+    energy_tol: f64,
+    jacobi_tol: f64,
+    cutoff_distance: f64,
+    damping: f64,
+    verbose: bool,
+) -> PyResult<MozymePyResult> {
+    if atomic_numbers.len() != coordinates.len() {
+        return Err(PyValueError::new_err(format!(
+            "Mismatch: {} atomic numbers but {} coordinates",
+            atomic_numbers.len(),
+            coordinates.len()
+        )));
+    }
+
+    let mut coords_flat = Vec::with_capacity(coordinates.len());
+    for (i, c) in coordinates.iter().enumerate() {
+        if c.len() != 3 {
+            return Err(PyValueError::new_err(format!(
+                "Atom {} coordinate must be [x, y, z], got {} elements",
+                i,
+                c.len()
+            )));
+        }
+        coords_flat.push([c[0], c[1], c[2]]);
+    }
+
+    let model = get_model(method)?;
+    let batch = MolecularBatch::new_for_model(atomic_numbers, &coords_flat, model.as_ref());
+
+    let disp_model = match dispersion {
+        Some("pm6-dh+") | Some("pm6-dh2") | Some("dh+") => Some(DispersionModel::Pm6DhPlus),
+        Some("pm7") => Some(DispersionModel::Pm7),
+        _ => None,
+    };
+
+    let options = MozymeOptions {
+        max_iter,
+        max_jacobi_sweeps,
+        energy_tol,
+        jacobi_tol,
+        cutoff_distance,
+        damping,
+        verbose,
+    };
+
+    let res = run_mozyme_scf(&batch, model.as_ref(), disp_model, &options);
+
+    let lmos_py = res
+        .lmos
+        .into_iter()
+        .map(|l| MozymeLmoPy {
+            index: l.index,
+            lmo_type: format!("{:?}", l.lmo_type),
+            is_occupied: l.is_occupied,
+            atom_indices: l.atom_indices,
+            ao_indices: l.ao_indices,
+            coeffs: l.coeffs,
+            energy_ev: l.energy,
+        })
+        .collect();
+
+    Ok(MozymePyResult {
+        converged: res.converged,
+        iterations: res.iterations,
+        electronic_energy_ev: res.electronic_energy_ev,
+        nuclear_repulsion_ev: res.core_repulsion_ev,
+        total_energy_ev: res.total_energy_ev,
+        heat_of_formation_kcal: res.heat_of_formation_kcal,
+        atomic_charges: res.atomic_charges,
+        lmos: lmos_py,
+    })
+}
+
 /// MOPAC_RS Python Module
 #[pymodule]
 fn mopac_py(m: &Bound<'_, PyModule>) -> PyResult<()> {
@@ -2599,6 +2790,8 @@ fn mopac_py(m: &Bound<'_, PyModule>) -> PyResult<()> {
     m.add_class::<PbcResultPy>()?;
     m.add_class::<EspResultPy>()?;
     m.add_class::<PolarizabilityPyResult>()?;
+    m.add_class::<MozymeLmoPy>()?;
+    m.add_class::<MozymePyResult>()?;
     m.add_class::<MopacCalculator>()?;
     m.add_function(wrap_pyfunction!(calculate, m)?)?;
     m.add_function(wrap_pyfunction!(optimize, m)?)?;
@@ -2612,6 +2805,7 @@ fn mopac_py(m: &Bound<'_, PyModule>) -> PyResult<()> {
     m.add_function(wrap_pyfunction!(uv_vis_spectrum, m)?)?;
     m.add_function(wrap_pyfunction!(pbc, m)?)?;
     m.add_function(wrap_pyfunction!(polarizability, m)?)?;
+    m.add_function(wrap_pyfunction!(mozyme, m)?)?;
 
     let py = m.py();
     let py_code = r#"
