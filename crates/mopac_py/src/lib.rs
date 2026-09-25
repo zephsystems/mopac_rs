@@ -2769,9 +2769,108 @@ pub fn mozyme(
     })
 }
 
+/// AM1-BCC Atomic Partial Charges result.
+#[pyclass(get_all)]
+#[derive(Debug, Clone)]
+pub struct Am1BccPyResult {
+    /// Initial Mulliken population charges before BCC corrections
+    pub initial_charges: Vec<f64>,
+    /// Net bond charge corrections applied to each atom
+    pub bond_charge_corrections: Vec<f64>,
+    /// Final AM1-BCC charges
+    pub bcc_charges: Vec<f64>,
+    /// Total net charge of the molecular system
+    pub total_charge: f64,
+}
+
+#[pymethods]
+impl Am1BccPyResult {
+    pub fn to_dict(&self, py: Python) -> PyResult<PyObject> {
+        let dict = PyDict::new_bound(py);
+        dict.set_item("initial_charges", self.initial_charges.clone())?;
+        dict.set_item(
+            "bond_charge_corrections",
+            self.bond_charge_corrections.clone(),
+        )?;
+        dict.set_item("bcc_charges", self.bcc_charges.clone())?;
+        dict.set_item("total_charge", self.total_charge)?;
+        Ok(dict.into())
+    }
+}
+
+/// Calculate AM1-BCC atomic partial charges.
+#[pyfunction]
+#[pyo3(signature = (atomic_numbers, coordinates, method="AM1", use_nddo=true))]
+pub fn am1_bcc(
+    atomic_numbers: Vec<u8>,
+    coordinates: Vec<Vec<f64>>,
+    method: &str,
+    use_nddo: bool,
+) -> PyResult<Am1BccPyResult> {
+    let natoms = atomic_numbers.len();
+    if coordinates.len() != natoms {
+        return Err(PyValueError::new_err(format!(
+            "Mismatch between atomic_numbers ({}) and coordinates ({})",
+            natoms,
+            coordinates.len()
+        )));
+    }
+
+    let mut coords_slice = Vec::with_capacity(natoms);
+    for (i, row) in coordinates.iter().enumerate() {
+        if row.len() != 3 {
+            return Err(PyValueError::new_err(format!(
+                "Coordinate for atom {} must have 3 dimensions, got {}",
+                i,
+                row.len()
+            )));
+        }
+        coords_slice.push([row[0], row[1], row[2]]);
+    }
+
+    let batch = MolecularBatch::new(atomic_numbers, &coords_slice);
+    let model = get_model(method)?;
+    let mut ws = ScfWorkspace::allocate(batch.norbs);
+    let scf_opts = ScfOptions {
+        max_iter: 100,
+        energy_tol_ev: 1e-8,
+        density_tol: 1e-7,
+        use_nddo,
+        ..Default::default()
+    };
+
+    let scf_res = run_rhf_scf_with_options(&batch, model.as_ref(), &mut ws, &scf_opts);
+    if !scf_res.converged {
+        return Err(PyValueError::new_err(
+            "SCF failed to converge during AM1-BCC calculation",
+        ));
+    }
+
+    let mut total_valence_elecs = 0.0;
+    for &z in &batch.atomic_numbers {
+        if let Some(p) = model.get_element(z) {
+            total_valence_elecs += p.core_charge;
+        }
+    }
+    let nocc = (total_valence_elecs.round() as usize) / 2;
+
+    let mulliken = compute_mulliken_population(&batch, model.as_ref(), &ws.eigenvectors, nocc);
+    let bcc_res =
+        mopac_core::properties::am1_bcc::compute_am1_bcc_charges(&batch, &mulliken.net_charges)
+            .map_err(PyValueError::new_err)?;
+
+    Ok(Am1BccPyResult {
+        initial_charges: bcc_res.initial_charges,
+        bond_charge_corrections: bcc_res.bond_charge_corrections,
+        bcc_charges: bcc_res.bcc_charges,
+        total_charge: bcc_res.total_charge,
+    })
+}
+
 /// MOPAC_RS Python Module
 #[pymodule]
 fn mopac_py(m: &Bound<'_, PyModule>) -> PyResult<()> {
+    m.add_class::<Am1BccPyResult>()?;
     m.add_class::<CalculationResult>()?;
     m.add_class::<OptimizationPyResult>()?;
     m.add_class::<TransitionStatePyResult>()?;
@@ -2806,6 +2905,7 @@ fn mopac_py(m: &Bound<'_, PyModule>) -> PyResult<()> {
     m.add_function(wrap_pyfunction!(pbc, m)?)?;
     m.add_function(wrap_pyfunction!(polarizability, m)?)?;
     m.add_function(wrap_pyfunction!(mozyme, m)?)?;
+    m.add_function(wrap_pyfunction!(am1_bcc, m)?)?;
 
     let py = m.py();
     let py_code = r#"
@@ -2857,6 +2957,55 @@ except ImportError:
     class MopacASECalculator:
         def __init__(self, *args, **kwargs):
             raise ImportError("ase and numpy are required to instantiate MopacASECalculator")
+
+try:
+    import torch
+
+    class MopacEnergyFunction(torch.autograd.Function):
+        """Differentiable PyTorch autograd bridge to MOPAC_RS semi-empirical quantum engine."""
+        @staticmethod
+        def forward(ctx, coords, atomic_numbers, method="AM1", dispersion=None, cosmo_eps=None, use_nddo=True):
+            coords_np = coords.detach().cpu().numpy().tolist()
+            calc_res = calculate(
+                atomic_numbers,
+                coords_np,
+                method=method,
+                dispersion=dispersion,
+                cosmo_eps=cosmo_eps,
+                use_nddo=use_nddo
+            )
+            grad_tensor = torch.tensor(calc_res.gradients_ev_angstrom, dtype=coords.dtype, device=coords.device)
+            ctx.save_for_backward(grad_tensor)
+            return torch.tensor(calc_res.total_energy_ev, dtype=coords.dtype, device=coords.device)
+
+        @staticmethod
+        def backward(ctx, grad_output):
+            grad_tensor, = ctx.saved_tensors
+            return grad_output * grad_tensor, None, None, None, None, None
+
+    class MopacPotential(torch.nn.Module):
+        """Differentiable Semi-Empirical Quantum Potential Module for PyTorch and TorchMD."""
+        def __init__(self, atomic_numbers, method="AM1", dispersion=None, cosmo_eps=None, use_nddo=True):
+            super().__init__()
+            self.atomic_numbers = list(atomic_numbers)
+            self.method = method
+            self.dispersion = dispersion
+            self.cosmo_eps = cosmo_eps
+            self.use_nddo = use_nddo
+
+        def forward(self, coords):
+            return MopacEnergyFunction.apply(
+                coords,
+                self.atomic_numbers,
+                self.method,
+                self.dispersion,
+                self.cosmo_eps,
+                self.use_nddo
+            )
+except ImportError:
+    class MopacPotential:
+        def __init__(self, *args, **kwargs):
+            raise ImportError("PyTorch ('torch') is required to instantiate MopacPotential")
 "#;
 
     let dict = m.dict();

@@ -6,6 +6,7 @@
 //! - `bonds`: Armstrong-Perkins-Stewart / Mayer bond orders and atomic valencies matching `bonds.F90`.
 //! - `mulliken`: Mulliken population analysis and Löwdin de-orthogonalization matching `mullik.F90`.
 
+pub mod am1_bcc;
 pub mod bonds;
 pub mod dipole;
 pub mod esp;
@@ -13,6 +14,7 @@ pub mod heat;
 pub mod mulliken;
 pub mod polarizability;
 
+pub use am1_bcc::{compute_am1_bcc_charges, Am1BccResult};
 pub use bonds::{compute_bond_orders, BondOrderResult};
 pub use dipole::{compute_dipole_moment, DipoleResult, E_ANGSTROM_TO_DEBYE};
 pub use esp::{bondi_vdw_radius_angstrom, compute_esp_charges, EspOptions, EspResult};

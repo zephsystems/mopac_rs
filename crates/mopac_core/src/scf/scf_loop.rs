@@ -25,7 +25,7 @@ pub struct ScfResult {
 }
 
 /// Configuration options for the Self-Consistent Field (SCF) solver.
-#[derive(Debug, Clone, Copy, PartialEq)]
+#[derive(Debug, Clone, PartialEq)]
 pub struct ScfOptions {
     /// Maximum allowed SCF iterations (default: 60)
     pub max_iter: usize,
@@ -46,6 +46,8 @@ pub struct ScfOptions {
     pub cosmo: Option<crate::solvation::CosmoParams>,
     /// Optional external electric field vector in eV / Angstrom (default: None)
     pub electric_field_ev_angstrom: Option<[f64; 3]>,
+    /// Optional classical external point charges for QM/MM electrostatic embedding (default: None)
+    pub external_charges: Option<Vec<crate::hamiltonian::external_charges::ExternalCharge>>,
 }
 
 impl Default for ScfOptions {
@@ -59,6 +61,7 @@ impl Default for ScfOptions {
             use_nddo: false,
             cosmo: None,
             electric_field_ev_angstrom: None,
+            external_charges: None,
         }
     }
 }
@@ -158,6 +161,21 @@ pub fn run_rhf_scf_with_options(
             efield,
         );
         enuc += e_nuc_field;
+    }
+
+    if let Some(ref ext_charges) = options.external_charges {
+        crate::hamiltonian::external_charges::apply_external_charges_to_hcore(
+            batch,
+            model,
+            ext_charges,
+            &mut ws.h_core,
+        );
+        let e_nuc_ext = crate::hamiltonian::external_charges::compute_external_charges_core_energy(
+            batch,
+            model,
+            ext_charges,
+        );
+        enuc += e_nuc_ext;
     }
 
     // 4. Initial guess: diagonalize H_core to generate initial density P^(0)
@@ -311,6 +329,7 @@ pub fn run_rhf_scf(
             use_nddo: false,
             cosmo: None,
             electric_field_ev_angstrom: None,
+            external_charges: None,
         },
     )
 }
@@ -387,6 +406,7 @@ pub fn run_rhf_scf_adaptive_with_nddo_and_cosmo(
             use_nddo,
             cosmo,
             electric_field_ev_angstrom: None,
+            external_charges: None,
         },
         ScfOptions {
             max_iter: max_iter_per_stage * 2,
@@ -397,6 +417,7 @@ pub fn run_rhf_scf_adaptive_with_nddo_and_cosmo(
             use_nddo,
             cosmo,
             electric_field_ev_angstrom: None,
+            external_charges: None,
         },
         ScfOptions {
             max_iter: max_iter_per_stage * 2,
@@ -407,6 +428,7 @@ pub fn run_rhf_scf_adaptive_with_nddo_and_cosmo(
             use_nddo,
             cosmo,
             electric_field_ev_angstrom: None,
+            external_charges: None,
         },
         ScfOptions {
             max_iter: max_iter_per_stage * 2,
@@ -417,6 +439,7 @@ pub fn run_rhf_scf_adaptive_with_nddo_and_cosmo(
             use_nddo,
             cosmo,
             electric_field_ev_angstrom: None,
+            external_charges: None,
         },
     ];
 
@@ -467,6 +490,7 @@ pub fn run_rhf_scf_adaptive_with_field(
             use_nddo,
             cosmo: None,
             electric_field_ev_angstrom: Some(efield_ev_angstrom),
+            external_charges: None,
         },
         ScfOptions {
             max_iter: max_iter_per_stage * 2,
@@ -477,6 +501,7 @@ pub fn run_rhf_scf_adaptive_with_field(
             use_nddo,
             cosmo: None,
             electric_field_ev_angstrom: Some(efield_ev_angstrom),
+            external_charges: None,
         },
         ScfOptions {
             max_iter: max_iter_per_stage * 2,
@@ -487,6 +512,7 @@ pub fn run_rhf_scf_adaptive_with_field(
             use_nddo,
             cosmo: None,
             electric_field_ev_angstrom: Some(efield_ev_angstrom),
+            external_charges: None,
         },
         ScfOptions {
             max_iter: max_iter_per_stage * 2,
@@ -497,6 +523,7 @@ pub fn run_rhf_scf_adaptive_with_field(
             use_nddo,
             cosmo: None,
             electric_field_ev_angstrom: Some(efield_ev_angstrom),
+            external_charges: None,
         },
     ];
 

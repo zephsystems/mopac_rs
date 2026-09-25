@@ -162,6 +162,10 @@ struct Cli {
     /// Enable MOZYME localized molecular orbital linear-scaling SCF ($O(N)$)
     #[arg(long = "mozyme")]
     mozyme: bool,
+
+    /// Calculate AM1-BCC partial atomic charges with bond charge corrections
+    #[arg(long = "bcc", alias = "am1-bcc")]
+    bcc: bool,
 }
 
 #[derive(Debug, Clone, Copy, Default)]
@@ -204,6 +208,7 @@ struct ParsedInput {
     is_dipole_requested: bool,
     is_bonds_requested: bool,
     is_mullik_requested: bool,
+    is_bcc_requested: bool,
     is_meci_requested: bool,
     ci_active_orbitals: Option<usize>,
     is_uv_vis_requested: bool,
@@ -337,6 +342,7 @@ fn parse_mopac_input(content: &str) -> io::Result<ParsedInput> {
     let mut is_dipole_requested = false;
     let mut is_bonds_requested = false;
     let mut is_mullik_requested = false;
+    let mut is_bcc_requested = false;
     let mut is_meci_requested = false;
     let mut ci_active_orbitals = None;
     let mut is_uv_vis_requested = false;
@@ -368,6 +374,8 @@ fn parse_mopac_input(content: &str) -> io::Result<ParsedInput> {
             is_bonds_requested = true;
         } else if u == "MULLIK" || u == "MULLIKEN" {
             is_mullik_requested = true;
+        } else if u == "BCC" || u == "AM1-BCC" {
+            is_bcc_requested = true;
         } else if u == "1SCF" {
             is_1scf = true;
         } else if u == "GPU" {
@@ -518,6 +526,7 @@ fn parse_mopac_input(content: &str) -> io::Result<ParsedInput> {
         is_dipole_requested,
         is_bonds_requested,
         is_mullik_requested,
+        is_bcc_requested,
         is_meci_requested,
         ci_active_orbitals,
         is_uv_vis_requested,
@@ -667,7 +676,10 @@ fn main() -> Result<(), Box<dyn std::error::Error>> {
 
     println!("===============================================================================");
     println!("                          MOPAC_RS CANONICAL QUANTUM ENGINE                     ");
-    println!("                                Version 0.1.0-alpha                             ");
+    println!(
+        "                                Version {:<32}",
+        env!("CARGO_PKG_VERSION")
+    );
     println!("===============================================================================");
     println!(" Job Input File        : {}", input_path.display());
     println!(" Method / Hamiltonian   : {}", model.name());
@@ -1628,14 +1640,15 @@ fn main() -> Result<(), Box<dyn std::error::Error>> {
         }
     }
 
+    let n_electrons: usize = batch
+        .atomic_numbers
+        .iter()
+        .map(|&z| model.get_element(z).unwrap().core_charge as usize)
+        .sum();
+    let num_occupied = n_electrons / 2;
+
     let is_mullik = cli.mullik || parsed.is_mullik_requested;
     let mullik_result = if is_mullik {
-        let n_electrons: usize = batch
-            .atomic_numbers
-            .iter()
-            .map(|&z| model.get_element(z).unwrap().core_charge as usize)
-            .sum();
-        let num_occupied = n_electrons / 2;
         Some(compute_mulliken_population(
             &batch,
             model.as_ref(),
@@ -1660,6 +1673,43 @@ fn main() -> Result<(), Box<dyn std::error::Error>> {
                 m_res.atomic_populations[i],
                 m_res.net_charges[i]
             );
+        }
+    }
+
+    let is_bcc = cli.bcc || parsed.is_bcc_requested;
+    if is_bcc {
+        let mullik_ref = if let Some(ref m_res) = mullik_result {
+            m_res.clone()
+        } else {
+            compute_mulliken_population(&batch, model.as_ref(), &ws.eigenvectors, num_occupied)
+        };
+
+        if let Ok(bcc_res) = mopac_core::properties::am1_bcc::compute_am1_bcc_charges(
+            &batch,
+            &mullik_ref.net_charges,
+        ) {
+            println!(
+                "-------------------------------------------------------------------------------"
+            );
+            println!(
+                "                       AM1-BCC ATOMIC PARTIAL CHARGES                          "
+            );
+            println!(
+                "-------------------------------------------------------------------------------"
+            );
+            println!("      NO.  ATOM   MULLIKEN CHARGE    BCC CORRECTION    AM1-BCC CHARGE");
+            for i in 0..batch.natoms {
+                let sym = atomic_number_to_symbol(batch.atomic_numbers[i]);
+                println!(
+                    "    {:4}    {:2}       {:10.6}        {:10.6}        {:10.6}",
+                    i + 1,
+                    sym,
+                    bcc_res.initial_charges[i],
+                    bcc_res.bond_charge_corrections[i],
+                    bcc_res.bcc_charges[i]
+                );
+            }
+            println!("    TOTAL MOLECULAR CHARGE: {:10.6}", bcc_res.total_charge);
         }
     }
 
@@ -1807,7 +1857,8 @@ fn main() -> Result<(), Box<dyn std::error::Error>> {
     )?;
     writeln!(
         out,
-        " **                              MOPAC_RS v0.1.0                              **"
+        " **                              MOPAC_RS v{:<5}                              **",
+        env!("CARGO_PKG_VERSION")
     )?;
     writeln!(
         out,

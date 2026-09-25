@@ -1,0 +1,21 @@
+[build-system]
+requires = ["setuptools>=61.0"]
+build-backend = "setuptools.build_meta"
+
+[project]
+name = "chimerax-mopac"
+version = "0.1.1"
+description = "UCSF ChimeraX bundle for MOPAC_RS high-performance quantum chemistry, AM1-BCC charges, and electrostatic surface visualization"
+readme = "README.md"
+requires-python = ">=3.9"
+license = { text = "Apache-2.0" }
+authors = [
+    { name = "zeph.sys", email = "zeph.systems@gmail.com" }
+]
+keywords = ["chimerax", "mopac", "quantum-chemistry", "am1-bcc", "molecular-surfaces"]
+dependencies = [
+    "mopac_py>=0.1.1"
+]
+
+[project.entry-points."chimerax.bundle_info"]
+chimerax_mopac = "chimerax_mopac:bundle_info"

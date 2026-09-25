@@ -11,6 +11,7 @@ Cargo.lock
 *.log
 *.arc
 *.syb
+*.tar.gz
 tmp/
 scratch/
 

@@ -11,7 +11,7 @@
 [![Language: Rust](https://img.shields.io/badge/Language-Rust%201.85%2B-orange.svg)]()
 [![SIMD: AVX2 / AVX-512](https://img.shields.io/badge/Acceleration-AVX2%20%7C%20AVX--512-red.svg)]()
 [![GPU: Vulkan Compute](https://img.shields.io/badge/Compute-Vulkan%20%7C%20GDDR6%20VRAM-green.svg)]()
-[![Scrutiny Tests](https://img.shields.io/badge/Automated%20Tests-83%2F83%20Passed-brightgreen.svg)]()
+[![Scrutiny Tests](https://img.shields.io/badge/Automated%20Tests-89%2F89%20Passed-brightgreen.svg)]()
 [![Python Bindings](https://img.shields.io/badge/PyO3-Python%203.8--3.14-blue.svg)]()
 
 <!-- Total Downloads -->
@@ -36,7 +36,7 @@ Every single module, parameter table, and integral calculation is empirically ve
 * **Dual Compute Backend:**
   - **CPU SIMD:** Vectorized AVX2 / FMA kernels with Rayon multi-threaded parallelism.
   - **Universal GPU (Vulkan Compute):** Cross-vendor hardware acceleration supporting NVIDIA RTX, AMD Radeon, Intel Arc, and Apple Silicon (via MoltenVK) with dedicated DMA host-to-device GDDR6 VRAM batch management.
-* **Axiomatic Verification:** 83 automated scrutiny, unit, quantum theorem, and differential oracle tests validating physical invariance, rotation orthonormality, translational symmetry, and exact numerical parity against OpenMOPAC.
+* **Axiomatic Verification:** 89 automated scrutiny, unit, quantum theorem, and differential oracle tests validating physical invariance, rotation orthonormality, translational symmetry, and exact numerical parity against OpenMOPAC.
 
 ---
 
@@ -118,14 +118,28 @@ Every single module, parameter table, and integral calculation is empirically ve
 ### 11. Periodic Boundary Conditions (PBC)
 - **1D, 2D, 3D Unit Cells:** Lattice vector parameterization with Monkhorst-Pack reciprocal space k-point sampling and Bloch SCF band structures.
 
-### 12. Python Bindings & Ecosystem Bridge (`mopac_py`)
-High-performance PyO3 bridge exposing the quantum chemical engine directly to Python for **RDKit**, **ASE** (Atomic Simulation Environment), and **PyTorch**:
-- **Zero-copy analytical gradients** directly returned as NumPy arrays or nested lists.
+### 12. AM1-BCC Atomic Partial Charges
+- **AMBER / Open Force Field Parity:** Clean-room implementation of the Jakalian et al. (2000, 2002) bond charge correction scheme directly atop semi-empirical AM1 Mulliken populations.
+- **Empirical BCC Parameterization:** Includes standard bond charge corrections (BCC01–BCC28) covering aliphatic/aromatic C-H, carbonyl C=O, alcohols/ethers C-O, amines/imines C-N, and halogens C-X.
+- **Strict Charge Conservation:** Enforces antisymmetric bond transfers $\delta_{ij} = -\delta_{ji}$, guaranteeing $\sum_i \Delta q_i \equiv 0$ strictly to machine precision ($10^{-16}$) and preserving total molecular charge.
+- **Direct CLI & Python Availability:** Accessible via the `--bcc` / `--am1-bcc` CLI flag, input keyword `AM1-BCC`, and `mopac_py.am1_bcc(atoms, coords)`.
+
+### 13. QM/MM Electrostatic Embedding
+- **Classical Point Charge Coupling:** Fully self-consistent electrostatic embedding of external point charges $Q_k$ at coordinates $\vec{R}_k$ into the quantum core Hamiltonian:
+  $$H_{\mu\mu} \leftarrow H_{\mu\mu} - \sum_{k} \frac{Q_k}{\sqrt{R_{Ak}^2 + \rho_A^2}}$$
+- **Dewar-Klopman Damping:** Regularized monopole interaction radius $\rho_A = \frac{\text{EV\_ANGSTROM\_FACTOR}}{2 g_{ss}^A}$ eliminating non-physical electron collapse / spillover catastrophes while converging exactly to Coulomb's law at long range ($R_{Ak} \gg \rho_A$).
+- **Nuclear Repulsion & Polarization:** Includes external core-charge energy $E_{\text{core-ext}} = \sum_A \sum_k \frac{Z_A Q_k}{\sqrt{R_{Ak}^2 + \rho_A^2}}$ and captures explicit solvent polarization (e.g. water dipole moment increases from $1.854\text{ D}$ to $2.049\text{ D}$ in the presence of an external test charge).
+- **Exact Analytical Nuclear Gradients:** Closed-form nuclear gradients $\nabla_A E_{\text{ext}}$ verified against central finite differences to within $< 10^{-5}\text{ eV/\AA}$ with zero translational drift.
+
+### 14. Python Bindings & Ecosystem Bridge (`mopac_py`)
+High-performance PyO3 bridge exposing the quantum chemical engine directly to Python for **RDKit**, **ASE** (Atomic Simulation Environment), and **PyTorch / TorchMD**:
+- **Zero-copy analytical gradients** directly returned as NumPy arrays or torch tensors.
 - **Vibrational Frequencies & Thermochemistry:** `mopac_py.frequencies(atoms, coords, method="AM1")` computing full normal modes, ZPVE, $H(T)$, $G(T)$, $C_p$, and $S^\circ$.
+- **AM1-BCC Charge Calculator:** `mopac_py.am1_bcc(atoms, coords)` returning raw Mulliken and refined BCC partial charges.
 - **MOZYME Linear Scaling:** `mopac_py.mozyme(atoms, coords, method="PM6")` for macromolecules.
 - **Direct RDKit Interoperability:** `mopac_py.from_rdkit(mol)` extracts atomic numbers and 3D conformer coordinates directly.
 - **Native ASE Calculator:** `mopac_py.MopacASECalculator` plugs directly into ASE dynamics (`BFGS`, `VelocityVerlet`, etc.).
-- **Full parameterization control** (`method="PM6"`, `dispersion="D3-BJ"`, `cosmo_eps=78.4`, `use_nddo=True`).
+- **Differentiable PyTorch Potential (`TorchMD` / $\Delta$-ML):** `mopac_py.MopacPotential` as a native `torch.nn.Module` with custom autograd function (`mopac_py.MopacEnergyFunction`) for hybrid QM/MM and machine-learned force field training.
 - **Full parameterization control** (`method="PM6"`, `dispersion="D3-BJ"`, `cosmo_eps=78.4`, `use_nddo=True`).
 
 ```python
@@ -142,6 +156,10 @@ print(f"Dipole: {res.dipole_debye[3]:.3f} Debye")
 print(f"Mulliken Charges: {res.mulliken_charges}")
 print(f"Gradients (eV/A): {res.gradients_ev_angstrom}")
 
+# AM1-BCC atomic partial charges
+bcc = mopac_py.am1_bcc(atoms, coords)
+print(f"AM1-BCC Charges: {bcc.bcc_charges}")
+
 # Vibrational frequencies and thermochemistry (298.15 K, 1 atm)
 vib = mopac_py.frequencies(atoms, coords, method="AM1")
 print(f"Vibrational Frequencies (cm^-1): {vib.vibrational_frequencies_cm1}")
@@ -152,6 +170,12 @@ print(f"Standard Entropy S^o: {vib.thermo.entropy_total_cal_k_mol:.3f} cal/(mol*
 opt = mopac_py.optimize(atoms, coords, method="PM6", max_cycles=50)
 print(f"Optimized Energy: {opt.final_energy_ev:.6f} eV (Converged: {opt.converged})")
 ```
+
+### 15. UCSF ChimeraX Extension (`integrations/chimerax`)
+Interactive visual molecular modeling plugin for **UCSF ChimeraX 1.8+**:
+- Seamless interactive semi-empirical calculations inside the 3D viewport.
+- Surface electrostatic coloring from AM1-BCC / Mulliken charges.
+- One-click L-BFGS geometry optimization and MOZYME macromolecular calculations via `mopac calculate`, `mopac bcc`, `mopac optimize`, and `mopac mozyme`.
 
 ---
 
@@ -201,6 +225,7 @@ Options:
       --force            Enable Cartesian Hessian & vibrational frequency analysis
       --bonds            Enable Mayer bond orders and atomic valencies calculation
       --mullik           Enable Mulliken population analysis
+      --bcc, --am1-bcc   Compute AM1-BCC atomic partial charges
       --ci <N>           Enable Multi-Electron Configuration Interaction (MECI) with active space size N
       --uv-vis           Simulate UV-Vis electronic absorption spectrum
       --static, --polar  Calculate finite-field polarizability and NLO hyperpolarizability tensors
