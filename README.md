@@ -3,7 +3,9 @@
 > **Modern High-Performance Data-Oriented Semi-Empirical Quantum Chemistry Engine in Rust**
 
 [![License: Apache 2.0](https://img.shields.io/badge/License-Apache_2.0-blue.svg)](https://opensource.org/licenses/Apache-2.0)
-[![Crates.io](https://img.shields.io/crates/v/mopac.svg)](https://crates.io/crates/mopac)
+[![Crates.io: mopac](https://img.shields.io/crates/v/mopac.svg?label=mopac)](https://crates.io/crates/mopac)
+[![Crates.io: mopac_core](https://img.shields.io/crates/v/mopac_core.svg)](https://crates.io/crates/mopac_core)
+[![Docs.rs](https://docs.rs/mopac_core/badge.svg)](https://docs.rs/mopac_core)
 [![DOI](https://zenodo.org/badge/DOI/10.5281/zenodo.22731254.svg)](https://doi.org/10.5281/zenodo.22731254)
 [![CI Status](https://github.com/zephsystems/mopac_rs/actions/workflows/ci.yml/badge.svg)](https://github.com/zephsystems/mopac_rs/actions/workflows/ci.yml)
 [![Language: Rust](https://img.shields.io/badge/Language-Rust%201.85%2B-orange.svg)]()
@@ -11,6 +13,11 @@
 [![GPU: Vulkan Compute](https://img.shields.io/badge/Compute-Vulkan%20%7C%20GDDR6%20VRAM-green.svg)]()
 [![Scrutiny Tests](https://img.shields.io/badge/Automated%20Tests-78%2F78%20Passed-brightgreen.svg)]()
 [![Python Bindings](https://img.shields.io/badge/PyO3-Python%203.8--3.14-blue.svg)]()
+
+<!-- Total Downloads -->
+[![Downloads mopac_core](https://img.shields.io/crates/d/mopac_core?label=mopac_core%20downloads)](https://crates.io/crates/mopac_core)
+[![Downloads mopac_gpu](https://img.shields.io/crates/d/mopac_gpu?label=mopac_gpu%20downloads)](https://crates.io/crates/mopac_gpu)
+[![Downloads mopac](https://img.shields.io/crates/d/mopac?label=cli%20downloads)](https://crates.io/crates/mopac)
 
 ---
 
@@ -268,7 +275,8 @@ If you use `mopac_rs` in your academic research, benchmarks, or software, please
   title = {{MOPAC\_RS: Modern High-Performance Semi-Empirical Quantum Chemistry Engine in Rust}},
   year = {2026},
   publisher = {Zenodo},
-  version = {0.1.0-alpha},
+  version = {0.1.0},
+  doi = {10.5281/zenodo.22731254},
   url = {https://github.com/zephsystems/mopac_rs}
 }
 ```
