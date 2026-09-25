@@ -8,16 +8,16 @@ authors:
 repository-code: "https://github.com/zephsystems/mopac_rs"
 url: "https://github.com/zephsystems/mopac_rs"
 license: "Apache-2.0"
-version: "0.1.0"
-date-released: "2026-09-12"
-doi: "10.5281/zenodo.22731254"
+version: "0.1.1"
+date-released: "2026-09-25"
+doi: "10.5281/zenodo.22731253"
 identifiers:
-  - type: doi
-    value: "10.5281/zenodo.22731254"
-    description: "The release-specific DOI for MOPAC_RS v0.1.0"
   - type: doi
     value: "10.5281/zenodo.22731253"
     description: "The concept DOI representing all versions of MOPAC_RS"
+  - type: doi
+    value: "10.5281/zenodo.22731254"
+    description: "The release-specific DOI for MOPAC_RS v0.1.0"
 keywords:
   - "quantum-chemistry"
   - "semi-empirical"

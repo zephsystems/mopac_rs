@@ -6,7 +6,7 @@
 [![Crates.io: mopac](https://img.shields.io/crates/v/mopac.svg?label=mopac)](https://crates.io/crates/mopac)
 [![Crates.io: mopac_core](https://img.shields.io/crates/v/mopac_core.svg)](https://crates.io/crates/mopac_core)
 [![Docs.rs](https://docs.rs/mopac_core/badge.svg)](https://docs.rs/mopac_core)
-[![DOI](https://zenodo.org/badge/DOI/10.5281/zenodo.22731254.svg)](https://doi.org/10.5281/zenodo.22731254)
+[![DOI](https://zenodo.org/badge/DOI/10.5281/zenodo.22731253.svg)](https://doi.org/10.5281/zenodo.22731253)
 [![CI Status](https://github.com/zephsystems/mopac_rs/actions/workflows/ci.yml/badge.svg)](https://github.com/zephsystems/mopac_rs/actions/workflows/ci.yml)
 [![Language: Rust](https://img.shields.io/badge/Language-Rust%201.85%2B-orange.svg)]()
 [![SIMD: AVX2 / AVX-512](https://img.shields.io/badge/Acceleration-AVX2%20%7C%20AVX--512-red.svg)]()
@@ -336,8 +336,8 @@ If you use `mopac_rs` in your academic research, benchmarks, or software, please
   title = {{MOPAC\_RS: Modern High-Performance Semi-Empirical Quantum Chemistry Engine in Rust}},
   year = {2026},
   publisher = {Zenodo},
-  version = {0.1.0},
-  doi = {10.5281/zenodo.22731254},
+  version = {0.1.1},
+  doi = {10.5281/zenodo.22731253},
   url = {https://github.com/zephsystems/mopac_rs}
 }
 ```
