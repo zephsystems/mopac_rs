@@ -12,4 +12,4 @@ readme = "../../README.md"
 
 [dependencies]
 ash = "0.38"
-mopac_core = { path = "../mopac_core", version = "0.1.0" }
+mopac_core = { path = "../mopac_core", version = "0.1.1" }

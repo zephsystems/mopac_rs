@@ -52,7 +52,7 @@ use std::time::Instant;
 #[derive(Parser, Debug)]
 #[command(
     name = "mopac",
-    version = "0.1.0-alpha",
+    version = "0.1.1",
     about = "MOPAC_RS: Modern Data-Oriented Semi-Empirical Quantum Chemistry Engine"
 )]
 struct Cli {
