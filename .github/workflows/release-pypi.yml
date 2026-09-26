@@ -25,7 +25,6 @@ jobs:
         with:
           target: ${{ matrix.target }}
           args: --release --out dist
-          sdist: false
       - name: Upload wheels
         uses: actions/upload-artifact@v4
         with:
@@ -47,7 +46,6 @@ jobs:
         with:
           target: ${{ matrix.target }}
           args: --release --out dist
-          sdist: false
       - name: Upload wheels
         uses: actions/upload-artifact@v4
         with:
@@ -55,14 +53,10 @@ jobs:
           path: dist
 
   macos:
-    runs-on: ${{ matrix.os }}
+    runs-on: macos-14
     strategy:
       matrix:
-        include:
-          - os: macos-13
-            target: x86_64
-          - os: macos-14
-            target: aarch64
+        target: [aarch64, x86_64]
     steps:
       - uses: actions/checkout@v4
       - uses: actions/setup-python@v5
@@ -73,7 +67,6 @@ jobs:
         with:
           target: ${{ matrix.target }}
           args: --release --out dist
-          sdist: false
       - name: Upload wheels
         uses: actions/upload-artifact@v4
         with:
@@ -107,7 +100,7 @@ jobs:
         with:
           path: dist
           merge-multiple: true
-      - name: Publish to PyPI via Trusted Publishing
+      - name: Publish package distributions to PyPI
         uses: pypa/gh-action-pypi-publish@release/v1
         with:
           packages-dir: dist/
