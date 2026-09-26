@@ -3006,6 +3006,8 @@ except ImportError:
     class MopacPotential:
         def __init__(self, *args, **kwargs):
             raise ImportError("PyTorch ('torch') is required to instantiate MopacPotential")
+
+__all__ = list(__all__) + ["from_rdkit", "from_ase", "MopacASECalculator", "MopacPotential"]
 "#;
 
     let dict = m.dict();
