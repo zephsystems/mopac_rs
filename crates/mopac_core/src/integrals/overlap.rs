@@ -520,24 +520,26 @@ pub fn compute_diatomic_overlap_block_analytical(
         let wp = (p_a.zs.powi(3) * p_b.zp.powi(5)).sqrt() * rab4;
         let s_sp = wp * (a[2] * b[0] - b[2] * a[0] + a[3] * b[1] - b[3] * a[1]);
 
-        s_mat[0][1] = lx * s_sp;
-        s_mat[0][2] = ly * s_sp;
-        s_mat[0][3] = lz * s_sp;
+        s_mat[0][1] = -lx * s_sp;
+        s_mat[0][2] = -ly * s_sp;
+        s_mat[0][3] = -lz * s_sp;
     } else if za > 1 && zb == 1 {
-        set_ab_tables(p_b.zs, p_a.zs, rab, &mut a, &mut b);
-        let rab4 = rab.powi(4) * 0.125;
-        let w = (p_b.zs.powi(3) * p_a.zs.powi(5)).sqrt() * rab4;
-        let rt3 = 1.0 / 3.0f64.sqrt();
-        let s_ss = w * rt3 * (a[3] * b[0] - b[3] * a[0] + a[2] * b[1] - b[2] * a[1]);
-        s_mat[0][0] = s_ss;
-
-        set_ab_tables(p_b.zs, p_a.zp, rab, &mut a, &mut b);
-        let wp = (p_b.zs.powi(3) * p_a.zp.powi(5)).sqrt() * rab4;
-        let s_ps = wp * (a[2] * b[0] - b[2] * a[0] + a[3] * b[1] - b[3] * a[1]);
-
-        s_mat[1][0] = lx * s_ps;
-        s_mat[2][0] = ly * s_ps;
-        s_mat[3][0] = lz * s_ps;
+        // Enforce exact transpose symmetry: S_{Heavy, H}(\vec{R}) = [S_{H, Heavy}(-\vec{R})]^T
+        let mut s_rev = [[0.0f64; 4]; 4];
+        compute_diatomic_overlap_block_analytical(
+            zb,
+            za,
+            p_b,
+            p_a,
+            r_angstrom,
+            [-lx, -ly, -lz],
+            &mut s_rev,
+        );
+        for i in 0..4 {
+            for j in 0..4 {
+                s_mat[i][j] = s_rev[j][i];
+            }
+        }
     } else {
         let rab5 = rab.powi(5) * 0.0625;
 
@@ -751,4 +753,68 @@ pub fn compute_diatomic_overlap_block(
             s_mat[i][j] = di[i][j];
         }
     }
+}
+
+/// Assembles the complete molecular non-orthogonal Slater-Type Orbital (STO) overlap matrix $S_{\mu\nu}$.
+///
+/// Properties:
+/// - Dimension: $N_{\text{orbs}} \times N_{\text{orbs}}$.
+/// - Diagonal normalization: $S_{\mu\mu} \equiv 1.0$.
+/// - Strict real symmetry: $S_{\mu\nu} = S_{\nu\mu}$.
+/// - Positive-definite metric: $\lambda_k(S) > 0$.
+pub fn build_overlap_matrix<M: ?Sized + crate::parameters::ParameterModel>(
+    batch: &crate::types::MolecularBatch,
+    model: &M,
+) -> crate::types::AlignedMatrix<f64> {
+    let norbs = batch.norbs;
+    let natoms = batch.natoms;
+    let mut s_mat = crate::types::AlignedMatrix::zeroed(norbs, norbs);
+
+    for i in 0..norbs {
+        s_mat.set(i, i, 1.0);
+    }
+
+    for a in 0..natoms {
+        let za = batch.atomic_numbers[a];
+        let p_a = match model.get_element(za) {
+            Some(p) => p,
+            None => continue,
+        };
+        let orb_a_start = batch.orbital_offsets[a];
+        let norb_a = batch.basis_types[a].num_orbitals();
+
+        for b in (a + 1)..natoms {
+            let zb = batch.atomic_numbers[b];
+            let p_b = match model.get_element(zb) {
+                Some(p) => p,
+                None => continue,
+            };
+            let orb_b_start = batch.orbital_offsets[b];
+            let norb_b = batch.basis_types[b].num_orbitals();
+
+            let r_ab = batch.distance(a, b);
+            if r_ab < 1e-10 {
+                continue;
+            }
+
+            let dir = [
+                (batch.x[b] - batch.x[a]) / r_ab,
+                (batch.y[b] - batch.y[a]) / r_ab,
+                (batch.z[b] - batch.z[a]) / r_ab,
+            ];
+
+            let mut s_block = [[0.0f64; 4]; 4];
+            compute_diatomic_overlap_block(za, zb, &p_a, &p_b, r_ab, dir, &mut s_block);
+
+            for mu in 0..norb_a {
+                for nu in 0..norb_b {
+                    let val = s_block[mu][nu];
+                    s_mat.set(orb_a_start + mu, orb_b_start + nu, val);
+                    s_mat.set(orb_b_start + nu, orb_a_start + mu, val);
+                }
+            }
+        }
+    }
+
+    s_mat
 }
