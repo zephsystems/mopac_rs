@@ -2,7 +2,7 @@
 //!
 //! Licensed under the Apache License, Version 2.0 (the "License").
 //! Evaluates H2, CH4, H2O, NH3, C2H4, C2H2, CH3OH under PM7 Hamiltonian
-//! dynamically against the canonical OpenMOPAC v23.2.5 binary (/home/cyclop/.local/bin/mopac).
+//! dynamically against the canonical OpenMOPAC v23.2.5 binary (detected via OPENMOPAC_BIN, ~/.local/bin, or PATH).
 //! In accordance with directives: ZERO mock data, verified against oracle.
 
 use mopac_core::parameters::pm7::Pm7Model;
@@ -26,9 +26,11 @@ fn find_openmopac_binary() -> Option<PathBuf> {
             return Some(pb);
         }
     }
-    let local = PathBuf::from("/home/cyclop/.local/bin/mopac");
-    if local.exists() {
-        return Some(local);
+    if let Ok(home) = std::env::var("HOME") {
+        let local = PathBuf::from(home).join(".local/bin/mopac");
+        if local.exists() {
+            return Some(local);
+        }
     }
     if let Ok(path) = std::env::var("PATH") {
         for dir in std::env::split_paths(&path) {

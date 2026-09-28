@@ -42,7 +42,19 @@ import mopac_py
 
 CACHE_FILE = os.path.join(os.path.dirname(__file__), "molecules_cache.json")
 RESULTS_FILE = os.path.join(os.path.dirname(__file__), "massive_audit_results.json")
-ORACLE_BIN = "/home/cyclop/.local/bin/mopac" if os.path.exists("/home/cyclop/.local/bin/mopac") else None
+def _resolve_oracle_bin():
+    if "OPENMOPAC_BIN" in os.environ and os.path.exists(os.environ["OPENMOPAC_BIN"]):
+        return os.environ["OPENMOPAC_BIN"]
+    import shutil
+    which_bin = shutil.which("mopac")
+    if which_bin:
+        return which_bin
+    home_bin = os.path.expanduser("~/.local/bin/mopac")
+    if os.path.exists(home_bin):
+        return home_bin
+    return None
+
+ORACLE_BIN = _resolve_oracle_bin()
 
 Z_SYMBOLS = {
     1: "H", 5: "B", 6: "C", 7: "N", 8: "O", 9: "F",

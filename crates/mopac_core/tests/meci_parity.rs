@@ -35,9 +35,11 @@ fn find_openmopac_binary() -> Option<PathBuf> {
             return Some(pb);
         }
     }
-    let local = PathBuf::from("/home/cyclop/.local/bin/mopac");
-    if local.exists() {
-        return Some(local);
+    if let Ok(home) = std::env::var("HOME") {
+        let local = PathBuf::from(home).join(".local/bin/mopac");
+        if local.exists() {
+            return Some(local);
+        }
     }
     if let Ok(path) = std::env::var("PATH") {
         for dir in std::env::split_paths(&path) {

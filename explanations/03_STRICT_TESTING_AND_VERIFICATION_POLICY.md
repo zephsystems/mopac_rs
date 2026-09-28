@@ -100,7 +100,7 @@ All tests in `mopac_rs` are evaluated against strict numerical tolerances:
   * Parity condition: $\|g_{\text{anal}} - g_{\text{num}}\|_\infty < 10^{-6} \text{ kcal/mol/\AA}$.
 
 ### 3.3. Tier 3: End-to-End Parity Benchmarks
-A dedicated test suite executing real molecules against the installed `/home/cyclop/.conda/envs/mopac/bin/mopac` reference binary:
+A dedicated test suite executing real molecules against the canonical OpenMOPAC reference binary (`mopac` via `OPENMOPAC_BIN` or `PATH`):
 
 1. **Diatomics:** $\text{H}_2, \text{N}_2, \text{CO}, \text{HF}, \text{Cl}_2$.
 2. **Saturated Hydrocarbons:** Methane ($\text{CH}_4$), Ethane ($\text{C}_2\text{H}_6$), Propane ($\text{C}_3\text{H}_8$), Cyclohexane ($\text{C}_6\text{H}_{12}$).

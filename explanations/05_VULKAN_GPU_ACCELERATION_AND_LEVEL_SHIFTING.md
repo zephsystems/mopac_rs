@@ -4,7 +4,7 @@
 **Author**: Antigravity Autonomous Pair-Programming Agent  
 **Language**: English (Strict Mandate)  
 **License**: Apache License 2.0  
-**Workspace Crates**: [`mopac_core`](file:///home/cyclop/Projects/n/05_mopacrs/crates/mopac_core), [`mopac_gpu`](file:///home/cyclop/Projects/n/05_mopacrs/crates/mopac_gpu)  
+**Workspace Crates**: [`mopac_core`](../crates/mopac_core), [`mopac_gpu`](../crates/mopac_gpu)  
 
 ---
 
@@ -21,8 +21,8 @@
 ## 1. Executive Summary
 
 This milestone delivers two foundational capabilities to the `mopac_rs` ecosystem:
-1. **Saunders-Hillier Virtual Orbital Level Shifting (`bshift`)** integrated directly into [`mopac_core::scf::scf_loop`](file:///home/cyclop/Projects/n/05_mopacrs/crates/mopac_core/src/scf/scf_loop.rs). Modeled identically on MOPAC's Fortran source (`iter.F90`), this technique resolves near-degeneracy oscillations by elevating the virtual manifold while keeping occupied states and physical ground-state energy strictly invariant.
-2. **Direct Vulkan GPU Compute Engine ([`mopac_gpu`](file:///home/cyclop/Projects/n/05_mopacrs/crates/mopac_gpu))**: Built with zero-overhead Vulkan bindings (`ash 0.38`), native IEEE-754 double precision (`shaderFloat64`), and pre-allocated zero-allocation GPU memory workspaces (`GpuWorkspace`). The engine detects and dispatches computation to discrete GPUs (`NVIDIA GeForce RTX 4050 Laptop GPU`) and integrated GPUs (`AMD Radeon 680M`), matching CPU reference calculations to **$1.78 \times 10^{-15}\text{ eV}$** across $4,000,000$ matrix pairs.
+1. **Saunders-Hillier Virtual Orbital Level Shifting (`bshift`)** integrated directly into [`mopac_core::scf::scf_loop`](../crates/mopac_core/src/scf/scf_loop.rs). Modeled identically on MOPAC's Fortran source (`iter.F90`), this technique resolves near-degeneracy oscillations by elevating the virtual manifold while keeping occupied states and physical ground-state energy strictly invariant.
+2. **Direct Vulkan GPU Compute Engine ([`mopac_gpu`](../crates/mopac_gpu))**: Built with zero-overhead Vulkan bindings (`ash 0.38`), native IEEE-754 double precision (`shaderFloat64`), and pre-allocated zero-allocation GPU memory workspaces (`GpuWorkspace`). The engine detects and dispatches computation to discrete GPUs (`NVIDIA GeForce RTX 4050 Laptop GPU`) and integrated GPUs (`AMD Radeon 680M`), matching CPU reference calculations to **$1.78 \times 10^{-15}\text{ eV}$** across $4,000,000$ matrix pairs.
 
 ---
 
@@ -88,7 +88,7 @@ Rather than relying on proprietary vendor frameworks (e.g. CUDA only) or heavy r
 - **Pre-Allocated Zero-Allocation Memory (`GpuWorkspace`)**: Eliminates driver memory allocation latency during iterative cycles through host-visible, host-coherent pre-mapped staging buffers.
 
 ### 3.2 Compute Pipeline Details
-The Dewar-Klopman two-center two-electron monopole kernel is implemented in [`crates/mopac_gpu/shaders/coulomb.comp`](file:///home/cyclop/Projects/n/05_mopacrs/crates/mopac_gpu/shaders/coulomb.comp):
+The Dewar-Klopman two-center two-electron monopole kernel is implemented in [`crates/mopac_gpu/shaders/coulomb.comp`](../crates/mopac_gpu/shaders/coulomb.comp):
 ```glsl
 #version 450
 #extension GL_EXT_shader_explicit_arithmetic_types_float64 : require
@@ -161,7 +161,7 @@ Empirically measured on host system with **NVIDIA GeForce RTX 4050 Laptop GPU (D
 
 ### Architectural Insights & Analysis:
 1. **Double Precision Throughput**: Consumer GeForce RTX GPUs (RTX 4050) feature a 1:64 FP64-to-FP32 compute ratio, whereas Datacenter GPUs (NVIDIA A100/H100) feature a 1:2 ratio. For small single-molecule computations, CPU cache-line alignment (L1/L2 hits) delivers exceptional single-threaded performance.
-2. **Pre-Allocation Advantage**: By introducing [`GpuWorkspace`](file:///home/cyclop/Projects/n/05_mopacrs/crates/mopac_gpu/src/coulomb.rs#L440-L460), iterative dispatch overhead was reduced by **over 11x** (from $2.34\text{ ms}$ to $0.21\text{ ms}$ for $N=50$).
+2. **Pre-Allocation Advantage**: By introducing [`GpuWorkspace`](../crates/mopac_gpu/src/coulomb.rs#L440-L460), iterative dispatch overhead was reduced by **over 11x** (from $2.34\text{ ms}$ to $0.21\text{ ms}$ for $N=50$).
 3. **Batch Molecular Scaling**: The true power of GPU compute in `mopac_gpu` will be realized when evaluating **molecular batches** (e.g., conformational ensembles or docking libraries with 100+ molecules evaluated concurrently across GPU warps).
 
 ### 5.2 End-to-End Quantum Benchmark: 100 Real Molecules (`mopac_rs` vs Official MOPAC v23.2.5)
@@ -174,7 +174,7 @@ To eliminate all subjectivity, an end-to-end empirical audit was executed side-b
 | **Convergence Rate** | **100 / 100 (100.0%)** | **96 / 100 (96.0%)** | Gap reduced from 92 failures to only **4 remaining** |
 | **Total Wall Clock Time** | $14,539.80\text{ ms}$ ($14.54\text{ s}$) | **$7,692.21\text{ ms}$ ($7.69\text{ s}$)** | **1.89x faster overall** (up to 40x-150x on small molecules) |
 | **Average Time / Molecule** | $145.4\text{ ms}$ | **$76.9\text{ ms}$** | Contiguous SIMD row traversals & cyclic Jacobi solver |
-| **Memory Allocations (SCF)** | Unknown (Fortran dynamic arrays) | **0 malloc** | Pre-allocated [`ScfWorkspace`](file:///home/cyclop/Projects/n/05_mopacrs/crates/mopac_core/src/types.rs) |
+| **Memory Allocations (SCF)** | Unknown (Fortran dynamic arrays) | **0 malloc** | Pre-allocated [`ScfWorkspace`](../crates/mopac_core/src/types.rs) |
 | **Mean Absolute $\Delta \text{HOMO}$** | Reference Standard | **$1.6235\text{ eV}$** | High qualitative and quantitative electronic consistency |
 
 #### The Remaining 4 Systems:

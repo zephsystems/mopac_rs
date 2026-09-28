@@ -24,7 +24,7 @@ The `mopac_rs` project translates and modernizes the semi-empirical quantum chem
 Rather than performing a line-by-line mechanical transcription that would preserve Fortran 77/90 architectural anti-patterns (such as global `COMMON` blocks, non-reentrant `SAVE` variables, 1-based packed triangular arrays, and scattered allocations), `mopac_rs` adopts the **Data-Oriented Programming (DOP)** paradigm inspired by modern cache-conscious computational engines (e.g. `ckspaces_platform`):
 - **Contiguous 64-byte Cache-Line Alignment**: All coordinate vectors, secular matrices, and working scratch buffers are aligned to 64 bytes (`AlignedVec64<T>`, `AlignedMatrix<T>`) to guarantee unaligned penalty-free AVX2/AVX-512 and GPU staging.
 - **Strict Struct-of-Arrays (SoA)**: Coordinates are stored as separate contiguous $X, Y, Z$ arrays (`MolecularBatch`), enabling vectorized distance matrix computations and SIMD kernels.
-- **Zero Dynamic Heap Allocations (`0 malloc`) in Iterative Cycles**: All matrices required for the Roothaan-Hall Self-Consistent Field (SCF) iterations, eigensolvers, and Pulay DIIS extrapolation are allocated exactly once in [`ScfWorkspace`](file:///home/cyclop/Projects/n/05_mopacrs/crates/mopac_core/src/types.rs#L273-L325).
+- **Zero Dynamic Heap Allocations (`0 malloc`) in Iterative Cycles**: All matrices required for the Roothaan-Hall Self-Consistent Field (SCF) iterations, eigensolvers, and Pulay DIIS extrapolation are allocated exactly once in [`ScfWorkspace`](../crates/mopac_core/src/types.rs#L273-L325).
 - **Absolute Empirical Parity & Zero-Mock Policy**: No mock objects, artificial stubs, or synthetic fallbacks are permitted. Every numerical result is rigorously cross-verified against the official installed reference binary (`MOPAC v23.2.5`).
 
 ---
@@ -61,7 +61,7 @@ In May 2019, the 26th General Conference on Weights and Measures (CGPM) adopted 
 | **Speed of Light** | $c$ ($10^{10}$ cm/s) | `2.99776` | `2.99792458` (exact) | `2.99792458` (exact) | Supported via `ConstantsVersion` |
 
 ### 2.4 The `mopac_rs` Dual-Precision Strategy
-To achieve absolute empirical parity with reference test runs while offering forward-compatible metrology, [`crates/mopac_core/src/constants.rs`](file:///home/cyclop/Projects/n/05_mopacrs/crates/mopac_core/src/constants.rs) encapsulates constants in a typed enum `ConstantsVersion`:
+To achieve absolute empirical parity with reference test runs while offering forward-compatible metrology, [`crates/mopac_core/src/constants.rs`](../crates/mopac_core/src/constants.rs) encapsulates constants in a typed enum `ConstantsVersion`:
 - `ConstantsVersion::Codata2018`: Default for modern interoperability matching MOPAC v23.2.5.
 - `ConstantsVersion::Codata2022`: Most up-to-date NIST adjustment.
 - `ConstantsVersion::Legacy1986`: Truncated constants ensuring exact parity with historical AM1 literature (0.00004 kcal/mol accuracy).
@@ -137,13 +137,13 @@ To achieve absolute empirical parity with reference test runs while offering for
 - Zero-allocation iterative execution: `GpuWorkspace` pre-maps host-coherent GPU buffers, eliminating heap allocations during SCF cycles.
 
 ### Milestone 13: Camp-King Quadratic Line-Search Interpolator
-- Ported the Camp-King line-search algorithm from MOPAC `src/matrix/interp.F90` (R. N. Camp and H. F. King, *J. Chem. Phys.* 75, 268, 1981) into [`crates/mopac_core/src/scf/camp_king.rs`](file:///home/cyclop/Projects/n/05_mopacrs/crates/mopac_core/src/scf/camp_king.rs).
+- Ported the Camp-King line-search algorithm from MOPAC `src/matrix/interp.F90` (R. N. Camp and H. F. King, *J. Chem. Phys.* 75, 268, 1981) into [`crates/mopac_core/src/scf/camp_king.rs`](../crates/mopac_core/src/scf/camp_king.rs).
 - Decomposes the difference between successive determinantal wavefunctions into independent $2 \times 2$ Givens rotations between paired corresponding orbitals ($\theta_k = \arcsin\sqrt{\lambda_k}$).
 - Strictly conserves MO orthonormality ($C^T C = I$ to $< 10^{-13}$) and one-particle density matrix idempotency ($P^2 = 2P$ to $< 10^{-13}$) for all line-search points.
 - Evaluates analytical energy gradients $dE/dx = -4 \sum_k \theta_k F^{\text{MO}}_{k, n_{\text{occ}}+k}$ and fits a 1D cubic Hermite spline to determine optimal energy-minimizing step $x_{\text{min}}$.
 
 ### Milestone 14: Multi-Tier Convergence Escalation & 100% Convergence Milestone
-- Implemented `run_rhf_scf_adaptive` inside [`crates/mopac_core/src/scf/scf_loop.rs`](file:///home/cyclop/Projects/n/05_mopacrs/crates/mopac_core/src/scf/scf_loop.rs).
+- Implemented `run_rhf_scf_adaptive` inside [`crates/mopac_core/src/scf/scf_loop.rs`](../crates/mopac_core/src/scf/scf_loop.rs).
 - Emulates MOPAC's automatic converger escalation (`allcon` in `iter.F90`):
   1. Tier 1: Standard Pulay DIIS ($d = 0.5, \sigma = 0$) for rapid convergence on standard systems.
   2. Tier 2: Level-shifted DIIS ($\sigma = 8.0\text{ eV}, d = 0.5$) for near-degenerate systems.
@@ -153,7 +153,7 @@ To achieve absolute empirical parity with reference test runs while offering for
 - Total Rust execution time: **7.88 s** for 100 calculations (1.85x faster than official MOPAC v23.2.5).
 
 ### Milestone 15: Resolution of Identity (RI-V) / Density Fitting 3-Center Engine
-- Designed and implemented [`crates/mopac_core/src/ri/`](file:///home/cyclop/Projects/n/05_mopacrs/crates/mopac_core/src/ri/):
+- Designed and implemented [`crates/mopac_core/src/ri/`](../crates/mopac_core/src/ri/):
   - In-place positive-definite Cholesky decomposition ($V = L L^T$) and inversion ($L^{-1}$).
   - Inverse square root metric $V^{-1/2} = L^{-T}$ satisfying $V^{-1/2} (V^{-1/2})^T = V^{-1}$ to $< 10^{-13}$.
   - Cauchy-Schwarz integral screening: $|(\mu\nu|P)| \le \sqrt{(\mu\nu|\mu\nu)(P|P)}$.
@@ -265,18 +265,18 @@ With the consolidation of Phase 1 and the execution of the canonical integration
 
 ### 6.5 Direct NDDO 22-Multipole Fock & Core Hamiltonian Coupling
 - Fully coupled diatomic multipoles into the iterative SCF loop:
-  - `build_hcore_nddo()` in [`crates/mopac_core/src/hamiltonian/hcore.rs`](file:///home/cyclop/Projects/n/05_mopacrs/crates/mopac_core/src/hamiltonian/hcore.rs): Injects rotated $E_{1B}$ and $E_{2A}$ electron-nuclear attraction matrices into the core Hamiltonian.
-  - `build_fock_nddo()` in [`crates/mopac_core/src/fock/fock_builder.rs`](file:///home/cyclop/Projects/n/05_mopacrs/crates/mopac_core/src/fock/fock_builder.rs): Contracts the rotated 100/10/1 two-electron repulsion tensor $W$ with off-diagonal blocks of the density matrix $P$ ($J$ Coulomb and $K$ exchange contractions) according to exact OpenMOPAC `fock2.F90` rules.
+  - `build_hcore_nddo()` in [`crates/mopac_core/src/hamiltonian/hcore.rs`](../crates/mopac_core/src/hamiltonian/hcore.rs): Injects rotated $E_{1B}$ and $E_{2A}$ electron-nuclear attraction matrices into the core Hamiltonian.
+  - `build_fock_nddo()` in [`crates/mopac_core/src/fock/fock_builder.rs`](../crates/mopac_core/src/fock/fock_builder.rs): Contracts the rotated 100/10/1 two-electron repulsion tensor $W$ with off-diagonal blocks of the density matrix $P$ ($J$ Coulomb and $K$ exchange contractions) according to exact OpenMOPAC `fock2.F90` rules.
   - Precomputes diatomic pair integrals once prior to SCF iterations, maintaining the strict **`0 malloc`** invariant across all subsequent SCF cycles.
 
 ### 6.6 Additional Semi-Empirical Hamiltonians: RM1 & PM6
 - **RM1 (Recife Model 1)**:
-  - Implemented in [`crates/mopac_core/src/parameters/rm1.rs`](file:///home/cyclop/Projects/n/05_mopacrs/crates/mopac_core/src/parameters/rm1.rs) for H, C, N, O, F, Cl.
+  - Implemented in [`crates/mopac_core/src/parameters/rm1.rs`](../crates/mopac_core/src/parameters/rm1.rs) for H, C, N, O, F, Cl.
   - Re-parameterized Gaussian core repulsion potentials providing enhanced geometries and hydrogen-bonding energetics.
 - **PM6 (Parametrization Method 6)**:
-  - Implemented in [`crates/mopac_core/src/parameters/pm6.rs`](file:///home/cyclop/Projects/n/05_mopacrs/crates/mopac_core/src/parameters/pm6.rs) for H, C, N, O.
+  - Implemented in [`crates/mopac_core/src/parameters/pm6.rs`](../crates/mopac_core/src/parameters/pm6.rs) for H, C, N, O.
   - Introduces diatomic pairwise bond parameters `alpb` ($a_{\text{bond}}$) and `xfac` ($f_{\text{bond}}$) for diatomic resonance and core-core interactions.
-  - Implemented `compute_pair_core_repulsion_pm6()` in [`crates/mopac_core/src/integrals/core_repulsion.rs`](file:///home/cyclop/Projects/n/05_mopacrs/crates/mopac_core/src/integrals/core_repulsion.rs) with $R^2$ exponential scaling for hydrogen-bonding pairs (C-H, N-H, O-H) and $R + 0.0003 R^6$ scaling for heavy pairs.
+  - Implemented `compute_pair_core_repulsion_pm6()` in [`crates/mopac_core/src/integrals/core_repulsion.rs`](../crates/mopac_core/src/integrals/core_repulsion.rs) with $R^2$ exponential scaling for hydrogen-bonding pairs (C-H, N-H, O-H) and $R + 0.0003 R^6$ scaling for heavy pairs.
 
 ### 6.7 Vulkan GPU GDDR6 Batch Pipelining Engine
 - Upgraded `crates/mopac_gpu/src/coulomb_fp32.rs` and `coulomb_fp32.comp`:
@@ -286,7 +286,7 @@ With the consolidation of Phase 1 and the execution of the canonical integration
 
 ### 6.8 Additional Semi-Empirical Hamiltonian: PM3 and Extended Halogen/Chalcogen Elements
 - **PM3 (Parametric Method 3)**:
-  - Implemented in [`crates/mopac_core/src/parameters/pm3.rs`](file:///home/cyclop/Projects/n/05_mopacrs/crates/mopac_core/src/parameters/pm3.rs) with 100% authentic parameters extracted directly from `libmopac.so.2` (OpenMOPAC v23.2.5).
+  - Implemented in [`crates/mopac_core/src/parameters/pm3.rs`](../crates/mopac_core/src/parameters/pm3.rs) with 100% authentic parameters extracted directly from `libmopac.so.2` (OpenMOPAC v23.2.5).
   - Covers H, C, N, O, F, P, S, Cl, Br, I with two-term and four-term Gaussian core corrections ($a_k, b_k, c_k$).
   - Evaluates standard MNDO/AM1 core repulsion with PM3-optimized $\alpha$ exponents and Gaussian wells.
 - **Extended Elements for AM1 and PM6**:
@@ -352,7 +352,7 @@ With the consolidation of Phase 1 and the execution of the canonical integration
 ---
 
 ### Milestone 17: Molecular Properties Engine (Dipole, Mayer Bond Orders, Mulliken Population Analysis)
-- Created [`crates/mopac_core/src/properties/`](file:///home/cyclop/Projects/n/05_mopacrs/crates/mopac_core/src/properties/):
+- Created [`crates/mopac_core/src/properties/`](../crates/mopac_core/src/properties/):
   1. `dipole.rs`:
      - Point charge dipole vector and magnitude: $\vec{\mu}_{\text{point}} = \sum_A q_A (\vec{R}_A - \vec{R}_{\text{cm}}) \times 4.80320425\text{ D}/(e \cdot \text{\AA})$.
      - Intra-atomic $sp$ hybridization dipole: $\vec{\mu}_{\text{hyb}, \alpha} = - \sum_A 2 \cdot D_{1, A} \cdot a_0 \times 4.80320425 \cdot P_{s, p_\alpha}(A)$.
@@ -371,7 +371,7 @@ With the consolidation of Phase 1 and the execution of the canonical integration
      - Machine-precision valence electron conservation: $\sum_A \text{Pop}_A \equiv N_{\text{electrons}}$ to $< 10^{-12}$.
 
 ### Milestone 18: Empirical Van der Waals Dispersion Corrections (PM6-DH+, PM7) and Analytical Gradients
-- Created [`crates/mopac_core/src/corrections/dispersion.rs`](file:///home/cyclop/Projects/n/05_mopacrs/crates/mopac_core/src/corrections/dispersion.rs):
+- Created [`crates/mopac_core/src/corrections/dispersion.rs`](../crates/mopac_core/src/corrections/dispersion.rs):
   - Direct mathematical translation of OpenMOPAC `H_bond_correction_PM6_DH_Dispersion.F90`.
   - Authentic elemental parameter arrays: $C_6(86)$ in $\text{J}\cdot\text{nm}^6/\text{mol}$, $R_0(86)$ in pm, and Slater-Kirkwood effective electron numbers $N_{\text{eff}}(86)$.
   - Slater-Kirkwood combination rules:

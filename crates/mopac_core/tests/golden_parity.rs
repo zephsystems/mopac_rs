@@ -3,7 +3,7 @@
 //! Licensed under the Apache License, Version 2.0 (the "License").
 //! Strictly executes differential validation by running both:
 //! 1. The native MOPAC_RS pure-Rust semi-empirical quantum chemistry engine.
-//! 2. The canonical compiled OpenMOPAC v23.2.5 binary (/home/cyclop/.local/bin/mopac).
+//! 2. The canonical compiled OpenMOPAC v23.2.5 binary (detected via OPENMOPAC_BIN, ~/.local/bin, or PATH).
 //!
 //! In accordance with user directives: ZERO mock data, ZERO synthetic fallbacks.
 //! Every single value is computed dynamically and compared directly against the reference binary.
@@ -32,9 +32,11 @@ fn find_openmopac_binary() -> Option<PathBuf> {
             return Some(pb);
         }
     }
-    let local = PathBuf::from("/home/cyclop/.local/bin/mopac");
-    if local.exists() {
-        return Some(local);
+    if let Ok(home) = std::env::var("HOME") {
+        let local = PathBuf::from(home).join(".local/bin/mopac");
+        if local.exists() {
+            return Some(local);
+        }
     }
     if let Ok(path) = std::env::var("PATH") {
         for dir in std::env::split_paths(&path) {
