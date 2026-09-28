@@ -465,6 +465,22 @@ pub fn run_rhf_scf_adaptive_with_nddo_and_cosmo(
         }
     }
 
+    if !last_res.converged {
+        // Tier 5: Second-Order SCF (SOSCF) coupled Newton-Raphson orbital optimization
+        ws.reset();
+        let soscf_res = crate::scf::soscf::run_rhf_soscf(
+            batch,
+            model,
+            ws,
+            max_iter_per_stage * 2,
+            energy_tol_ev,
+            density_tol,
+        );
+        if soscf_res.converged {
+            return soscf_res;
+        }
+    }
+
     last_res
 }
 

@@ -28,6 +28,12 @@ pub fn covalent_radius(z: u8) -> f64 {
         16 => 1.05, // S
         17 => 1.02, // Cl
         18 => 1.06, // Ar
+        20 => 1.76, // Ca
+        25 => 1.39, // Mn
+        26 => 1.25, // Fe (Heme cofactor)
+        27 => 1.26, // Co
+        28 => 1.24, // Ni
+        29 => 1.28, // Cu
         30 => 1.22, // Zn
         35 => 1.20, // Br
         53 => 1.39, // I
@@ -49,13 +55,19 @@ pub fn valence_electron_count(z: u8) -> usize {
         9 => 7,  // F
         10 => 8, // Ne
         11 => 1,
-        12 => 2,
+        12 => 2, // Mg
         13 => 3,
         14 => 4, // Si
         15 => 5, // P
         16 => 6, // S
         17 => 7, // Cl
         18 => 8,
+        20 => 2, // Ca
+        25 => 2, // Mn
+        26 => 2, // Fe
+        27 => 2, // Co
+        28 => 2, // Ni
+        29 => 1, // Cu
         30 => 2, // Zn (3d is treated as core)
         35 => 7, // Br
         53 => 7, // I
@@ -130,11 +142,16 @@ pub fn construct_lewis_structure(batch: &MolecularBatch) -> LewisStructure {
         let lp_count = non_bonding_electrons / 2;
         lone_pairs.push((i, lp_count));
 
-        // Formal charge = Val_e - (Lone_electrons + Shared_electrons / 2)
-        // Shared_electrons / 2 = total_bond_order
-        let assigned_electrons = (lp_count * 2) + total_bond_order;
-        let fc = val_e as i64 - assigned_electrons as i64;
-        formal_charges[i] = fc.clamp(-4, 4) as i8;
+        // Formal charge: metal cations are assigned their +2 formal oxidation state,
+        // while main-group atoms follow Val_e - (Lone_electrons + Shared_electrons / 2)
+        let fc = if matches!(z_i, 20 | 25..=30) {
+            2i8
+        } else {
+            let assigned_electrons = (lp_count * 2) + total_bond_order;
+            let val_diff = val_e as i64 - assigned_electrons as i64;
+            val_diff.clamp(-4, 4) as i8
+        };
+        formal_charges[i] = fc;
     }
 
     LewisStructure {
@@ -154,6 +171,16 @@ fn determine_bond_order(z1: u8, z2: u8, dist: f64, r_sum: f64) -> usize {
 
     // Halogens (F, Cl, Br, I) generally form single bonds with main group atoms
     if matches!(z1, 9 | 17 | 35 | 53) || matches!(z2, 9 | 17 | 35 | 53) {
+        return 1;
+    }
+
+    // Transition metals (Fe, Co, Ni, Cu, Zn, Mn) and alkaline earth (Ca) form single/coordination bonds
+    if matches!(z1, 20 | 25..=30) || matches!(z2, 20 | 25..=30) {
+        return 1;
+    }
+
+    // Disulfide bonds (S-S) in cystine bridges form single bonds
+    if z1 == 16 && z2 == 16 {
         return 1;
     }
 
@@ -214,5 +241,40 @@ mod tests {
 
         assert_eq!(lewis.bonds.len(), 4, "Methane must have 4 C-H bonds");
         assert_eq!(lewis.lone_pairs[0].1, 0, "Carbon in CH4 has 0 lone pairs");
+    }
+
+    #[test]
+    fn test_lewis_disulfide_bond() {
+        // Dimethyl disulfide model: CH3 - S - S - CH3
+        // S1 at (0, 0, 0), S2 at (2.05, 0, 0)
+        let z = vec![16, 16];
+        let coords = vec![[0.0, 0.0, 0.0], [2.05, 0.0, 0.0]];
+        let batch = MolecularBatch::new(z, &coords);
+        let lewis = construct_lewis_structure(&batch);
+
+        assert_eq!(lewis.bonds.len(), 1, "Disulfide must form single bond between S atoms");
+        assert_eq!(lewis.bonds[0].order, 1);
+        assert_eq!(lewis.bonds[0].atom1, 0);
+        assert_eq!(lewis.bonds[0].atom2, 1);
+    }
+
+    #[test]
+    fn test_lewis_heme_iron_nitrogen() {
+        // Fe center at (0,0,0) with 4 equatorial pyrrole nitrogens at ~1.98 A
+        let z = vec![26, 7, 7, 7, 7];
+        let d = 1.98;
+        let coords = vec![
+            [0.0, 0.0, 0.0],
+            [d, 0.0, 0.0],
+            [-d, 0.0, 0.0],
+            [0.0, d, 0.0],
+            [0.0, -d, 0.0],
+        ];
+        let batch = MolecularBatch::new(z, &coords);
+        let lewis = construct_lewis_structure(&batch);
+
+        assert_eq!(lewis.coordination_numbers[0], 4, "Fe center must have coordination number 4");
+        assert_eq!(lewis.formal_charges[0], 2, "Fe(II) formal oxidation state must be +2");
+        assert_eq!(lewis.bonds.len(), 4, "Fe must form 4 coordination bonds with porphyrin N");
     }
 }

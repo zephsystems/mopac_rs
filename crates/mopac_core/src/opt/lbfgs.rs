@@ -8,10 +8,10 @@
 
 use crate::constants::codata2018::EV_TO_KCAL_MOL;
 use crate::gradients::nuclear_gradients::{
-    compute_cartesian_gradients_with_options, compute_gradient_norms, GradientWorkspace,
+    compute_cartesian_gradients_full, compute_gradient_norms, GradientWorkspace,
 };
 use crate::parameters::ParameterModel;
-use crate::scf::scf_loop::{run_rhf_scf_adaptive_with_nddo, ScfResult};
+use crate::scf::scf_loop::{run_rhf_scf_adaptive_with_nddo_and_cosmo, ScfResult};
 use crate::types::{MolecularBatch, ScfWorkspace};
 
 /// Configuration options for molecular geometry optimization.
@@ -34,6 +34,8 @@ pub struct OptimizationOptions {
     /// Optional coordinate optimization mask (length: 3 * natoms).
     /// `true` = active degree of freedom, `false` = frozen/pinned coordinate.
     pub opt_mask: Option<Vec<bool>>,
+    /// Optional COSMO implicit dielectric solvation parameters.
+    pub cosmo: Option<crate::solvation::CosmoParams>,
 }
 
 impl Default for OptimizationOptions {
@@ -47,6 +49,7 @@ impl Default for OptimizationOptions {
             history_capacity: 6,
             use_nddo: false,
             opt_mask: None,
+            cosmo: None,
         }
     }
 }
@@ -130,19 +133,32 @@ pub fn optimize_geometry_lbfgs(
 
     // 1. Initial SCF evaluation
     scf_ws.reset();
-    let initial_scf =
-        run_rhf_scf_adaptive_with_nddo(batch, model, scf_ws, 50, 1e-7, 1e-6, options.use_nddo);
+    let initial_scf = run_rhf_scf_adaptive_with_nddo_and_cosmo(
+        batch,
+        model,
+        scf_ws,
+        50,
+        1e-7,
+        1e-6,
+        options.use_nddo,
+        options.cosmo,
+    );
     let mut current_energy = initial_scf.total_energy_ev;
     let initial_energy = current_energy;
 
+    let mut cosmo_state = options
+        .cosmo
+        .and_then(|p| crate::solvation::CosmoState::initialize(batch, model, p).ok());
+
     let mut gradients_3d = vec![[0.0f64; 3]; natoms];
-    compute_cartesian_gradients_with_options(
+    compute_cartesian_gradients_full(
         batch,
         model,
         &scf_ws.density,
         grad_ws,
         &mut gradients_3d,
         options.use_nddo,
+        cosmo_state.as_ref(),
     );
 
     // Apply optimization mask: zero out gradients on frozen degrees of freedom
@@ -285,18 +301,31 @@ pub fn optimize_geometry_lbfgs(
 
         // 5. Evaluate SCF at trial point
         scf_ws.reset();
-        let scf_res =
-            run_rhf_scf_adaptive_with_nddo(batch, model, scf_ws, 50, 1e-7, 1e-6, options.use_nddo);
+        let scf_res = run_rhf_scf_adaptive_with_nddo_and_cosmo(
+            batch,
+            model,
+            scf_ws,
+            50,
+            1e-7,
+            1e-6,
+            options.use_nddo,
+            options.cosmo,
+        );
         let new_energy = scf_res.total_energy_ev;
         last_scf = scf_res;
 
-        compute_cartesian_gradients_with_options(
+        if let Some(p) = options.cosmo {
+            cosmo_state = crate::solvation::CosmoState::initialize(batch, model, p).ok();
+        }
+
+        compute_cartesian_gradients_full(
             batch,
             model,
             &scf_ws.density,
             grad_ws,
             &mut gradients_3d,
             options.use_nddo,
+            cosmo_state.as_ref(),
         );
 
         // Apply optimization mask to trial gradients
@@ -369,5 +398,48 @@ pub fn optimize_geometry_lbfgs(
         final_grad_rms: rms_g,
         final_grad_max: max_g,
         final_scf: last_scf,
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+    use crate::parameters::am1::Am1Model;
+    use crate::solvation::CosmoParams;
+
+    #[test]
+    fn test_lbfgs_cosmo_water_optimization() {
+        let z = vec![8, 1, 1];
+        // Start slightly distorted from minimum
+        let coords = vec![
+            [0.0, 0.0, 0.0],
+            [0.0, 0.85, 0.50],
+            [0.0, -0.85, 0.50],
+        ];
+        let mut batch = MolecularBatch::new(z, &coords);
+        let model = Am1Model;
+        let mut scf_ws = ScfWorkspace::allocate(batch.norbs);
+        let mut grad_ws = GradientWorkspace::allocate(batch.norbs);
+
+        let options = OptimizationOptions {
+            max_cycles: 20,
+            grad_rms_tol: 2.0,
+            grad_max_tol: 3.0,
+            energy_tol_ev: 1e-4,
+            max_step_size: 0.1,
+            history_capacity: 5,
+            use_nddo: false,
+            opt_mask: None,
+            cosmo: Some(CosmoParams {
+                epsilon: 78.4,
+                rsolv: 1.30005,
+            }),
+        };
+
+        let res = optimize_geometry_lbfgs(&mut batch, &model, &mut scf_ws, &mut grad_ws, &options);
+        println!("[L-BFGS COSMO] cycles = {}, init E = {:.6} eV, final E = {:.6} eV, init RMS g = {:.3}, final RMS g = {:.3}",
+            res.cycles, res.initial_energy_ev, res.final_energy_ev, res.initial_grad_rms, res.final_grad_rms);
+        assert!(res.cycles > 0);
+        assert!(res.final_grad_rms <= res.initial_grad_rms + 1e-2);
     }
 }

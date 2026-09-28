@@ -1299,6 +1299,7 @@ fn main() -> Result<(), Box<dyn std::error::Error>> {
             history_capacity: 6,
             use_nddo,
             opt_mask: Some(opt_mask),
+            cosmo: None,
         };
 
         let mut grad_ws = GradientWorkspace::allocate(batch.norbs);

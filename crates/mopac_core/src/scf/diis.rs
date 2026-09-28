@@ -92,21 +92,94 @@ impl DiisWorkspace {
 
     /// Drops the oldest vector from the active subspace to resolve linear dependence.
     pub fn drop_oldest(&mut self) {
+        self.drop_vector(0);
+    }
+
+    /// Drops a specific vector by active index `idx` from the active subspace,
+    /// shifting subsequent active slots and B matrix rows/columns in-place.
+    pub fn drop_vector(&mut self, idx: usize) {
+        if idx >= self.num_stored {
+            return;
+        }
         if self.num_stored <= 1 {
             self.reset();
             return;
         }
-
-        let oldest_slot = self.active_slots[0];
+        let dropped_slot = self.active_slots[idx];
         let n = self.num_stored;
-        for i in 0..(n - 1) {
+        // Shift active slots down
+        for i in idx..(n - 1) {
             self.active_slots[i] = self.active_slots[i + 1];
-            for j in 0..(n - 1) {
-                self.b_mat[i][j] = self.b_mat[i + 1][j + 1];
+        }
+        self.active_slots[n - 1] = dropped_slot;
+
+        // Shift B matrix rows
+        for i in idx..(n - 1) {
+            for j in 0..n {
+                self.b_mat[i][j] = self.b_mat[i + 1][j];
             }
         }
-        self.active_slots[n - 1] = oldest_slot;
+        // Shift B matrix columns
+        for j in idx..(n - 1) {
+            for i in 0..(n - 1) {
+                self.b_mat[i][j] = self.b_mat[i][j + 1];
+            }
+        }
+        // Zero unused boundary row and column
+        for k in 0..self.max_subspace {
+            self.b_mat[n - 1][k] = 0.0;
+            self.b_mat[k][n - 1] = 0.0;
+        }
         self.num_stored -= 1;
+    }
+
+    /// Intelligently prunes the most linearly dependent (collinear) or worst outlier error vector.
+    ///
+    /// Rather than blindly discarding the oldest vector (which may carry critical low-frequency
+    /// gradient information), this selective pruning computes the cross-correlation matrix
+    /// $$\rho_{ij} = \frac{|\langle e_i, e_j \rangle|}{\sqrt{\langle e_i, e_i \rangle \langle e_j, e_j \rangle}}$$
+    /// and drops the older vector of the most collinear pair ($\rho_{ij} > 0.98$).
+    /// If no collinearity is found, it drops the vector with largest residual norm.
+    pub fn prune_worst_vector(&mut self) {
+        let m = self.num_stored;
+        if m <= 1 {
+            self.reset();
+            return;
+        }
+
+        let mut max_corr = 0.0f64;
+        let mut drop_idx = 0usize;
+
+        for i in 0..m {
+            let dii = self.b_mat[i][i].max(1e-30);
+            for j in (i + 1)..m {
+                let djj = self.b_mat[j][j].max(1e-30);
+                let corr = self.b_mat[i][j].abs() / (dii * djj).sqrt();
+                if corr > max_corr {
+                    max_corr = corr;
+                    drop_idx = i; // Drop the older vector of the collinear pair
+                }
+            }
+        }
+
+        if max_corr > 0.98 {
+            self.drop_vector(drop_idx);
+        } else {
+            // Find vector with maximum norm excluding the newest vector (m - 1)
+            let mut max_norm = 0.0f64;
+            let mut worst_norm_idx = 0usize;
+            for i in 0..(m - 1) {
+                if self.b_mat[i][i] > max_norm {
+                    max_norm = self.b_mat[i][i];
+                    worst_norm_idx = i;
+                }
+            }
+            if max_norm > 0.0 {
+                self.drop_vector(worst_norm_idx);
+            } else {
+                self.drop_vector(0);
+            }
+        }
     }
 
     /// Add current Fock and Density matrices to DIIS history, compute commutator $[F, P]$,
@@ -215,8 +288,8 @@ impl DiisWorkspace {
                 solved = true;
                 break;
             }
-            // Linear dependency encountered: drop oldest and retry with smaller subspace
-            self.drop_oldest();
+            // Linear dependency encountered: intelligently prune collinear/outlier vector
+            self.prune_worst_vector();
             current_m = self.num_stored;
         }
 
@@ -374,4 +447,52 @@ pub fn solve_pulay_system(
     }
 
     true
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    #[test]
+    fn test_diis_selective_pruning_collinear() {
+        let mut ws = DiisWorkspace::allocate(4, 6);
+        ws.num_stored = 3;
+        // Vector 0 and Vector 1 collinear: corr ~ 0.999
+        ws.b_mat[0][0] = 1.0;
+        ws.b_mat[1][1] = 1.0;
+        ws.b_mat[2][2] = 2.0;
+
+        ws.b_mat[0][1] = 0.999;
+        ws.b_mat[1][0] = 0.999;
+
+        ws.b_mat[0][2] = 0.1;
+        ws.b_mat[2][0] = 0.1;
+
+        ws.b_mat[1][2] = 0.1;
+        ws.b_mat[2][1] = 0.1;
+
+        ws.prune_worst_vector();
+
+        assert_eq!(ws.num_stored, 2);
+        // Collinear vector 0 should have been dropped, preserving vector 1 (now at index 0)
+        assert_eq!(ws.b_mat[0][0], 1.0);
+        assert_eq!(ws.b_mat[1][1], 2.0);
+    }
+
+    #[test]
+    fn test_diis_drop_vector_middle() {
+        let mut ws = DiisWorkspace::allocate(4, 6);
+        ws.num_stored = 4;
+        for i in 0..4 {
+            ws.active_slots[i] = i;
+            ws.b_mat[i][i] = (i + 1) as f64;
+        }
+
+        // Drop index 1
+        ws.drop_vector(1);
+        assert_eq!(ws.num_stored, 3);
+        assert_eq!(ws.b_mat[0][0], 1.0);
+        assert_eq!(ws.b_mat[1][1], 3.0);
+        assert_eq!(ws.b_mat[2][2], 4.0);
+    }
 }
