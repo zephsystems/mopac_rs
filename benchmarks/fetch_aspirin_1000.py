@@ -1,29 +1,50 @@
 #!/usr/bin/env python3
 """
 Script to fetch the top 1000 PubChem compounds similar to Aspirin (CID 2244).
-Uses PubChem PUG REST API compliant with NCBI rate-limiting guidelines.
+Uses PubChem PUG REST API directly with standard library urllib.
 """
 
 import json
 import os
-import subprocess
 import sys
 import time
+import urllib.error
+import urllib.request
 
 SCRIPT_DIR = os.path.dirname(os.path.abspath(__file__))
-PUBCHEM_API_SCRIPT = os.path.expanduser("~/.gemini/config/plugins/science/skills/pubchem_database/scripts/pubchem_api.py")
-INPUT_SIM_FILE = "/tmp/aspirin_sim.json"
 OUTPUT_FILE = os.path.join(SCRIPT_DIR, "data", "aspirin_1000.json")
 
+def fetch_json(url: str, retries: int = 3, delay: float = 1.0) -> dict:
+    req = urllib.request.Request(
+        url,
+        headers={"User-Agent": "mopac-rs-benchmark/0.1.1 (scientific-research)"}
+    )
+    for attempt in range(retries):
+        try:
+            with urllib.request.urlopen(req, timeout=30) as resp:
+                return json.loads(resp.read().decode("utf-8"))
+        except urllib.error.HTTPError as e:
+            if e.code == 429:
+                time.sleep(delay * (attempt + 2))
+                continue
+            raise
+        except Exception:
+            if attempt == retries - 1:
+                raise
+            time.sleep(delay)
+    return {}
+
 def main():
-    if not os.path.exists(INPUT_SIM_FILE):
-        print(f"Error: {INPUT_SIM_FILE} does not exist.")
+    print("Querying PubChem PUG REST API for Aspirin (CID 2244) structural similarity...")
+    sim_url = "https://pubchem.ncbi.nlm.nih.gov/rest/pug/compound/similarity/cid/2244/JSON?Threshold=90&MaxRecords=1000"
+
+    try:
+        sim_data = fetch_json(sim_url)
+    except Exception as e:
+        print(f"Error fetching similarity CIDs: {e}")
         sys.exit(1)
 
-    with open(INPUT_SIM_FILE, "r") as f:
-        data = json.load(f)
-
-    cids = data.get("IdentifierList", {}).get("CID", [])
+    cids = sim_data.get("IdentifierList", {}).get("CID", [])
     target_cids = cids[:1000]
     print(f"Total similarity CIDs found: {len(cids)}. Selected target: {len(target_cids)} CIDs.")
 
@@ -33,28 +54,20 @@ def main():
     for i in range(0, len(target_cids), batch_size):
         chunk = target_cids[i:i + batch_size]
         cid_str = ",".join(map(str, chunk))
-        tmp_out = f"/tmp/pubchem_chunk_{i}.json"
-        path = f"pug/compound/cid/{cid_str}/property/SMILES,ConnectivitySMILES,MolecularFormula,MolecularWeight,IUPACName/JSON"
-        
-        cmd = [
-            "uv", "run", PUBCHEM_API_SCRIPT,
-            "query", "--path", path,
-            "--output", tmp_out
-        ]
-        print(f"Fetching batch {i // batch_size + 1}/{(len(target_cids) + batch_size - 1) // batch_size} (CIDs {chunk[0]}..{chunk[-1]})...")
-        res = subprocess.run(cmd, capture_output=True, text=True)
-        if res.returncode != 0:
-            print(f"Batch failed: {res.stderr}")
-            sys.exit(1)
-        
-        with open(tmp_out, "r") as tf:
-            chunk_data = json.load(tf)
-        
-        props = chunk_data.get("PropertyTable", {}).get("Properties", [])
-        all_properties.extend(props)
-        if os.path.exists(tmp_out):
-            os.remove(tmp_out)
-        time.sleep(0.2)
+        prop_url = f"https://pubchem.ncbi.nlm.nih.gov/rest/pug/compound/cid/{cid_str}/property/SMILES,ConnectivitySMILES,MolecularFormula,MolecularWeight,IUPACName/JSON"
+
+        batch_num = i // batch_size + 1
+        total_batches = (len(target_cids) + batch_size - 1) // batch_size
+        print(f"Fetching batch {batch_num}/{total_batches} (CIDs {chunk[0]}..{chunk[-1]})...")
+
+        try:
+            chunk_data = fetch_json(prop_url)
+            props = chunk_data.get("PropertyTable", {}).get("Properties", [])
+            all_properties.extend(props)
+        except Exception as e:
+            print(f"Warning: batch {batch_num} failed: {e}")
+
+        time.sleep(0.3)
 
     print(f"Successfully retrieved properties for {len(all_properties)} compounds.")
     os.makedirs(os.path.dirname(OUTPUT_FILE), exist_ok=True)
