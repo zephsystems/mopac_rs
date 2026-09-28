@@ -1,0 +1,179 @@
+{
+  "tier1_am1_bcc": {
+    "total_molecules": 1000,
+    "succeeded": 822,
+    "skipped_salts_inorganic": 68,
+    "scf_unconverged": 110,
+    "success_rate_pct": 82.2,
+    "wall_time_s": 739.6,
+    "throughput_mol_per_s": 1.11,
+    "mean_time_per_mol_ms": 7345.81
+  },
+  "tier1_pm6_cosmo": {
+    "sample_size": 250,
+    "succeeded": 228,
+    "success_rate_pct": 91.2,
+    "wall_time_s": 105.06,
+    "throughput_mol_per_s": 2.17,
+    "mean_time_per_mol_ms": 5903.59,
+    "mean_heat_of_formation_kcal": -1059.95,
+    "mean_gap_ev": 8.38,
+    "min_gap_ev": 2.07,
+    "max_gap_ev": 9.07
+  },
+  "tier2_hamiltonian_comparison": {
+    "PM6": {
+      "time_ms": 223.45527500147,
+      "heat_of_formation_kcal": -178.61455791436128,
+      "total_energy_ev": -2378.144385485235,
+      "dipole_total_debye": 2.100450665880472,
+      "dipole_vector_debye": [
+        0.5141052335695787,
+        0.886848969895196,
+        -1.833326952076448,
+        2.100450665880472
+      ],
+      "homo_ev": -9.89748099659295,
+      "lumo_ev": -0.9744162639748307,
+      "gap_ev": 8.92306473261812,
+      "scf_iterations": 25
+    },
+    "AM1": {
+      "time_ms": 198.5538689987152,
+      "heat_of_formation_kcal": -124.2388265845916,
+      "total_energy_ev": -2543.399316603627,
+      "dipole_total_debye": 1.6953298920978612,
+      "dipole_vector_debye": [
+        0.49045010950511503,
+        0.6649243823263027,
+        -1.4803640426986029,
+        1.6953298920978612
+      ],
+      "homo_ev": -9.691549080601753,
+      "lumo_ev": -0.5566868050359466,
+      "gap_ev": 9.134862275565807,
+      "scf_iterations": 24
+    },
+    "RM1": {
+      "time_ms": 218.82789300070726,
+      "heat_of_formation_kcal": -130.47309148369914,
+      "total_energy_ev": -2505.4109481165815,
+      "dipole_total_debye": 1.7636587750009232,
+      "dipole_vector_debye": [
+        0.5365363659884527,
+        0.7419035132869638,
+        -1.5073818957325056,
+        1.7636587750009232
+      ],
+      "homo_ev": -9.549809323196738,
+      "lumo_ev": -0.42500081172425563,
+      "gap_ev": 9.124808511472484,
+      "scf_iterations": 25
+    },
+    "PM3": {
+      "time_ms": 161.35652999946615,
+      "heat_of_formation_kcal": -124.69281737970778,
+      "total_energy_ev": -2363.532008507789,
+      "dipole_total_debye": 1.870921364902032,
+      "dipole_vector_debye": [
+        0.9219487712276828,
+        0.5405670114488678,
+        -1.53562512450529,
+        1.870921364902032
+      ],
+      "homo_ev": -9.713400693645163,
+      "lumo_ev": -0.6522636740120561,
+      "gap_ev": 9.061137019633106,
+      "scf_iterations": 22
+    },
+    "MNDO": {
+      "time_ms": 168.77246900185128,
+      "heat_of_formation_kcal": -126.95657727758135,
+      "total_energy_ev": -2551.835213427981,
+      "dipole_total_debye": 1.840730551527505,
+      "dipole_vector_debye": [
+        0.7816308126537621,
+        0.8936240476654751,
+        -1.4066905478714729,
+        1.840730551527505
+      ],
+      "homo_ev": -9.608005560432417,
+      "lumo_ev": -0.6628422238418797,
+      "gap_ev": 8.945163336590538,
+      "scf_iterations": 22
+    }
+  },
+  "tier3_optimization": {
+    "converged": true,
+    "cycles": 54,
+    "initial_energy_ev": -2353.798020463262,
+    "final_energy_ev": -2361.9789382313993,
+    "delta_energy_ev": -8.180917768137078,
+    "final_heat_of_formation_kcal": 194.16951168606693,
+    "final_grad_rms": 0.8175048652876524,
+    "time_ms": 10192.896128999564
+  },
+  "tier4_vibrations_and_thermo": {
+    "modes_count": 57,
+    "zpve_kcal_mol": 100.21382335236895,
+    "lowest_freq_cm1": -9.279210277652629,
+    "highest_freq_cm1": 5716.215098836503,
+    "entropy_cal_mol_k": 117.33756793756058,
+    "enthalpy_thermal_kcal_mol": 8.71532293691793,
+    "gibbs_correction_kcal_mol": 73.94495040870319,
+    "is_transition_state": false,
+    "time_ms": 17164.29667400007
+  },
+  "tier4_esp_charges": {
+    "atom_count": 21,
+    "sum_charges": -6.574601973952099e-16,
+    "min_charge": -2.713651634528608,
+    "max_charge": 1.9482218472648556,
+    "time_ms": 148.63168499869062
+  },
+  "tier4_polarizability": {
+    "alpha_isotropic_angstrom3": 18.766711174478576,
+    "alpha_isotropic_au": 126.64404436893606,
+    "alpha_anisotropy_au": 61.784709539694255,
+    "beta_total_esu": 1.3917496237585104e-30,
+    "beta_total_au": 161.09298378183698,
+    "dipole_debye": 6.814632764246288,
+    "time_ms": 3443.0771349980205
+  },
+  "tier5_meci_and_uv_vis": {
+    "states_count": 4,
+    "lambda_max_nm": 316.0,
+    "epsilon_max": 1675.4485451424457,
+    "states": [
+      {
+        "root": 1,
+        "spin": "SINGLET",
+        "delta_e_ev": 0.0,
+        "lambda_nm": 0.0,
+        "oscillator_strength": 0.0
+      },
+      {
+        "root": 2,
+        "spin": "TRIPLET",
+        "delta_e_ev": 3.8782376793117366,
+        "lambda_nm": 319.6921092830062,
+        "oscillator_strength": 7.498721725795065e-21
+      },
+      {
+        "root": 3,
+        "spin": "SINGLET",
+        "delta_e_ev": 3.9256586348465152,
+        "lambda_nm": 315.8303101024664,
+        "oscillator_strength": 0.0002731101989805024
+      },
+      {
+        "root": 4,
+        "spin": "SINGLET",
+        "delta_e_ev": 15.362742383861391,
+        "lambda_nm": 80.70447014085569,
+        "oscillator_strength": 3.018719098456262e-08
+      }
+    ],
+    "meci_time_ms": 177.98429499816848
+  }
+}

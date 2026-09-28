@@ -1,0 +1,9 @@
+Notification regarding PubChem database usage and citation guidelines:
+Recorded on: 2026-09-26T17:11:30-06:00
+Workspace: mopac_rs
+
+Users and researchers querying PubChem data must adhere to PubChem usage policies:
+1. Citation Guidelines: https://pubchem.ncbi.nlm.nih.gov/docs/citation-guidelines
+   - Please cite PubChem publications (e.g., Kim S, et al. PubChem 2023 update. Nucleic Acids Res. 2023;51(D1):D1373-D1380).
+2. PUG-REST Usage Policies and Rate Limits: https://pubchem.ncbi.nlm.nih.gov/docs/pug-rest
+   - Requests are throttled to respect NCBI rate limits (no more than 5 requests per second, avoid overloading during peak hours).
