@@ -6,6 +6,7 @@
 pub mod ci;
 pub mod constants;
 pub mod corrections;
+pub mod export;
 pub mod fock;
 pub mod gradients;
 pub mod hamiltonian;
@@ -25,6 +26,7 @@ pub mod vibrations;
 pub use ci::*;
 pub use constants::*;
 pub use corrections::*;
+pub use export::*;
 pub use fock::*;
 pub use gradients::*;
 pub use hamiltonian::*;

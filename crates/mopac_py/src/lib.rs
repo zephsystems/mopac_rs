@@ -2867,6 +2867,185 @@ pub fn am1_bcc(
     })
 }
 
+/// Export molecular structure as an MDL Molfile / SDF V2000 formatted string.
+#[pyfunction]
+#[pyo3(signature = (atomic_numbers, coordinates, title="MOPAC_RS", properties=None))]
+pub fn export_sdf(
+    atomic_numbers: Vec<u8>,
+    coordinates: Vec<Vec<f64>>,
+    title: &str,
+    properties: Option<Vec<(String, String)>>,
+) -> PyResult<String> {
+    let natoms = atomic_numbers.len();
+    if coordinates.len() != natoms {
+        return Err(PyValueError::new_err("Mismatch between atomic_numbers and coordinates length"));
+    }
+    let mut coords_3d = Vec::with_capacity(natoms);
+    for c in coordinates {
+        if c.len() != 3 {
+            return Err(PyValueError::new_err("Each coordinate must be [x, y, z]"));
+        }
+        coords_3d.push([c[0], c[1], c[2]]);
+    }
+    let props_refs: Vec<(&str, &str)> = match &properties {
+        Some(props) => props.iter().map(|(k, v)| (k.as_str(), v.as_str())).collect(),
+        None => Vec::new(),
+    };
+    Ok(mopac_core::export::sdf::export_sdf_v2000(
+        &atomic_numbers,
+        &coords_3d,
+        title,
+        &props_refs,
+        None,
+    ))
+}
+
+/// Export multi-model relaxation or reaction trajectory as an animated multi-frame XYZ string.
+#[pyfunction]
+#[pyo3(signature = (atomic_numbers, frames, frame_comments=None))]
+pub fn export_trajectory_xyz(
+    atomic_numbers: Vec<u8>,
+    frames: Vec<Vec<Vec<f64>>>,
+    frame_comments: Option<Vec<String>>,
+) -> PyResult<String> {
+    let natoms = atomic_numbers.len();
+    let mut frames_3d = Vec::with_capacity(frames.len());
+    for f in frames {
+        if f.len() != natoms {
+            return Err(PyValueError::new_err("Each frame coordinate count must match atomic_numbers length"));
+        }
+        let mut frame_coords = Vec::with_capacity(natoms);
+        for c in f {
+            if c.len() != 3 {
+                return Err(PyValueError::new_err("Each coordinate must be [x, y, z]"));
+            }
+            frame_coords.push([c[0], c[1], c[2]]);
+        }
+        frames_3d.push(frame_coords);
+    }
+    let comments = frame_comments.unwrap_or_default();
+    Ok(mopac_core::export::sdf::export_trajectory_xyz(
+        &atomic_numbers,
+        &frames_3d,
+        &comments,
+    ))
+}
+
+/// Generate a volumetric Gaussian Cube (.cube) string for a Molecular Orbital (HOMO, LUMO, etc.).
+#[pyfunction]
+#[pyo3(signature = (atomic_numbers, coordinates, method="PM6", orbital_index=None, padding_angstrom=3.5, resolution_angstrom=0.25))]
+pub fn generate_orbital_cube(
+    atomic_numbers: Vec<u8>,
+    coordinates: Vec<Vec<f64>>,
+    method: &str,
+    orbital_index: Option<usize>,
+    padding_angstrom: f64,
+    resolution_angstrom: f64,
+) -> PyResult<String> {
+    let natoms = atomic_numbers.len();
+    if coordinates.len() != natoms {
+        return Err(PyValueError::new_err("Mismatch between atomic_numbers and coordinates length"));
+    }
+    let mut coords_3d = Vec::with_capacity(natoms);
+    for c in coordinates {
+        if c.len() != 3 {
+            return Err(PyValueError::new_err("Each coordinate must be [x, y, z]"));
+        }
+        coords_3d.push([c[0], c[1], c[2]]);
+    }
+    let model = get_model(method)?;
+    let batch = MolecularBatch::new_for_model(atomic_numbers, &coords_3d, model.as_ref());
+    let mut ws = ScfWorkspace::allocate(batch.norbs);
+    let scf_opts = ScfOptions {
+        max_iter: 100,
+        energy_tol_ev: 1e-7,
+        density_tol: 1e-6,
+        use_nddo: true,
+        damping: 0.5,
+        ..Default::default()
+    };
+    let scf_res = run_rhf_scf_with_options(&batch, model.as_ref(), &mut ws, &scf_opts);
+    if !scf_res.converged {
+        return Err(PyValueError::new_err("SCF failed to converge for Cube generation"));
+    }
+    let mut total_valence = 0.0;
+    for &z in &batch.atomic_numbers {
+        if let Some(p) = model.get_element(z) {
+            total_valence += p.core_charge;
+        }
+    }
+    let nocc = (total_valence.round() as usize) / 2;
+    let target_idx = orbital_index.unwrap_or(nocc); // 1-indexed: default is HOMO (nocc)
+    if target_idx == 0 || target_idx > batch.norbs {
+        return Err(PyValueError::new_err(format!(
+            "orbital_index {} out of range [1, {}]", target_idx, batch.norbs
+        )));
+    }
+    let target_idx_0 = target_idx - 1;
+    let energy_ev = ws.eigenvalues[target_idx_0];
+    let mo_coeffs = ws.eigenvectors.row(target_idx_0);
+    let config = mopac_core::export::cube::CubeGridConfig {
+        padding_angstrom,
+        resolution_angstrom,
+    };
+    Ok(mopac_core::export::cube::generate_molecular_orbital_cube(
+        &batch,
+        model.as_ref(),
+        mo_coeffs,
+        target_idx,
+        energy_ev,
+        &config,
+    ))
+}
+
+/// Generate a volumetric Gaussian Cube (.cube) string for total electron density rho(r).
+#[pyfunction]
+#[pyo3(signature = (atomic_numbers, coordinates, method="PM6", padding_angstrom=3.5, resolution_angstrom=0.25))]
+pub fn generate_density_cube(
+    atomic_numbers: Vec<u8>,
+    coordinates: Vec<Vec<f64>>,
+    method: &str,
+    padding_angstrom: f64,
+    resolution_angstrom: f64,
+) -> PyResult<String> {
+    let natoms = atomic_numbers.len();
+    if coordinates.len() != natoms {
+        return Err(PyValueError::new_err("Mismatch between atomic_numbers and coordinates length"));
+    }
+    let mut coords_3d = Vec::with_capacity(natoms);
+    for c in coordinates {
+        if c.len() != 3 {
+            return Err(PyValueError::new_err("Each coordinate must be [x, y, z]"));
+        }
+        coords_3d.push([c[0], c[1], c[2]]);
+    }
+    let model = get_model(method)?;
+    let batch = MolecularBatch::new_for_model(atomic_numbers, &coords_3d, model.as_ref());
+    let mut ws = ScfWorkspace::allocate(batch.norbs);
+    let scf_opts = ScfOptions {
+        max_iter: 100,
+        energy_tol_ev: 1e-7,
+        density_tol: 1e-6,
+        use_nddo: true,
+        damping: 0.5,
+        ..Default::default()
+    };
+    let scf_res = run_rhf_scf_with_options(&batch, model.as_ref(), &mut ws, &scf_opts);
+    if !scf_res.converged {
+        return Err(PyValueError::new_err("SCF failed to converge for Density Cube generation"));
+    }
+    let config = mopac_core::export::cube::CubeGridConfig {
+        padding_angstrom,
+        resolution_angstrom,
+    };
+    Ok(mopac_core::export::cube::generate_density_cube(
+        &batch,
+        model.as_ref(),
+        &ws.density,
+        &config,
+    ))
+}
+
 /// MOPAC_RS Python Module
 #[pymodule]
 fn mopac_py(m: &Bound<'_, PyModule>) -> PyResult<()> {
@@ -2906,6 +3085,10 @@ fn mopac_py(m: &Bound<'_, PyModule>) -> PyResult<()> {
     m.add_function(wrap_pyfunction!(polarizability, m)?)?;
     m.add_function(wrap_pyfunction!(mozyme, m)?)?;
     m.add_function(wrap_pyfunction!(am1_bcc, m)?)?;
+    m.add_function(wrap_pyfunction!(export_sdf, m)?)?;
+    m.add_function(wrap_pyfunction!(export_trajectory_xyz, m)?)?;
+    m.add_function(wrap_pyfunction!(generate_orbital_cube, m)?)?;
+    m.add_function(wrap_pyfunction!(generate_density_cube, m)?)?;
 
     let py = m.py();
     let py_code = r#"
