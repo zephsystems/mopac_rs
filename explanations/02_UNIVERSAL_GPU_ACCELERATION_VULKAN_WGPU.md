@@ -22,7 +22,7 @@
 ### 1.1. The Failure of Legacy MOPAC GPU Acceleration
 Upstream MOPAC attempted GPU acceleration in the Fermi/Kepler era using proprietary NVIDIA CUDA (`diag_for_GPU.F90`, `density_for_GPU.F90`, `mod_calls_cublas.F90`). 
 
-As documented in MOPAC's own internal documentation ([`matrix/README.md`](file:///tmp/mopac_ref/src/matrix/README.md)):
+As documented in MOPAC's own internal documentation ([`matrix/README.md`](https://github.com/openmopac/mopac/blob/master/src/matrix/README.md)):
 > *"the prior support for GPUs in MOPAC, which is not presently functioning, needs to be re-introduced"*
 
 This legacy attempt failed for three structural reasons:
