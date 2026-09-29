@@ -3084,6 +3084,69 @@ pub fn export_trajectory_xyz(
     ))
 }
 
+/// Export PDB file formatted specifically for Mol* visualization.
+///
+/// Maps atomic partial charges linearly to the standard crystallographic B-factor
+/// range [10.0, 90.0] ensuring high-contrast Diverging Blue-White-Red coloring
+/// in Mol* 'Uncertainty' color theme without surface clipping artifacts.
+#[pyfunction]
+#[pyo3(signature = (atomic_numbers, coordinates, charges, max_charge = None))]
+pub fn export_molstar_pdb(
+    atomic_numbers: Vec<u8>,
+    coordinates: Vec<Vec<f64>>,
+    charges: Vec<f64>,
+    max_charge: Option<f64>,
+) -> PyResult<String> {
+    let natoms = atomic_numbers.len();
+    if coordinates.len() != natoms {
+        return Err(PyValueError::new_err(
+            "Mismatch between atomic_numbers and coordinates length",
+        ));
+    }
+    let q_max = max_charge.unwrap_or(0.6).abs().max(1e-3);
+    let mut out = String::with_capacity(natoms * 82 + 64);
+    out.push_str("REMARK   MOPAC_RS MOLSTAR-OPTIMIZED PDB WITH NORMALIZED CHARGES\n");
+
+    for (i, (&z, c)) in atomic_numbers.iter().zip(coordinates.iter()).enumerate() {
+        if c.len() != 3 {
+            return Err(PyValueError::new_err("Each coordinate must be [x, y, z]"));
+        }
+        let sym = match z {
+            1 => "H",
+            6 => "C",
+            7 => "N",
+            8 => "O",
+            9 => "F",
+            15 => "P",
+            16 => "S",
+            17 => "Cl",
+            35 => "Br",
+            53 => "I",
+            _ => "X",
+        };
+        let q = charges.get(i).copied().unwrap_or(0.0);
+        let q_clamped = q.clamp(-q_max, q_max);
+        // Negative charge -> Red (high B-factor ~90.0)
+        // Neutral charge  -> White/Neutral (mid B-factor ~50.0)
+        // Positive charge -> Blue (low B-factor ~10.0)
+        let b_scaled = 50.0 - (q_clamped / q_max) * 40.0;
+
+        let line = format!(
+            "ATOM  {:5} {:^4} STO A   1    {:8.3}{:8.3}{:8.3}  1.00{:6.2}          {:>2}\n",
+            i + 1,
+            sym,
+            c[0],
+            c[1],
+            c[2],
+            b_scaled,
+            sym
+        );
+        out.push_str(&line);
+    }
+    out.push_str("END\n");
+    Ok(out)
+}
+
 /// Generate a volumetric Gaussian Cube (.cube) string for a Molecular Orbital (HOMO, LUMO, etc.).
 #[pyfunction]
 #[pyo3(signature = (atomic_numbers, coordinates, method="PM6", orbital_index=None, padding_angstrom=3.5, resolution_angstrom=0.25, n_threads=None))]
@@ -3555,6 +3618,7 @@ fn mopac_py(m: &Bound<'_, PyModule>) -> PyResult<()> {
     m.add_function(wrap_pyfunction!(am1_bcc, m)?)?;
     m.add_function(wrap_pyfunction!(export_sdf, m)?)?;
     m.add_function(wrap_pyfunction!(export_trajectory_xyz, m)?)?;
+    m.add_function(wrap_pyfunction!(export_molstar_pdb, m)?)?;
     m.add_function(wrap_pyfunction!(generate_orbital_cube, m)?)?;
     m.add_function(wrap_pyfunction!(generate_density_cube, m)?)?;
     m.add_function(wrap_pyfunction!(generate_cubes_bundle, m)?)?;
