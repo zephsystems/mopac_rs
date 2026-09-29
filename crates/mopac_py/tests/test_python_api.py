@@ -16,8 +16,8 @@ import os
 import sys
 import unittest
 
-# Ensure target/debug or target/release is in sys.path
-for build_dir in ["target/release", "target/debug"]:
+# Ensure target/release or target/debug is in sys.path (release takes precedence)
+for build_dir in ["target/debug", "target/release"]:
     abs_dir = os.path.abspath(os.path.join(os.path.dirname(__file__), "../../../", build_dir))
     if os.path.exists(abs_dir):
         # Create symlink if libmopac_py.so exists and mopac_py.so does not
@@ -248,6 +248,49 @@ class TestMopacPyBindings(unittest.TestCase):
         vib_bh3 = mopac_py.frequencies(bh3_atoms, bh3_coords, method="AM1")
         self.assertEqual(len(vib_bh3.vibrational_frequencies_cm1), 6)
         self.assertGreater(vib_bh3.zpve_kcal_mol, 10.0)
+
+    def test_cubes_bundle_and_optimization(self):
+        """Verify unified generate_cubes_bundle, bitwise identity, and edge cases."""
+        bundle = mopac_py.generate_cubes_bundle(
+            self.h2o_atoms, self.h2o_coords, method="PM6",
+            orbitals=["HOMO", "LUMO", "HOMO-1"],
+            include_density=True,
+            padding_angstrom=2.0, resolution_angstrom=0.4
+        )
+        self.assertIn("density", bundle)
+        self.assertIn("HOMO", bundle)
+        self.assertIn("LUMO", bundle)
+        self.assertIn("HOMO-1", bundle)
+
+        # Independent single-call comparison
+        dens_direct = mopac_py.generate_density_cube(
+            self.h2o_atoms, self.h2o_coords, method="PM6",
+            padding_angstrom=2.0, resolution_angstrom=0.4
+        )
+        homo_direct = mopac_py.generate_orbital_cube(
+            self.h2o_atoms, self.h2o_coords, method="PM6",
+            padding_angstrom=2.0, resolution_angstrom=0.4
+        )
+        self.assertEqual(bundle["density"], dens_direct)
+        self.assertEqual(bundle["HOMO"], homo_direct)
+
+        # Calculator object method
+        calc = mopac_py.MopacCalculator("PM6")
+        calc_bundle = calc.generate_cubes_bundle(
+            self.h2o_atoms, self.h2o_coords,
+            orbitals=["HOMO", "LUMO"],
+            padding_angstrom=2.0, resolution_angstrom=0.4
+        )
+        self.assertEqual(calc_bundle["HOMO"], bundle["HOMO"])
+        self.assertEqual(calc_bundle["density"], bundle["density"])
+
+        # Contraintuitive error cases
+        with self.assertRaises(ValueError):
+            mopac_py.generate_cubes_bundle(self.h2o_atoms, self.h2o_coords, orbitals=["HOMO-10"])
+        with self.assertRaises(ValueError):
+            mopac_py.generate_cubes_bundle(self.h2o_atoms, self.h2o_coords, orbitals=["LUMO+50"])
+        with self.assertRaises(ValueError):
+            mopac_py.generate_cubes_bundle(self.h2o_atoms, self.h2o_coords, orbitals=["NON_EXISTENT"])
 
 
 if __name__ == "__main__":

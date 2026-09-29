@@ -396,4 +396,13 @@ impl ScfWorkspace {
         self.tmp2.fill_zero();
         self.diis.reset();
     }
+
+    /// Reset workspace for the next stage of SCF while preserving the current density matrix.
+    pub fn reset_keeping_density(&mut self) {
+        self.fock.fill_zero();
+        self.diis_error.fill_zero();
+        self.tmp1.fill_zero();
+        self.tmp2.fill_zero();
+        self.diis.reset();
+    }
 }

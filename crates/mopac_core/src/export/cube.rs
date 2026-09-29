@@ -14,6 +14,11 @@ use std::f64::consts::PI;
 pub const ANGSTROM_TO_BOHR: f64 = 1.8897261246;
 /// Conversion factor: 1 Bohr = 0.5291772109 Angstroms.
 pub const BOHR_TO_ANGSTROM: f64 = 0.5291772109;
+/// Physical spatial cutoff squared in Bohr^2: r = 12.0 Bohr (6.35 A).
+///
+/// At r = 12.0 Bohr, Slater-Type Orbitals decay to amplitude < 1e-7,
+/// meaning electron density contribution is rho < 1e-14 e/Bohr^3.
+pub const STO_SPATIAL_CUTOFF_BOHR2: f64 = 144.0;
 
 /// 3D Grid configuration for Gaussian Cube generation.
 #[derive(Debug, Clone)]
@@ -391,17 +396,17 @@ pub fn generate_molecular_orbital_cube(
                         for atom in &sto_atoms {
                             let dx = px - atom.ax;
                             let dx2 = dx * dx;
-                            if dx2 > 400.0 {
+                            if dx2 > STO_SPATIAL_CUTOFF_BOHR2 {
                                 continue;
                             }
                             let dy = py - atom.ay;
                             let dxy2 = dx2 + dy * dy;
-                            if dxy2 > 400.0 {
+                            if dxy2 > STO_SPATIAL_CUTOFF_BOHR2 {
                                 continue;
                             }
                             let dz = pz - atom.az;
                             let r2 = dxy2 + dz * dz;
-                            if r2 > 400.0 {
+                            if r2 > STO_SPATIAL_CUTOFF_BOHR2 {
                                 continue;
                             }
 
@@ -582,17 +587,17 @@ pub fn generate_density_cube(
                         for atom in &sto_atoms {
                             let dx = px - atom.ax;
                             let dx2 = dx * dx;
-                            if dx2 > 400.0 {
+                            if dx2 > STO_SPATIAL_CUTOFF_BOHR2 {
                                 continue;
                             }
                             let dy = py - atom.ay;
                             let dxy2 = dx2 + dy * dy;
-                            if dxy2 > 400.0 {
+                            if dxy2 > STO_SPATIAL_CUTOFF_BOHR2 {
                                 continue;
                             }
                             let dz = pz - atom.az;
                             let r2 = dxy2 + dz * dz;
-                            if r2 > 400.0 {
+                            if r2 > STO_SPATIAL_CUTOFF_BOHR2 {
                                 continue;
                             }
 
@@ -622,13 +627,16 @@ pub fn generate_density_cube(
                         for i in 0..m {
                             let mu = active_indices[i];
                             let v_mu = active_vals[i];
+                            // Diagonal element: P_mu_mu * v_mu^2
+                            rho += density_matrix.get(mu, mu) * v_mu * v_mu;
+                            // Off-diagonal elements exploiting symmetry P_mu_nu == P_nu_mu
                             let mut sum_nu = 0.0;
-                            for j in 0..m {
+                            for j in 0..i {
                                 let nu = active_indices[j];
                                 let v_nu = active_vals[j];
                                 sum_nu += density_matrix.get(mu, nu) * v_nu;
                             }
-                            rho += v_mu * sum_nu;
+                            rho += 2.0 * v_mu * sum_nu;
                         }
 
                         slice_yz[iy * nz + iz] = rho;

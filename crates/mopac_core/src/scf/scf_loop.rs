@@ -48,6 +48,8 @@ pub struct ScfOptions {
     pub electric_field_ev_angstrom: Option<[f64; 3]>,
     /// Optional classical external point charges for QM/MM electrostatic embedding (default: None)
     pub external_charges: Option<Vec<crate::hamiltonian::external_charges::ExternalCharge>>,
+    /// Reuse existing density in ws.density as warm start initial guess (default: false)
+    pub reuse_density: bool,
 }
 
 impl Default for ScfOptions {
@@ -62,6 +64,7 @@ impl Default for ScfOptions {
             cosmo: None,
             electric_field_ev_angstrom: None,
             external_charges: None,
+            reuse_density: false,
         }
     }
 }
@@ -178,9 +181,14 @@ pub fn run_rhf_scf_with_options(
         enuc += e_nuc_ext;
     }
 
-    // 4. Initial guess: diagonalize H_core to generate initial density P^(0)
-    diagonalize_symmetric(&ws.h_core, &mut ws.eigenvalues, &mut ws.eigenvectors);
-    compute_density_matrix(&ws.eigenvectors, nocc, &mut ws.density);
+    // 4. Initial guess: diagonalize H_core to generate initial density P^(0),
+    // unless reuse_density is requested and ws.density already contains a valid warm density.
+    let has_warm_density =
+        options.reuse_density && ws.density.data.iter().any(|&x| x.abs() > 1e-12);
+    if !has_warm_density {
+        diagonalize_symmetric(&ws.h_core, &mut ws.eigenvalues, &mut ws.eigenvectors);
+        compute_density_matrix(&ws.eigenvectors, nocc, &mut ws.density);
+    }
 
     ws.diis.reset();
     let mut prev_energy = 0.0f64;
@@ -224,11 +232,14 @@ pub fn run_rhf_scf_with_options(
 
         // Determine effective Saunders-Hillier level shift:
         // 1. Explicit level_shift_ev requested by caller
-        // 2. Automatic adaptive level shift if calculation reaches iter > 25 (MOPAC iter.F90 lines 450-456)
+        // 2. Early oscillation detection for conjugated systems: if iter > 12 and DIIS error > 5e-3
+        // 3. Automatic adaptive level shift if calculation reaches iter > 25 (MOPAC iter.F90 lines 450-456)
         let eff_shift = if options.level_shift_ev > 0.0 && iter > 2 {
             options.level_shift_ev
         } else if options.level_shift_ev == 0.0 && iter > 25 {
-            2.0 // Automatic level shift to break limit-cycle density oscillation
+            4.0 // Automatic level shift to break limit-cycle density oscillation
+        } else if options.level_shift_ev == 0.0 && iter > 12 && diis_res.max_error > 5e-3 {
+            3.0 // Early oscillation intervention for conjugated systems
         } else {
             0.0
         };
@@ -330,6 +341,7 @@ pub fn run_rhf_scf(
             cosmo: None,
             electric_field_ev_angstrom: None,
             external_charges: None,
+            reuse_density: false,
         },
     )
 }
@@ -407,6 +419,7 @@ pub fn run_rhf_scf_adaptive_with_nddo_and_cosmo(
             cosmo,
             electric_field_ev_angstrom: None,
             external_charges: None,
+            reuse_density: false,
         },
         ScfOptions {
             max_iter: max_iter_per_stage * 2,
@@ -418,6 +431,7 @@ pub fn run_rhf_scf_adaptive_with_nddo_and_cosmo(
             cosmo,
             electric_field_ev_angstrom: None,
             external_charges: None,
+            reuse_density: false,
         },
         ScfOptions {
             max_iter: max_iter_per_stage * 2,
@@ -429,6 +443,7 @@ pub fn run_rhf_scf_adaptive_with_nddo_and_cosmo(
             cosmo,
             electric_field_ev_angstrom: None,
             external_charges: None,
+            reuse_density: false,
         },
         ScfOptions {
             max_iter: max_iter_per_stage * 2,
@@ -440,6 +455,7 @@ pub fn run_rhf_scf_adaptive_with_nddo_and_cosmo(
             cosmo,
             electric_field_ev_angstrom: None,
             external_charges: None,
+            reuse_density: false,
         },
     ];
 
@@ -454,11 +470,12 @@ pub fn run_rhf_scf_adaptive_with_nddo_and_cosmo(
         dielectric_energy_ev: None,
     };
 
-    for (stage_idx, opts) in stages.iter().enumerate() {
+    for (stage_idx, mut opts) in stages.into_iter().enumerate() {
         if stage_idx > 0 {
-            ws.reset();
+            opts.reuse_density = true;
+            ws.reset_keeping_density();
         }
-        let res = run_rhf_scf_with_options(batch, model, ws, opts);
+        let res = run_rhf_scf_with_options(batch, model, ws, &opts);
         last_res = res;
         if last_res.converged {
             break;
@@ -507,6 +524,7 @@ pub fn run_rhf_scf_adaptive_with_field(
             cosmo: None,
             electric_field_ev_angstrom: Some(efield_ev_angstrom),
             external_charges: None,
+            reuse_density: false,
         },
         ScfOptions {
             max_iter: max_iter_per_stage * 2,
@@ -518,6 +536,7 @@ pub fn run_rhf_scf_adaptive_with_field(
             cosmo: None,
             electric_field_ev_angstrom: Some(efield_ev_angstrom),
             external_charges: None,
+            reuse_density: false,
         },
         ScfOptions {
             max_iter: max_iter_per_stage * 2,
@@ -529,6 +548,7 @@ pub fn run_rhf_scf_adaptive_with_field(
             cosmo: None,
             electric_field_ev_angstrom: Some(efield_ev_angstrom),
             external_charges: None,
+            reuse_density: false,
         },
         ScfOptions {
             max_iter: max_iter_per_stage * 2,
@@ -540,6 +560,7 @@ pub fn run_rhf_scf_adaptive_with_field(
             cosmo: None,
             electric_field_ev_angstrom: Some(efield_ev_angstrom),
             external_charges: None,
+            reuse_density: false,
         },
     ];
 
@@ -554,11 +575,12 @@ pub fn run_rhf_scf_adaptive_with_field(
         dielectric_energy_ev: None,
     };
 
-    for (stage_idx, opts) in stages.iter().enumerate() {
+    for (stage_idx, mut opts) in stages.into_iter().enumerate() {
         if stage_idx > 0 {
-            ws.reset();
+            opts.reuse_density = true;
+            ws.reset_keeping_density();
         }
-        let res = run_rhf_scf_with_options(batch, model, ws, opts);
+        let res = run_rhf_scf_with_options(batch, model, ws, &opts);
         last_res = res;
         if last_res.converged {
             break;

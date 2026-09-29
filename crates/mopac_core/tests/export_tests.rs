@@ -91,3 +91,88 @@ fn test_gaussian_cube_generation() {
     assert!(density_cube.contains("MOPAC_RS Total Electron Density Cube File"));
     assert!(density_cube.lines().count() > 10);
 }
+
+#[test]
+fn test_cube_density_numerical_invariants_and_warm_restart() {
+    let atomic_numbers = vec![8, 1, 1];
+    let coords = vec![
+        [0.0, 0.0, 0.117],
+        [0.0, 0.757, -0.469],
+        [0.0, -0.757, -0.469],
+    ];
+
+    let model = Pm6Model;
+    let batch = MolecularBatch::new(atomic_numbers, &coords);
+    let mut ws = ScfWorkspace::allocate(batch.norbs);
+
+    // Initial solve
+    let scf_initial = run_rhf_scf_adaptive_with_nddo(&batch, &model, &mut ws, 60, 1e-7, 1e-6, true);
+    assert!(scf_initial.converged);
+
+    // Warm restart test: run with reuse_density: true
+    let mut ws_warm = ScfWorkspace::allocate(batch.norbs);
+    ws_warm.density.data.copy_from_slice(&ws.density.data);
+
+    let opts_warm = mopac_core::scf::scf_loop::ScfOptions {
+        max_iter: 60,
+        energy_tol_ev: 1e-7,
+        density_tol: 1e-6,
+        level_shift_ev: 0.0,
+        damping: 0.5,
+        use_nddo: true,
+        reuse_density: true,
+        ..Default::default()
+    };
+
+    let scf_warm = mopac_core::scf::scf_loop::run_rhf_scf_with_options(
+        &batch,
+        &model,
+        &mut ws_warm,
+        &opts_warm,
+    );
+    assert!(scf_warm.converged);
+    assert!(
+        scf_warm.iterations <= 2,
+        "Warm restart should converge in <= 2 iterations, took {}",
+        scf_warm.iterations
+    );
+    assert!((scf_warm.total_energy_ev - scf_initial.total_energy_ev).abs() < 1e-6);
+
+    // Invariant: Test physical cutoff preservation on density
+    let config = CubeGridConfig {
+        padding_angstrom: 3.5,
+        resolution_angstrom: 0.3,
+        ..Default::default()
+    };
+    let cube = generate_density_cube(&batch, &model, &ws.density, &config);
+
+    // Parse density values from cube output
+    let mut total_density_integral = 0.0f64;
+    let step_bohr = 0.3 * ANGSTROM_TO_BOHR;
+    let d_vol = step_bohr * step_bohr * step_bohr;
+
+    let lines: Vec<&str> = cube.lines().collect();
+    let header_lines = 6 + batch.natoms;
+    for &line in &lines[header_lines..] {
+        for token in line.split_whitespace() {
+            if let Ok(val) = token.parse::<f64>() {
+                assert!(
+                    val >= -1e-12,
+                    "Physical density cannot be significantly negative: {}",
+                    val
+                );
+                total_density_integral += val * d_vol;
+            }
+        }
+    }
+
+    // Verify integrated electron count in real space Tr(P * S_real) is consistent
+    assert!(
+        total_density_integral > 7.0 && total_density_integral < 12.0,
+        "Integrated density: {}",
+        total_density_integral
+    );
+
+    // Verify cutoff constant is accessible and reasonable
+    assert_eq!(STO_SPATIAL_CUTOFF_BOHR2, 144.0);
+}

@@ -2267,6 +2267,78 @@ impl MopacCalculator {
         )
     }
 
+    /// Generate a bundle of Gaussian Cube (.cube) volumetric files for density and molecular orbitals.
+    #[pyo3(signature = (atomic_numbers, coordinates, orbitals = None, include_density = true, padding_angstrom = 3.0, resolution_angstrom = 0.35, n_threads = None))]
+    fn generate_cubes_bundle(
+        &self,
+        py: Python<'_>,
+        atomic_numbers: Vec<u8>,
+        coordinates: Vec<Vec<f64>>,
+        orbitals: Option<Vec<String>>,
+        include_density: Option<bool>,
+        padding_angstrom: Option<f64>,
+        resolution_angstrom: Option<f64>,
+        n_threads: Option<usize>,
+    ) -> PyResult<std::collections::HashMap<String, String>> {
+        generate_cubes_bundle(
+            py,
+            atomic_numbers,
+            coordinates,
+            &self.method,
+            orbitals,
+            include_density,
+            padding_angstrom,
+            resolution_angstrom,
+            n_threads,
+        )
+    }
+
+    /// Generate total electron density Gaussian Cube (.cube) string.
+    #[pyo3(signature = (atomic_numbers, coordinates, padding_angstrom = 3.0, resolution_angstrom = 0.35, n_threads = None))]
+    fn generate_density_cube(
+        &self,
+        py: Python<'_>,
+        atomic_numbers: Vec<u8>,
+        coordinates: Vec<Vec<f64>>,
+        padding_angstrom: Option<f64>,
+        resolution_angstrom: Option<f64>,
+        n_threads: Option<usize>,
+    ) -> PyResult<String> {
+        generate_density_cube(
+            py,
+            atomic_numbers,
+            coordinates,
+            &self.method,
+            padding_angstrom.unwrap_or(3.0),
+            resolution_angstrom.unwrap_or(0.35),
+            n_threads,
+        )
+    }
+
+    /// Generate specific molecular orbital Gaussian Cube (.cube) string.
+    #[pyo3(signature = (atomic_numbers, coordinates, orbital_index = None, padding_angstrom = 3.0, resolution_angstrom = 0.35, n_threads = None))]
+    fn generate_orbital_cube(
+        &self,
+        py: Python<'_>,
+        atomic_numbers: Vec<u8>,
+        coordinates: Vec<Vec<f64>>,
+        orbital_index: Option<usize>,
+        padding_angstrom: Option<f64>,
+        resolution_angstrom: Option<f64>,
+        n_threads: Option<usize>,
+    ) -> PyResult<String> {
+        generate_orbital_cube(
+            py,
+            atomic_numbers,
+            coordinates,
+            &self.method,
+            orbital_index,
+            padding_angstrom.unwrap_or(3.0),
+            resolution_angstrom.unwrap_or(0.35),
+            n_threads,
+        )
+    }
+
     /// Locate transition state using Eigenvector Following (P-RFO Baker).
     #[pyo3(signature = (atomic_numbers, coordinates, max_cycles = 100, grad_rms_tol = 0.1, grad_max_tol = 0.2, trust_radius = 0.1, target_mode = None))]
     fn transition_state(
@@ -3170,6 +3242,192 @@ pub fn generate_density_cube(
     res.map_err(PyValueError::new_err)
 }
 
+fn parse_orbital_label(label: &str, nocc: usize, norbs: usize) -> PyResult<usize> {
+    let clean = label.trim().to_uppercase();
+    if clean == "HOMO" {
+        return Ok(nocc);
+    }
+    if clean == "LUMO" {
+        if nocc >= norbs {
+            return Err(PyValueError::new_err(
+                "No virtual LUMO orbital available (nocc >= norbs)",
+            ));
+        }
+        return Ok(nocc + 1);
+    }
+    if let Some(rest) = clean.strip_prefix("HOMO-") {
+        let k: usize = rest.parse().map_err(|_| {
+            PyValueError::new_err(format!("Invalid orbital specifier: '{}'", label))
+        })?;
+        if k >= nocc {
+            return Err(PyValueError::new_err(format!(
+                "HOMO-{} underflows occupied orbitals (nocc = {})",
+                k, nocc
+            )));
+        }
+        return Ok(nocc - k);
+    }
+    if let Some(rest) = clean.strip_prefix("LUMO+") {
+        let k: usize = rest.parse().map_err(|_| {
+            PyValueError::new_err(format!("Invalid orbital specifier: '{}'", label))
+        })?;
+        let target = nocc + 1 + k;
+        if target > norbs {
+            return Err(PyValueError::new_err(format!(
+                "LUMO+{} exceeds total orbitals (norbs = {})",
+                k, norbs
+            )));
+        }
+        return Ok(target);
+    }
+    if let Ok(idx) = clean.parse::<usize>() {
+        if idx == 0 || idx > norbs {
+            return Err(PyValueError::new_err(format!(
+                "orbital_index {} out of range [1, {}]",
+                idx, norbs
+            )));
+        }
+        return Ok(idx);
+    }
+    Err(PyValueError::new_err(format!(
+        "Unknown orbital label '{}'. Expected 'HOMO', 'LUMO', 'HOMO-1', 'LUMO+1', or integer 1-based index",
+        label
+    )))
+}
+
+/// Generate a bundle of volumetric Gaussian Cube (.cube) files in a single pass.
+///
+/// Executes the quantum Self-Consistent Field (SCF) cycle ONCE and reuses the converged
+/// density matrix and molecular orbital eigenvectors, avoiding redundant SCF solves.
+///
+/// Returns a dictionary mapping requested labels to Gaussian Cube formatted strings:
+/// e.g. `{"density": "...", "HOMO": "...", "LUMO": "..."}`.
+#[pyfunction]
+#[pyo3(signature = (
+    atomic_numbers,
+    coordinates,
+    method = "PM6",
+    orbitals = None,
+    include_density = true,
+    padding_angstrom = 3.0,
+    resolution_angstrom = 0.35,
+    n_threads = None
+))]
+pub fn generate_cubes_bundle(
+    py: Python<'_>,
+    atomic_numbers: Vec<u8>,
+    coordinates: Vec<Vec<f64>>,
+    method: &str,
+    orbitals: Option<Vec<String>>,
+    include_density: Option<bool>,
+    padding_angstrom: Option<f64>,
+    resolution_angstrom: Option<f64>,
+    n_threads: Option<usize>,
+) -> PyResult<std::collections::HashMap<String, String>> {
+    let natoms = atomic_numbers.len();
+    if coordinates.len() != natoms {
+        return Err(PyValueError::new_err(
+            "Mismatch between atomic_numbers and coordinates length",
+        ));
+    }
+    let mut coords_3d = Vec::with_capacity(natoms);
+    for c in coordinates {
+        if c.len() != 3 {
+            return Err(PyValueError::new_err("Each coordinate must be [x, y, z]"));
+        }
+        coords_3d.push([c[0], c[1], c[2]]);
+    }
+    let model = get_model(method)?;
+    let batch = MolecularBatch::new_for_model(atomic_numbers, &coords_3d, model.as_ref());
+
+    let mut total_valence = 0.0;
+    for &z in &batch.atomic_numbers {
+        if let Some(p) = model.get_element(z) {
+            total_valence += p.core_charge;
+        }
+    }
+    let nocc = (total_valence.round() as usize) / 2;
+
+    let requested_orbitals =
+        orbitals.unwrap_or_else(|| vec!["HOMO".to_string(), "LUMO".to_string()]);
+    let mut parsed_targets = Vec::with_capacity(requested_orbitals.len());
+    for orb_str in requested_orbitals {
+        let idx = parse_orbital_label(&orb_str, nocc, batch.norbs)?;
+        parsed_targets.push((orb_str, idx));
+    }
+
+    let do_density = include_density.unwrap_or(true);
+    let pad = padding_angstrom.unwrap_or(3.0);
+    let res_a = resolution_angstrom.unwrap_or(0.35);
+    let threads = resolve_num_threads(n_threads);
+
+    let res = py.allow_threads(
+        || -> Result<std::collections::HashMap<String, String>, &'static str> {
+            let mut ws = ScfWorkspace::allocate(batch.norbs);
+            let scf_opts = ScfOptions {
+                max_iter: 100,
+                energy_tol_ev: 1e-7,
+                density_tol: 1e-6,
+                use_nddo: true,
+                damping: 0.5,
+                ..Default::default()
+            };
+            let mut scf_res = run_rhf_scf_with_options(&batch, model.as_ref(), &mut ws, &scf_opts);
+            if !scf_res.converged {
+                scf_res = mopac_core::scf::scf_loop::run_rhf_scf_adaptive_with_nddo(
+                    &batch,
+                    model.as_ref(),
+                    &mut ws,
+                    60,
+                    1e-5,
+                    1e-4,
+                    true,
+                );
+            }
+            if !scf_res.converged {
+                return Err("SCF failed to converge for Cubes bundle generation");
+            }
+
+            let config = mopac_core::export::cube::CubeGridConfig {
+                padding_angstrom: pad,
+                resolution_angstrom: res_a,
+                n_threads: threads,
+            };
+
+            let mut bundle = std::collections::HashMap::new();
+
+            if do_density {
+                let density_cube = mopac_core::export::cube::generate_density_cube(
+                    &batch,
+                    model.as_ref(),
+                    &ws.density,
+                    &config,
+                );
+                bundle.insert("density".to_string(), density_cube);
+            }
+
+            for (label, idx) in parsed_targets {
+                let idx_0 = idx - 1;
+                let energy_ev = ws.eigenvalues[idx_0];
+                let mo_coeffs = ws.eigenvectors.row(idx_0);
+                let orb_cube = mopac_core::export::cube::generate_molecular_orbital_cube(
+                    &batch,
+                    model.as_ref(),
+                    mo_coeffs,
+                    idx,
+                    energy_ev,
+                    &config,
+                );
+                bundle.insert(label, orb_cube);
+            }
+
+            Ok(bundle)
+        },
+    );
+
+    res.map_err(PyValueError::new_err)
+}
+
 /// Mayer and Armstrong-Perkins-Stewart bond order analysis.
 #[pyclass(get_all)]
 #[derive(Debug, Clone)]
@@ -3299,6 +3557,7 @@ fn mopac_py(m: &Bound<'_, PyModule>) -> PyResult<()> {
     m.add_function(wrap_pyfunction!(export_trajectory_xyz, m)?)?;
     m.add_function(wrap_pyfunction!(generate_orbital_cube, m)?)?;
     m.add_function(wrap_pyfunction!(generate_density_cube, m)?)?;
+    m.add_function(wrap_pyfunction!(generate_cubes_bundle, m)?)?;
     m.add_class::<BondOrderPyResult>()?;
     m.add_function(wrap_pyfunction!(bond_orders, m)?)?;
     m.add_function(wrap_pyfunction!(set_num_threads, m)?)?;
