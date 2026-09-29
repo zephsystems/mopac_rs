@@ -110,9 +110,21 @@ fn test_vulkan_gpu_t4_lysozyme_protein() {
     let ctx = match VulkanContext::new() {
         Ok(c) => Arc::new(c),
         Err(e) => {
-            panic!("Vulkan GPU initialization failed: {}", e);
+            eprintln!(
+                "Skipping Vulkan protein test (no Vulkan GPU runtime available): {}",
+                e
+            );
+            return;
         }
     };
+
+    if !ctx.device_info.supports_float64 {
+        eprintln!(
+            "Skipping Vulkan protein test (device {} does not support native Float64 precision)",
+            ctx.device_info.device_name
+        );
+        return;
+    }
 
     println!(
         "Vulkan GPU Device: {} (Discrete: {}, Vulkan API: {:?})",

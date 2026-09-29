@@ -111,9 +111,21 @@ fn test_vulkan_gpu_large_protein_human_serum_albumin() {
     let ctx = match VulkanContext::new() {
         Ok(c) => Arc::new(c),
         Err(e) => {
-            panic!("Vulkan GPU initialization failed: {}", e);
+            eprintln!(
+                "Skipping Vulkan large protein test (no Vulkan GPU runtime available): {}",
+                e
+            );
+            return;
         }
     };
+
+    if !ctx.device_info.supports_float64 {
+        eprintln!(
+            "Skipping Vulkan large protein test (device {} does not support native Float64 precision)",
+            ctx.device_info.device_name
+        );
+        return;
+    }
 
     println!(
         "Vulkan GPU Device: {} (Discrete: {}, Vulkan API: {:?})",
