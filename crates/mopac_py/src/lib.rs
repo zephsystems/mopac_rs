@@ -780,7 +780,19 @@ fn run_calculation_internal(
         ..Default::default()
     };
 
-    let scf_res = run_rhf_scf_with_options(&batch, model.as_ref(), &mut scf_ws, &opts);
+    let mut scf_res = run_rhf_scf_with_options(&batch, model.as_ref(), &mut scf_ws, &opts);
+    if !scf_res.converged {
+        scf_res = mopac_core::scf::scf_loop::run_rhf_scf_adaptive_with_nddo_and_cosmo(
+            &batch,
+            model.as_ref(),
+            &mut scf_ws,
+            max_iter,
+            energy_tol_ev,
+            density_tol,
+            use_nddo,
+            cosmo,
+        );
+    }
 
     // Analytical nuclear gradients
     let mut grad_ws = GradientWorkspace::allocate(batch.norbs);
@@ -1214,6 +1226,7 @@ pub fn transition_state(
     custom_masses = None,
 ))]
 pub fn frequencies(
+    py: Python<'_>,
     atomic_numbers: Vec<u8>,
     coordinates: Vec<[f64; 3]>,
     method: Option<&str>,
@@ -1284,8 +1297,9 @@ pub fn frequencies(
         custom_masses,
     };
 
-    let res =
-        compute_hessian_and_frequencies(&mut batch, model.as_ref(), &mut ws, &scf_opts, &hess_opts);
+    let res = py.allow_threads(|| {
+        compute_hessian_and_frequencies(&mut batch, model.as_ref(), &mut ws, &scf_opts, &hess_opts)
+    });
 
     let normal_modes: Vec<NormalModePy> = res
         .normal_modes
@@ -1385,7 +1399,10 @@ pub fn esp_charges(
     let mut ws = ScfWorkspace::allocate(batch.norbs);
     let scf_opts = ScfOptions::default();
 
-    let scf_res = run_rhf_scf_with_options(&batch, model.as_ref(), &mut ws, &scf_opts);
+    let mut scf_res = run_rhf_scf_with_options(&batch, model.as_ref(), &mut ws, &scf_opts);
+    if !scf_res.converged {
+        scf_res = mopac_core::scf::scf_loop::run_rhf_scf_adaptive_with_nddo(&batch, model.as_ref(), &mut ws, 60, 1e-5, 1e-4, true);
+    }
     if !scf_res.converged {
         return Err(PyValueError::new_err(
             "Base SCF failed to converge for ESP calculation",
@@ -2172,6 +2189,7 @@ impl MopacCalculator {
     #[pyo3(signature = (atomic_numbers, coordinates, temperature_k = 298.15, pressure_atm = 1.0, rotational_symmetry_number = 1.0, custom_masses = None))]
     fn frequencies(
         &self,
+        py: Python<'_>,
         atomic_numbers: Vec<u8>,
         coordinates: Vec<[f64; 3]>,
         temperature_k: Option<f64>,
@@ -2180,9 +2198,10 @@ impl MopacCalculator {
         custom_masses: Option<Vec<f64>>,
     ) -> PyResult<VibrationalResultPy> {
         frequencies(
+            py,
             atomic_numbers,
             coordinates,
-            Some(&self.method),
+            Some(self.method.as_str()),
             temperature_k,
             pressure_atm,
             rotational_symmetry_number,
@@ -2935,6 +2954,7 @@ pub fn export_trajectory_xyz(
 #[pyfunction]
 #[pyo3(signature = (atomic_numbers, coordinates, method="PM6", orbital_index=None, padding_angstrom=3.5, resolution_angstrom=0.25))]
 pub fn generate_orbital_cube(
+    py: Python<'_>,
     atomic_numbers: Vec<u8>,
     coordinates: Vec<Vec<f64>>,
     method: &str,
@@ -2955,19 +2975,6 @@ pub fn generate_orbital_cube(
     }
     let model = get_model(method)?;
     let batch = MolecularBatch::new_for_model(atomic_numbers, &coords_3d, model.as_ref());
-    let mut ws = ScfWorkspace::allocate(batch.norbs);
-    let scf_opts = ScfOptions {
-        max_iter: 100,
-        energy_tol_ev: 1e-7,
-        density_tol: 1e-6,
-        use_nddo: true,
-        damping: 0.5,
-        ..Default::default()
-    };
-    let scf_res = run_rhf_scf_with_options(&batch, model.as_ref(), &mut ws, &scf_opts);
-    if !scf_res.converged {
-        return Err(PyValueError::new_err("SCF failed to converge for Cube generation"));
-    }
     let mut total_valence = 0.0;
     for &z in &batch.atomic_numbers {
         if let Some(p) = model.get_element(z) {
@@ -2982,26 +2989,48 @@ pub fn generate_orbital_cube(
         )));
     }
     let target_idx_0 = target_idx - 1;
-    let energy_ev = ws.eigenvalues[target_idx_0];
-    let mo_coeffs = ws.eigenvectors.row(target_idx_0);
-    let config = mopac_core::export::cube::CubeGridConfig {
-        padding_angstrom,
-        resolution_angstrom,
-    };
-    Ok(mopac_core::export::cube::generate_molecular_orbital_cube(
-        &batch,
-        model.as_ref(),
-        mo_coeffs,
-        target_idx,
-        energy_ev,
-        &config,
-    ))
+
+    let res = py.allow_threads(|| -> Result<String, &'static str> {
+        let mut ws = ScfWorkspace::allocate(batch.norbs);
+        let scf_opts = ScfOptions {
+            max_iter: 100,
+            energy_tol_ev: 1e-7,
+            density_tol: 1e-6,
+            use_nddo: true,
+            damping: 0.5,
+            ..Default::default()
+        };
+        let mut scf_res = run_rhf_scf_with_options(&batch, model.as_ref(), &mut ws, &scf_opts);
+        if !scf_res.converged {
+            scf_res = mopac_core::scf::scf_loop::run_rhf_scf_adaptive_with_nddo(&batch, model.as_ref(), &mut ws, 60, 1e-5, 1e-4, true);
+        }
+        if !scf_res.converged {
+            return Err("SCF failed to converge for Cube generation");
+        }
+        let energy_ev = ws.eigenvalues[target_idx_0];
+        let mo_coeffs = ws.eigenvectors.row(target_idx_0);
+        let config = mopac_core::export::cube::CubeGridConfig {
+            padding_angstrom,
+            resolution_angstrom,
+        };
+        Ok(mopac_core::export::cube::generate_molecular_orbital_cube(
+            &batch,
+            model.as_ref(),
+            mo_coeffs,
+            target_idx,
+            energy_ev,
+            &config,
+        ))
+    });
+
+    res.map_err(PyValueError::new_err)
 }
 
 /// Generate a volumetric Gaussian Cube (.cube) string for total electron density rho(r).
 #[pyfunction]
 #[pyo3(signature = (atomic_numbers, coordinates, method="PM6", padding_angstrom=3.5, resolution_angstrom=0.25))]
 pub fn generate_density_cube(
+    py: Python<'_>,
     atomic_numbers: Vec<u8>,
     coordinates: Vec<Vec<f64>>,
     method: &str,
@@ -3021,29 +3050,111 @@ pub fn generate_density_cube(
     }
     let model = get_model(method)?;
     let batch = MolecularBatch::new_for_model(atomic_numbers, &coords_3d, model.as_ref());
-    let mut ws = ScfWorkspace::allocate(batch.norbs);
-    let scf_opts = ScfOptions {
-        max_iter: 100,
-        energy_tol_ev: 1e-7,
-        density_tol: 1e-6,
-        use_nddo: true,
-        damping: 0.5,
-        ..Default::default()
-    };
-    let scf_res = run_rhf_scf_with_options(&batch, model.as_ref(), &mut ws, &scf_opts);
-    if !scf_res.converged {
-        return Err(PyValueError::new_err("SCF failed to converge for Density Cube generation"));
+
+    let res = py.allow_threads(|| -> Result<String, &'static str> {
+        let mut ws = ScfWorkspace::allocate(batch.norbs);
+        let scf_opts = ScfOptions {
+            max_iter: 100,
+            energy_tol_ev: 1e-7,
+            density_tol: 1e-6,
+            use_nddo: true,
+            damping: 0.5,
+            ..Default::default()
+        };
+        let mut scf_res = run_rhf_scf_with_options(&batch, model.as_ref(), &mut ws, &scf_opts);
+        if !scf_res.converged {
+            scf_res = mopac_core::scf::scf_loop::run_rhf_scf_adaptive_with_nddo(&batch, model.as_ref(), &mut ws, 60, 1e-5, 1e-4, true);
+        }
+        if !scf_res.converged {
+            return Err("SCF failed to converge for Density Cube generation");
+        }
+        let config = mopac_core::export::cube::CubeGridConfig {
+            padding_angstrom,
+            resolution_angstrom,
+        };
+        Ok(mopac_core::export::cube::generate_density_cube(
+            &batch,
+            model.as_ref(),
+            &ws.density,
+            &config,
+        ))
+    });
+
+    res.map_err(PyValueError::new_err)
+}
+
+/// Mayer and Armstrong-Perkins-Stewart bond order analysis.
+#[pyclass(get_all)]
+#[derive(Debug, Clone)]
+pub struct BondOrderPyResult {
+    /// Bond order matrix of dimension N_atoms x N_atoms
+    pub bond_orders: Vec<Vec<f64>>,
+    /// Total atomic valencies
+    pub valencies: Vec<f64>,
+    /// Active charge used in bonding
+    pub active_charges: Vec<f64>,
+    /// Lone pair / self charges
+    pub self_charges: Vec<f64>,
+    /// Free valencies
+    pub free_valencies: Vec<f64>,
+}
+
+#[pymethods]
+impl BondOrderPyResult {
+    fn to_dict<'py>(&self, py: Python<'py>) -> PyResult<Bound<'py, PyDict>> {
+        let dict = PyDict::new_bound(py);
+        dict.set_item("bond_orders", &self.bond_orders)?;
+        dict.set_item("valencies", &self.valencies)?;
+        dict.set_item("active_charges", &self.active_charges)?;
+        dict.set_item("self_charges", &self.self_charges)?;
+        dict.set_item("free_valencies", &self.free_valencies)?;
+        Ok(dict)
     }
-    let config = mopac_core::export::cube::CubeGridConfig {
-        padding_angstrom,
-        resolution_angstrom,
-    };
-    Ok(mopac_core::export::cube::generate_density_cube(
-        &batch,
-        model.as_ref(),
-        &ws.density,
-        &config,
-    ))
+}
+
+/// Compute Armstrong-Perkins-Stewart / Mayer bond orders and atomic valencies.
+#[pyfunction]
+#[pyo3(signature = (atomic_numbers, coordinates, method="PM7"))]
+pub fn bond_orders(
+    atomic_numbers: Vec<u8>,
+    coordinates: Vec<Vec<f64>>,
+    method: Option<&str>,
+) -> PyResult<BondOrderPyResult> {
+    let natoms = atomic_numbers.len();
+    if coordinates.len() != natoms {
+        return Err(PyValueError::new_err("Mismatch between atomic_numbers and coordinates length"));
+    }
+    let mut coords_3d = Vec::with_capacity(natoms);
+    for c in coordinates {
+        if c.len() != 3 {
+            return Err(PyValueError::new_err("Each coordinate must be [x, y, z]"));
+        }
+        coords_3d.push([c[0], c[1], c[2]]);
+    }
+    let m_str = method.unwrap_or("PM7");
+    let model = get_model(m_str)?;
+    let batch = MolecularBatch::new_for_model(atomic_numbers, &coords_3d, model.as_ref());
+    let mut ws = ScfWorkspace::allocate(batch.norbs);
+    let scf_res = mopac_core::scf::scf_loop::run_rhf_scf_adaptive_with_nddo(&batch, model.as_ref(), &mut ws, 60, 1e-5, 1e-4, true);
+    if !scf_res.converged {
+        return Err(PyValueError::new_err("SCF failed to converge for bond order calculation"));
+    }
+    let bo = mopac_core::properties::bonds::compute_bond_orders(&batch, &ws.density);
+    let mut bo_mat = Vec::with_capacity(natoms);
+    for i in 0..natoms {
+        let mut row = Vec::with_capacity(natoms);
+        for j in 0..natoms {
+            row.push(bo.bond_orders.get(i, j));
+        }
+        bo_mat.push(row);
+    }
+    Ok(BondOrderPyResult {
+        bond_orders: bo_mat,
+        valencies: bo.valencies,
+        active_charges: bo.active_charges,
+        self_charges: bo.self_charges,
+        free_valencies: bo.free_valencies,
+    })
 }
 
 /// MOPAC_RS Python Module
@@ -3089,6 +3200,8 @@ fn mopac_py(m: &Bound<'_, PyModule>) -> PyResult<()> {
     m.add_function(wrap_pyfunction!(export_trajectory_xyz, m)?)?;
     m.add_function(wrap_pyfunction!(generate_orbital_cube, m)?)?;
     m.add_function(wrap_pyfunction!(generate_density_cube, m)?)?;
+    m.add_class::<BondOrderPyResult>()?;
+    m.add_function(wrap_pyfunction!(bond_orders, m)?)?;
 
     let py = m.py();
     let py_code = r#"

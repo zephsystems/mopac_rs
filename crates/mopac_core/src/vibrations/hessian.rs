@@ -17,6 +17,7 @@ use crate::parameters::ParameterModel;
 use crate::scf::eigensolver::diagonalize_symmetric;
 use crate::scf::scf_loop::{run_rhf_scf_with_options, ScfOptions};
 use crate::types::{AlignedMatrix, AlignedVec64, MolecularBatch, ScfWorkspace};
+use rayon::prelude::*;
 
 /// Conversion factor from $\sqrt{\text{kcal} / (\text{mol} \cdot \text{\AA}^2 \cdot \text{amu})}$ to $\text{cm}^{-1}$.
 ///
@@ -176,61 +177,68 @@ pub fn compute_hessian_and_frequencies(
     // Save initial converged density for warm-starts and frozen evaluations
     let init_density = ws.density.clone();
 
-    let mut grad_ws = GradientWorkspace::allocate(batch.norbs);
-    let mut g_plus = vec![[0.0; 3]; natoms];
-    let mut g_minus = vec![[0.0; 3]; natoms];
-
     let mut cartesian_hessian = AlignedMatrix::zeroed(n3, n3);
     let delta = hess_opts.delta;
     let inv_2delta = 1.0 / (2.0 * delta);
 
-    // 3. Central difference numerical gradient evaluation
-    for a in 0..natoms {
-        for alpha in 0..3 {
-            let col = 3 * a + alpha;
+    // 3. Central difference numerical gradient evaluation (parallelized with Rayon across coordinates)
+    let hessian_columns: Vec<Vec<f64>> = (0..n3)
+        .into_par_iter()
+        .map(|col| {
+            let a = col / 3;
+            let alpha = col % 3;
+            let mut local_batch = batch.clone();
+            let mut local_ws = ScfWorkspace::allocate(batch.norbs);
+            let mut local_grad_ws = GradientWorkspace::allocate(batch.norbs);
+            let mut g_plus = vec![[0.0; 3]; natoms];
+            let mut g_minus = vec![[0.0; 3]; natoms];
 
             // --- Coordinate +delta ---
-            displace_coord(batch, a, alpha, delta);
+            displace_coord(&mut local_batch, a, alpha, delta);
             if hess_opts.recompute_scf {
-                ws.density.clone_from(&init_density);
-                run_rhf_scf_with_options(batch, model, ws, scf_opts);
+                local_ws.density.clone_from(&init_density);
+                run_rhf_scf_with_options(&local_batch, model, &mut local_ws, scf_opts);
+            } else {
+                local_ws.density.clone_from(&init_density);
             }
             compute_cartesian_gradients_with_options(
-                batch,
+                &mut local_batch,
                 model,
-                &ws.density,
-                &mut grad_ws,
+                &local_ws.density,
+                &mut local_grad_ws,
                 &mut g_plus,
                 hess_opts.use_nddo,
             );
 
             // --- Coordinate -delta ---
-            displace_coord(batch, a, alpha, -2.0 * delta);
+            displace_coord(&mut local_batch, a, alpha, -2.0 * delta);
             if hess_opts.recompute_scf {
-                ws.density.clone_from(&init_density);
-                run_rhf_scf_with_options(batch, model, ws, scf_opts);
+                local_ws.density.clone_from(&init_density);
+                run_rhf_scf_with_options(&local_batch, model, &mut local_ws, scf_opts);
             }
             compute_cartesian_gradients_with_options(
-                batch,
+                &mut local_batch,
                 model,
-                &ws.density,
-                &mut grad_ws,
+                &local_ws.density,
+                &mut local_grad_ws,
                 &mut g_minus,
                 hess_opts.use_nddo,
             );
 
-            // Restore coordinate
-            displace_coord(batch, a, alpha, delta);
-
-            // Populate column of Hessian: d(grad_l)/d(coord_col)
-            // Note: g is in eV/Angstrom. Convert to kcal/(mol*Angstrom^2)
+            let mut col_vals = Vec::with_capacity(n3);
             for b in 0..natoms {
                 for beta in 0..3 {
-                    let row = 3 * b + beta;
                     let dg = (g_plus[b][beta] - g_minus[b][beta]) * inv_2delta * EV_TO_KCAL_MOL;
-                    cartesian_hessian.set(row, col, dg);
+                    col_vals.push(dg);
                 }
             }
+            col_vals
+        })
+        .collect();
+
+    for (col, col_vals) in hessian_columns.into_iter().enumerate() {
+        for (row, val) in col_vals.into_iter().enumerate() {
+            cartesian_hessian.set(row, col, val);
         }
     }
 

@@ -7,6 +7,7 @@
 
 use crate::parameters::ParameterModel;
 use crate::types::{AlignedMatrix, BasisType, MolecularBatch};
+use rayon::prelude::*;
 use std::f64::consts::PI;
 
 /// Conversion factor: 1 Angstrom = 1.8897261246 Bohr (atomic units).
@@ -183,6 +184,67 @@ pub fn evaluate_density_at_point(
     rho
 }
 
+#[derive(Debug, Clone, Copy)]
+struct PrecomputedStoAtom {
+    z: u8,
+    ax: f64,
+    ay: f64,
+    az: f64,
+    zs: f64,
+    zp: f64,
+    norm_s: f64,
+    norm_p: f64,
+    offset: usize,
+    basis_type: BasisType,
+}
+
+#[inline(always)]
+fn compute_sto_norms(z: u8, zs: f64, zp: f64) -> (f64, f64) {
+    if z == 1 {
+        let norm_s = (zs * zs * zs / PI).sqrt();
+        (norm_s, 0.0)
+    } else if z <= 10 {
+        let norm_s = (zs.powi(5) / (3.0 * PI)).sqrt();
+        let norm_p = (zp.powi(5) / PI).sqrt();
+        (norm_s, norm_p)
+    } else {
+        let norm_s = (2.0 * zs.powi(7) / (45.0 * PI)).sqrt();
+        let norm_p = (2.0 * zp.powi(7) / (15.0 * PI)).sqrt();
+        (norm_s, norm_p)
+    }
+}
+
+#[inline(always)]
+fn evaluate_sto_sp_fast(
+    atom: &PrecomputedStoAtom,
+    dx: f64,
+    dy: f64,
+    dz: f64,
+    r: f64,
+    r2: f64,
+) -> [f64; 4] {
+    if atom.z == 1 {
+        let val_s = atom.norm_s * (-atom.zs * r).exp();
+        [val_s, 0.0, 0.0, 0.0]
+    } else if atom.z <= 10 {
+        let exp_s = (-atom.zs * r).exp();
+        let exp_p = (-atom.zp * r).exp();
+        let val_s = atom.norm_s * r * exp_s;
+        let val_px = atom.norm_p * dx * exp_p;
+        let val_py = atom.norm_p * dy * exp_p;
+        let val_pz = atom.norm_p * dz * exp_p;
+        [val_s, val_px, val_py, val_pz]
+    } else {
+        let exp_s = (-atom.zs * r).exp();
+        let exp_p = (-atom.zp * r).exp();
+        let val_s = atom.norm_s * r2 * exp_s;
+        let val_px = atom.norm_p * dx * r * exp_p;
+        let val_py = atom.norm_p * dy * r * exp_p;
+        let val_pz = atom.norm_p * dz * r * exp_p;
+        [val_s, val_px, val_py, val_pz]
+    }
+}
+
 /// Generates a Gaussian Cube (.cube) formatted string for a specific molecular orbital.
 ///
 /// Molstar directly reads this file and applies Marching Cubes to render
@@ -195,7 +257,6 @@ pub fn generate_molecular_orbital_cube(
     orbital_energy_ev: f64,
     config: &CubeGridConfig,
 ) -> String {
-    // 1. Calculate bounding box in Angstroms
     let mut min_x = f64::INFINITY;
     let mut max_x = f64::NEG_INFINITY;
     let mut min_y = f64::INFINITY;
@@ -226,7 +287,6 @@ pub fn generate_molecular_orbital_cube(
     let ny = ((max_y - min_y) / step_a).ceil() as usize + 1;
     let nz = ((max_z - min_z) / step_a).ceil() as usize + 1;
 
-    // Convert origin and step to Bohr (standard Gaussian Cube unit)
     let origin_bohr = [
         min_x * ANGSTROM_TO_BOHR,
         min_y * ANGSTROM_TO_BOHR,
@@ -236,14 +296,12 @@ pub fn generate_molecular_orbital_cube(
 
     let mut out = String::with_capacity(1024 + nx * ny * nz * 14);
 
-    // Line 1 & 2: Header comments
     out.push_str("MOPAC_RS Molecular Orbital Cube File\n");
     out.push_str(&format!(
         "Orbital {} Energy = {:.4} eV\n",
         orbital_index, orbital_energy_ev
     ));
 
-    // Line 3: natoms and origin in Bohr (signed natoms < 0 indicates extra MO record line)
     out.push_str(&format!(
         "{:5} {:12.6} {:12.6} {:12.6}\n",
         -(batch.natoms as i64),
@@ -252,12 +310,10 @@ pub fn generate_molecular_orbital_cube(
         origin_bohr[2]
     ));
 
-    // Lines 4-6: Voxel counts and step vectors in Bohr
     out.push_str(&format!("{:5} {:12.6} {:12.6} {:12.6}\n", nx, step_bohr, 0.0, 0.0));
     out.push_str(&format!("{:5} {:12.6} {:12.6} {:12.6}\n", ny, 0.0, step_bohr, 0.0));
     out.push_str(&format!("{:5} {:12.6} {:12.6} {:12.6}\n", nz, 0.0, 0.0, step_bohr));
 
-    // Atom lines: Z, core charge, X, Y, Z in Bohr
     for a in 0..batch.natoms {
         let z = batch.atomic_numbers[a];
         let p = model.get_element(z).expect("Element params missing in model");
@@ -270,32 +326,108 @@ pub fn generate_molecular_orbital_cube(
         ));
     }
 
-    // MO Header: number of orbitals and orbital index
     out.push_str(&format!("{:5} {:5}\n", 1, orbital_index));
 
-    // Grid scalar values: loop X -> Y -> Z with 6 values per line
-    let mut val_count = 0;
-    for ix in 0..nx {
-        let px = min_x + ix as f64 * step_a;
-        for iy in 0..ny {
-            let py = min_y + iy as f64 * step_a;
-            for iz in 0..nz {
-                let pz = min_z + iz as f64 * step_a;
-                let val = evaluate_molecular_orbital_at_point(
-                    batch,
-                    model,
-                    mo_coefficients,
-                    [px, py, pz],
-                );
-                out.push_str(&format!(" {:12.5E}", val));
-                val_count += 1;
-                if val_count % 6 == 0 {
-                    out.push('\n');
+    let sto_atoms: Vec<PrecomputedStoAtom> = (0..batch.natoms)
+        .map(|a| {
+            let z = batch.atomic_numbers[a];
+            let p = model.get_element(z).expect("Element params missing in model");
+            let ax = batch.x[a] * ANGSTROM_TO_BOHR;
+            let ay = batch.y[a] * ANGSTROM_TO_BOHR;
+            let az = batch.z[a] * ANGSTROM_TO_BOHR;
+            let (norm_s, norm_p) = compute_sto_norms(z, p.zs, p.zp);
+            PrecomputedStoAtom {
+                z,
+                ax,
+                ay,
+                az,
+                zs: p.zs,
+                zp: p.zp,
+                norm_s,
+                norm_p,
+                offset: batch.orbital_offsets[a],
+                basis_type: batch.basis_types[a],
+            }
+        })
+        .collect();
+
+    let mut grid_values = vec![0.0f64; nx * ny * nz];
+
+    grid_values
+        .par_chunks_exact_mut(ny * nz)
+        .enumerate()
+        .for_each(|(ix, slice_yz)| {
+            let px = origin_bohr[0] + ix as f64 * step_bohr;
+            let mut active_indices = Vec::with_capacity(batch.norbs);
+            let mut active_vals = Vec::with_capacity(batch.norbs);
+
+            for iy in 0..ny {
+                let py = origin_bohr[1] + iy as f64 * step_bohr;
+                for iz in 0..nz {
+                    let pz = origin_bohr[2] + iz as f64 * step_bohr;
+
+                    active_indices.clear();
+                    active_vals.clear();
+
+                    for atom in &sto_atoms {
+                        let dx = px - atom.ax;
+                        let dx2 = dx * dx;
+                        if dx2 > 400.0 {
+                            continue;
+                        }
+                        let dy = py - atom.ay;
+                        let dxy2 = dx2 + dy * dy;
+                        if dxy2 > 400.0 {
+                            continue;
+                        }
+                        let dz = pz - atom.az;
+                        let r2 = dxy2 + dz * dz;
+                        if r2 > 400.0 {
+                            continue;
+                        }
+
+                        let r = r2.sqrt();
+                        let sto = evaluate_sto_sp_fast(atom, dx, dy, dz, r, r2);
+
+                        match atom.basis_type {
+                            BasisType::S => {
+                                if sto[0].abs() > 1e-12 {
+                                    active_indices.push(atom.offset);
+                                    active_vals.push(sto[0]);
+                                }
+                            }
+                            BasisType::SP | BasisType::SPD => {
+                                for k in 0..4 {
+                                    if sto[k].abs() > 1e-12 {
+                                        active_indices.push(atom.offset + k);
+                                        active_vals.push(sto[k]);
+                                    }
+                                }
+                            }
+                        }
+                    }
+
+                    let m = active_indices.len();
+                    let mut psi = 0.0;
+                    for i in 0..m {
+                        let mu = active_indices[i];
+                        let v_mu = active_vals[i];
+                        psi += mo_coefficients[mu] * v_mu;
+                    }
+
+                    slice_yz[iy * nz + iz] = psi;
                 }
             }
+        });
+
+    let total_voxels = nx * ny * nz;
+    for (i, &val) in grid_values.iter().enumerate() {
+        out.push_str(&format!(" {:12.5E}", val));
+        if (i + 1) % 6 == 0 {
+            out.push('\n');
         }
     }
-    if val_count % 6 != 0 {
+    if total_voxels % 6 != 0 {
         out.push('\n');
     }
 
@@ -372,30 +504,115 @@ pub fn generate_density_cube(
         ));
     }
 
-    let mut val_count = 0;
-    for ix in 0..nx {
-        let px = min_x + ix as f64 * step_a;
-        for iy in 0..ny {
-            let py = min_y + iy as f64 * step_a;
-            for iz in 0..nz {
-                let pz = min_z + iz as f64 * step_a;
-                let val = evaluate_density_at_point(
-                    batch,
-                    model,
-                    density_matrix,
-                    [px, py, pz],
-                );
-                out.push_str(&format!(" {:12.5E}", val));
-                val_count += 1;
-                if val_count % 6 == 0 {
-                    out.push('\n');
+    let sto_atoms: Vec<PrecomputedStoAtom> = (0..batch.natoms)
+        .map(|a| {
+            let z = batch.atomic_numbers[a];
+            let p = model.get_element(z).expect("Element params missing in model");
+            let ax = batch.x[a] * ANGSTROM_TO_BOHR;
+            let ay = batch.y[a] * ANGSTROM_TO_BOHR;
+            let az = batch.z[a] * ANGSTROM_TO_BOHR;
+            let (norm_s, norm_p) = compute_sto_norms(z, p.zs, p.zp);
+            PrecomputedStoAtom {
+                z,
+                ax,
+                ay,
+                az,
+                zs: p.zs,
+                zp: p.zp,
+                norm_s,
+                norm_p,
+                offset: batch.orbital_offsets[a],
+                basis_type: batch.basis_types[a],
+            }
+        })
+        .collect();
+
+    let mut grid_values = vec![0.0f64; nx * ny * nz];
+
+    grid_values
+        .par_chunks_exact_mut(ny * nz)
+        .enumerate()
+        .for_each(|(ix, slice_yz)| {
+            let px = origin_bohr[0] + ix as f64 * step_bohr;
+            let mut active_indices = Vec::with_capacity(batch.norbs);
+            let mut active_vals = Vec::with_capacity(batch.norbs);
+
+            for iy in 0..ny {
+                let py = origin_bohr[1] + iy as f64 * step_bohr;
+                for iz in 0..nz {
+                    let pz = origin_bohr[2] + iz as f64 * step_bohr;
+
+                    active_indices.clear();
+                    active_vals.clear();
+
+                    for atom in &sto_atoms {
+                        let dx = px - atom.ax;
+                        let dx2 = dx * dx;
+                        if dx2 > 400.0 {
+                            continue;
+                        }
+                        let dy = py - atom.ay;
+                        let dxy2 = dx2 + dy * dy;
+                        if dxy2 > 400.0 {
+                            continue;
+                        }
+                        let dz = pz - atom.az;
+                        let r2 = dxy2 + dz * dz;
+                        if r2 > 400.0 {
+                            continue;
+                        }
+
+                        let r = r2.sqrt();
+                        let sto = evaluate_sto_sp_fast(atom, dx, dy, dz, r, r2);
+
+                        match atom.basis_type {
+                            BasisType::S => {
+                                if sto[0].abs() > 1e-12 {
+                                    active_indices.push(atom.offset);
+                                    active_vals.push(sto[0]);
+                                }
+                            }
+                            BasisType::SP | BasisType::SPD => {
+                                for k in 0..4 {
+                                    if sto[k].abs() > 1e-12 {
+                                        active_indices.push(atom.offset + k);
+                                        active_vals.push(sto[k]);
+                                    }
+                                }
+                            }
+                        }
+                    }
+
+                    let m = active_indices.len();
+                    let mut rho = 0.0;
+                    for i in 0..m {
+                        let mu = active_indices[i];
+                        let v_mu = active_vals[i];
+                        let mut sum_nu = 0.0;
+                        for j in 0..m {
+                            let nu = active_indices[j];
+                            let v_nu = active_vals[j];
+                            sum_nu += density_matrix.get(mu, nu) * v_nu;
+                        }
+                        rho += v_mu * sum_nu;
+                    }
+
+                    slice_yz[iy * nz + iz] = rho;
                 }
             }
+        });
+
+    let total_voxels = nx * ny * nz;
+    for (i, &val) in grid_values.iter().enumerate() {
+        out.push_str(&format!(" {:12.5E}", val));
+        if (i + 1) % 6 == 0 {
+            out.push('\n');
         }
     }
-    if val_count % 6 != 0 {
+    if total_voxels % 6 != 0 {
         out.push('\n');
     }
 
     out
 }
+
