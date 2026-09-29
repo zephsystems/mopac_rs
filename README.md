@@ -336,7 +336,7 @@ If you use `mopac_rs` in your academic research, benchmarks, or software, please
   title = {{MOPAC\_RS: Modern High-Performance Semi-Empirical Quantum Chemistry Engine in Rust}},
   year = {2026},
   publisher = {Zenodo},
-  version = {0.1.1},
+  version = {0.1.2},
   doi = {10.5281/zenodo.22731253},
   url = {https://github.com/zephsystems/mopac_rs}
 }
