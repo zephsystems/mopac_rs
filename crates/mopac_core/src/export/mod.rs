@@ -8,7 +8,13 @@
 //! Licensed under the Apache License, Version 2.0 (the "License").
 
 pub mod cube;
+pub mod mmcif;
+pub mod mvs;
+pub mod pdb;
 pub mod sdf;
 
 pub use cube::*;
+pub use mmcif::*;
+pub use mvs::*;
+pub use pdb::*;
 pub use sdf::*;

@@ -445,15 +445,19 @@ pub fn generate_molecular_orbital_cube(
             });
     });
 
-    let total_voxels = nx * ny * nz;
-    for (i, &val) in grid_values.iter().enumerate() {
-        out.push_str(&format!(" {:12.5E}", val));
-        if (i + 1) % 6 == 0 {
-            out.push('\n');
+    for ix in 0..nx {
+        for iy in 0..ny {
+            for iz in 0..nz {
+                let idx = ix * (ny * nz) + iy * nz + iz;
+                out.push_str(&format!(" {:12.5E}", grid_values[idx]));
+                if (iz + 1) % 6 == 0 {
+                    out.push('\n');
+                }
+            }
+            if !nz.is_multiple_of(6) {
+                out.push('\n');
+            }
         }
-    }
-    if !total_voxels.is_multiple_of(6) {
-        out.push('\n');
     }
 
     out
@@ -645,15 +649,19 @@ pub fn generate_density_cube(
             });
     });
 
-    let total_voxels = nx * ny * nz;
-    for (i, &val) in grid_values.iter().enumerate() {
-        out.push_str(&format!(" {:12.5E}", val));
-        if (i + 1) % 6 == 0 {
-            out.push('\n');
+    for ix in 0..nx {
+        for iy in 0..ny {
+            for iz in 0..nz {
+                let idx = ix * (ny * nz) + iy * nz + iz;
+                out.push_str(&format!(" {:12.5E}", grid_values[idx]));
+                if (iz + 1) % 6 == 0 {
+                    out.push('\n');
+                }
+            }
+            if !nz.is_multiple_of(6) {
+                out.push('\n');
+            }
         }
-    }
-    if !total_voxels.is_multiple_of(6) {
-        out.push('\n');
     }
 
     out

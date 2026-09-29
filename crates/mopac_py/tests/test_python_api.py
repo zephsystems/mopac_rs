@@ -292,6 +292,45 @@ class TestMopacPyBindings(unittest.TestCase):
         with self.assertRaises(ValueError):
             mopac_py.generate_cubes_bundle(self.h2o_atoms, self.h2o_coords, orbitals=["NON_EXISTENT"])
 
+    def test_molstar_export_suite_and_bundle(self):
+        """Verify Mol* interoperability suite: PDB, mmCIF, MVS and unified export_molstar_bundle."""
+        charges = [-0.60, 0.30, 0.30]
+
+        # 1. PDB with affine B-factor
+        pdb = mopac_py.export_molstar_pdb(self.h2o_atoms, self.h2o_coords, charges, max_charge=0.6)
+        self.assertIn("REMARK   MOPAC_RS MOLSTAR-OPTIMIZED PDB", pdb)
+        self.assertIn("TER\nEND", pdb)
+
+        # 2. mmCIF with partial charges
+        cif = mopac_py.export_mmcif_with_charges(self.h2o_atoms, self.h2o_coords, charges, molecule_name="WATER")
+        self.assertIn("data_WATER", cif)
+        self.assertIn("_atom_site.partial_charge", cif)
+
+        # 3. MolViewSpec session
+        mvs = mopac_py.export_mvs_session("water.pdb", format="pdb", surface_opacity=0.35)
+        self.assertIn('"version": "1.0"', mvs)
+        self.assertIn('"type": "ball_and_stick"', mvs)
+        self.assertIn('"type": "gaussian_surface"', mvs)
+
+        # 4. MopacCalculator export_molstar_bundle
+        calc = mopac_py.MopacCalculator("PM6")
+        bundle = calc.export_molstar_bundle(
+            self.h2o_atoms,
+            self.h2o_coords,
+            output_prefix="water_test",
+            orbitals=["HOMO", "LUMO"],
+            include_density=True,
+            surface_opacity=0.35,
+            padding_angstrom=2.0,
+            resolution_angstrom=0.4
+        )
+        self.assertIn("water_test_molstar.pdb", bundle)
+        self.assertIn("water_test.cif", bundle)
+        self.assertIn("water_test_session.mvs.json", bundle)
+        self.assertIn("density", bundle)
+        self.assertIn("HOMO", bundle)
+        self.assertIn("LUMO", bundle)
+
 
 if __name__ == "__main__":
     unittest.main(verbosity=2)
