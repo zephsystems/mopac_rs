@@ -22,6 +22,8 @@ pub struct CubeGridConfig {
     pub padding_angstrom: f64,
     /// Grid voxel spacing in Angstroms (default: 0.25 A)
     pub resolution_angstrom: f64,
+    /// Number of worker threads. None = global pool, Some(1) = serial fallback, Some(k) = bounded to k threads.
+    pub n_threads: Option<usize>,
 }
 
 impl Default for CubeGridConfig {
@@ -29,6 +31,7 @@ impl Default for CubeGridConfig {
         Self {
             padding_angstrom: 3.5,
             resolution_angstrom: 0.25,
+            n_threads: None,
         }
     }
 }
@@ -353,72 +356,74 @@ pub fn generate_molecular_orbital_cube(
 
     let mut grid_values = vec![0.0f64; nx * ny * nz];
 
-    grid_values
-        .par_chunks_exact_mut(ny * nz)
-        .enumerate()
-        .for_each(|(ix, slice_yz)| {
-            let px = origin_bohr[0] + ix as f64 * step_bohr;
-            let mut active_indices = Vec::with_capacity(batch.norbs);
-            let mut active_vals = Vec::with_capacity(batch.norbs);
+    crate::threading::run_with_thread_pool(config.n_threads, || {
+        grid_values
+            .par_chunks_exact_mut(ny * nz)
+            .enumerate()
+            .for_each(|(ix, slice_yz)| {
+                let px = origin_bohr[0] + ix as f64 * step_bohr;
+                let mut active_indices = Vec::with_capacity(batch.norbs);
+                let mut active_vals = Vec::with_capacity(batch.norbs);
 
-            for iy in 0..ny {
-                let py = origin_bohr[1] + iy as f64 * step_bohr;
-                for iz in 0..nz {
-                    let pz = origin_bohr[2] + iz as f64 * step_bohr;
+                for iy in 0..ny {
+                    let py = origin_bohr[1] + iy as f64 * step_bohr;
+                    for iz in 0..nz {
+                        let pz = origin_bohr[2] + iz as f64 * step_bohr;
 
-                    active_indices.clear();
-                    active_vals.clear();
+                        active_indices.clear();
+                        active_vals.clear();
 
-                    for atom in &sto_atoms {
-                        let dx = px - atom.ax;
-                        let dx2 = dx * dx;
-                        if dx2 > 400.0 {
-                            continue;
-                        }
-                        let dy = py - atom.ay;
-                        let dxy2 = dx2 + dy * dy;
-                        if dxy2 > 400.0 {
-                            continue;
-                        }
-                        let dz = pz - atom.az;
-                        let r2 = dxy2 + dz * dz;
-                        if r2 > 400.0 {
-                            continue;
-                        }
-
-                        let r = r2.sqrt();
-                        let sto = evaluate_sto_sp_fast(atom, dx, dy, dz, r, r2);
-
-                        match atom.basis_type {
-                            BasisType::S => {
-                                if sto[0].abs() > 1e-12 {
-                                    active_indices.push(atom.offset);
-                                    active_vals.push(sto[0]);
-                                }
+                        for atom in &sto_atoms {
+                            let dx = px - atom.ax;
+                            let dx2 = dx * dx;
+                            if dx2 > 400.0 {
+                                continue;
                             }
-                            BasisType::SP | BasisType::SPD => {
-                                for k in 0..4 {
-                                    if sto[k].abs() > 1e-12 {
-                                        active_indices.push(atom.offset + k);
-                                        active_vals.push(sto[k]);
+                            let dy = py - atom.ay;
+                            let dxy2 = dx2 + dy * dy;
+                            if dxy2 > 400.0 {
+                                continue;
+                            }
+                            let dz = pz - atom.az;
+                            let r2 = dxy2 + dz * dz;
+                            if r2 > 400.0 {
+                                continue;
+                            }
+
+                            let r = r2.sqrt();
+                            let sto = evaluate_sto_sp_fast(atom, dx, dy, dz, r, r2);
+
+                            match atom.basis_type {
+                                BasisType::S => {
+                                    if sto[0].abs() > 1e-12 {
+                                        active_indices.push(atom.offset);
+                                        active_vals.push(sto[0]);
+                                    }
+                                }
+                                BasisType::SP | BasisType::SPD => {
+                                    for k in 0..4 {
+                                        if sto[k].abs() > 1e-12 {
+                                            active_indices.push(atom.offset + k);
+                                            active_vals.push(sto[k]);
+                                        }
                                     }
                                 }
                             }
                         }
-                    }
 
-                    let m = active_indices.len();
-                    let mut psi = 0.0;
-                    for i in 0..m {
-                        let mu = active_indices[i];
-                        let v_mu = active_vals[i];
-                        psi += mo_coefficients[mu] * v_mu;
-                    }
+                        let m = active_indices.len();
+                        let mut psi = 0.0;
+                        for i in 0..m {
+                            let mu = active_indices[i];
+                            let v_mu = active_vals[i];
+                            psi += mo_coefficients[mu] * v_mu;
+                        }
 
-                    slice_yz[iy * nz + iz] = psi;
+                        slice_yz[iy * nz + iz] = psi;
+                    }
                 }
-            }
-        });
+            });
+    });
 
     let total_voxels = nx * ny * nz;
     for (i, &val) in grid_values.iter().enumerate() {
@@ -529,78 +534,80 @@ pub fn generate_density_cube(
 
     let mut grid_values = vec![0.0f64; nx * ny * nz];
 
-    grid_values
-        .par_chunks_exact_mut(ny * nz)
-        .enumerate()
-        .for_each(|(ix, slice_yz)| {
-            let px = origin_bohr[0] + ix as f64 * step_bohr;
-            let mut active_indices = Vec::with_capacity(batch.norbs);
-            let mut active_vals = Vec::with_capacity(batch.norbs);
+    crate::threading::run_with_thread_pool(config.n_threads, || {
+        grid_values
+            .par_chunks_exact_mut(ny * nz)
+            .enumerate()
+            .for_each(|(ix, slice_yz)| {
+                let px = origin_bohr[0] + ix as f64 * step_bohr;
+                let mut active_indices = Vec::with_capacity(batch.norbs);
+                let mut active_vals = Vec::with_capacity(batch.norbs);
 
-            for iy in 0..ny {
-                let py = origin_bohr[1] + iy as f64 * step_bohr;
-                for iz in 0..nz {
-                    let pz = origin_bohr[2] + iz as f64 * step_bohr;
+                for iy in 0..ny {
+                    let py = origin_bohr[1] + iy as f64 * step_bohr;
+                    for iz in 0..nz {
+                        let pz = origin_bohr[2] + iz as f64 * step_bohr;
 
-                    active_indices.clear();
-                    active_vals.clear();
+                        active_indices.clear();
+                        active_vals.clear();
 
-                    for atom in &sto_atoms {
-                        let dx = px - atom.ax;
-                        let dx2 = dx * dx;
-                        if dx2 > 400.0 {
-                            continue;
-                        }
-                        let dy = py - atom.ay;
-                        let dxy2 = dx2 + dy * dy;
-                        if dxy2 > 400.0 {
-                            continue;
-                        }
-                        let dz = pz - atom.az;
-                        let r2 = dxy2 + dz * dz;
-                        if r2 > 400.0 {
-                            continue;
-                        }
-
-                        let r = r2.sqrt();
-                        let sto = evaluate_sto_sp_fast(atom, dx, dy, dz, r, r2);
-
-                        match atom.basis_type {
-                            BasisType::S => {
-                                if sto[0].abs() > 1e-12 {
-                                    active_indices.push(atom.offset);
-                                    active_vals.push(sto[0]);
-                                }
+                        for atom in &sto_atoms {
+                            let dx = px - atom.ax;
+                            let dx2 = dx * dx;
+                            if dx2 > 400.0 {
+                                continue;
                             }
-                            BasisType::SP | BasisType::SPD => {
-                                for k in 0..4 {
-                                    if sto[k].abs() > 1e-12 {
-                                        active_indices.push(atom.offset + k);
-                                        active_vals.push(sto[k]);
+                            let dy = py - atom.ay;
+                            let dxy2 = dx2 + dy * dy;
+                            if dxy2 > 400.0 {
+                                continue;
+                            }
+                            let dz = pz - atom.az;
+                            let r2 = dxy2 + dz * dz;
+                            if r2 > 400.0 {
+                                continue;
+                            }
+
+                            let r = r2.sqrt();
+                            let sto = evaluate_sto_sp_fast(atom, dx, dy, dz, r, r2);
+
+                            match atom.basis_type {
+                                BasisType::S => {
+                                    if sto[0].abs() > 1e-12 {
+                                        active_indices.push(atom.offset);
+                                        active_vals.push(sto[0]);
+                                    }
+                                }
+                                BasisType::SP | BasisType::SPD => {
+                                    for k in 0..4 {
+                                        if sto[k].abs() > 1e-12 {
+                                            active_indices.push(atom.offset + k);
+                                            active_vals.push(sto[k]);
+                                        }
                                     }
                                 }
                             }
                         }
-                    }
 
-                    let m = active_indices.len();
-                    let mut rho = 0.0;
-                    for i in 0..m {
-                        let mu = active_indices[i];
-                        let v_mu = active_vals[i];
-                        let mut sum_nu = 0.0;
-                        for j in 0..m {
-                            let nu = active_indices[j];
-                            let v_nu = active_vals[j];
-                            sum_nu += density_matrix.get(mu, nu) * v_nu;
+                        let m = active_indices.len();
+                        let mut rho = 0.0;
+                        for i in 0..m {
+                            let mu = active_indices[i];
+                            let v_mu = active_vals[i];
+                            let mut sum_nu = 0.0;
+                            for j in 0..m {
+                                let nu = active_indices[j];
+                                let v_nu = active_vals[j];
+                                sum_nu += density_matrix.get(mu, nu) * v_nu;
+                            }
+                            rho += v_mu * sum_nu;
                         }
-                        rho += v_mu * sum_nu;
-                    }
 
-                    slice_yz[iy * nz + iz] = rho;
+                        slice_yz[iy * nz + iz] = rho;
+                    }
                 }
-            }
-        });
+            });
+    });
 
     let total_voxels = nx * ny * nz;
     for (i, &val) in grid_values.iter().enumerate() {

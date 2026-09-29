@@ -21,6 +21,7 @@ pub mod ri;
 pub mod scf;
 pub mod solvation;
 pub mod types;
+pub mod threading;
 pub mod vibrations;
 
 pub use ci::*;
@@ -40,5 +41,6 @@ pub use reactions::*;
 pub use ri::*;
 pub use scf::*;
 pub use solvation::*;
+pub use threading::*;
 pub use types::*;
 pub use vibrations::*;

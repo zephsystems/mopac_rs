@@ -38,6 +38,7 @@ fn test_esp_charges_water_neutral() {
         shell_multipliers: vec![1.4, 1.6, 1.8, 2.0],
         points_per_shell: 64,
         net_charge: 0.0,
+        ..Default::default()
     };
 
     let esp_res = compute_esp_charges(&batch, &model, &ws.density, &esp_opts)

@@ -74,6 +74,7 @@ fn test_gaussian_cube_generation() {
     let config = CubeGridConfig {
         padding_angstrom: 2.0,
         resolution_angstrom: 0.5,
+        ..Default::default()
     };
 
     // 1. Generate HOMO Cube

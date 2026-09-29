@@ -49,6 +49,40 @@ use mopac_core::scf::scf_loop::{run_rhf_scf_with_options, ScfOptions};
 use mopac_core::solvation::CosmoParams;
 use mopac_core::types::{MolecularBatch, ScfWorkspace};
 use mopac_core::vibrations::{compute_hessian_and_frequencies, HessianOptions};
+use std::sync::atomic::{AtomicUsize, Ordering};
+
+static GLOBAL_NUM_THREADS: AtomicUsize = AtomicUsize::new(0);
+
+fn resolve_num_threads(explicit: Option<usize>) -> Option<usize> {
+    if explicit.is_some() {
+        explicit
+    } else {
+        let g = GLOBAL_NUM_THREADS.load(Ordering::Relaxed);
+        if g > 0 {
+            Some(g)
+        } else {
+            None
+        }
+    }
+}
+
+/// Set default maximum number of parallel worker threads across MOPAC_RS operations.
+/// Pass 1 for strict single-core fallback, or K for bounded multithreading.
+#[pyfunction]
+pub fn set_num_threads(threads: usize) {
+    GLOBAL_NUM_THREADS.store(threads, Ordering::Relaxed);
+}
+
+/// Get the active maximum number of worker threads or ambient hardware parallelism.
+#[pyfunction]
+pub fn get_num_threads() -> usize {
+    let g = GLOBAL_NUM_THREADS.load(Ordering::Relaxed);
+    if g > 0 {
+        g
+    } else {
+        mopac_core::threading::current_thread_count()
+    }
+}
 
 /// Resolve model instance by string identifier.
 fn get_model(method: &str) -> PyResult<Box<dyn ParameterModel>> {
@@ -1224,6 +1258,7 @@ pub fn transition_state(
     project_external = true,
     use_nddo = false,
     custom_masses = None,
+    n_threads = None,
 ))]
 pub fn frequencies(
     py: Python<'_>,
@@ -1237,6 +1272,7 @@ pub fn frequencies(
     project_external: Option<bool>,
     use_nddo: Option<bool>,
     custom_masses: Option<Vec<f64>>,
+    n_threads: Option<usize>,
 ) -> PyResult<VibrationalResultPy> {
     let method_str = method.unwrap_or("PM6");
     let model = get_model(method_str)?;
@@ -1295,6 +1331,7 @@ pub fn frequencies(
         pressure_atm: pressure_atm.unwrap_or(1.0),
         rotational_symmetry_number: rotational_symmetry_number.unwrap_or(1.0),
         custom_masses,
+        n_threads: resolve_num_threads(n_threads),
     };
 
     let res = py.allow_threads(|| {
@@ -1369,14 +1406,17 @@ pub fn frequencies(
     coordinates,
     method = "PM6",
     net_charge = 0.0,
-    points_per_shell = 64
+    points_per_shell = 64,
+    n_threads = None,
 ))]
 pub fn esp_charges(
+    py: Python<'_>,
     atomic_numbers: Vec<u8>,
     coordinates: Vec<[f64; 3]>,
     method: Option<&str>,
     net_charge: Option<f64>,
     points_per_shell: Option<usize>,
+    n_threads: Option<usize>,
 ) -> PyResult<EspResultPy> {
     let method_str = method.unwrap_or("PM6");
     let model = get_model(method_str)?;
@@ -1396,27 +1436,27 @@ pub fn esp_charges(
     }
 
     let batch = MolecularBatch::new_for_model(atomic_numbers, &coordinates, model.as_ref());
-    let mut ws = ScfWorkspace::allocate(batch.norbs);
-    let scf_opts = ScfOptions::default();
-
-    let mut scf_res = run_rhf_scf_with_options(&batch, model.as_ref(), &mut ws, &scf_opts);
-    if !scf_res.converged {
-        scf_res = mopac_core::scf::scf_loop::run_rhf_scf_adaptive_with_nddo(&batch, model.as_ref(), &mut ws, 60, 1e-5, 1e-4, true);
-    }
-    if !scf_res.converged {
-        return Err(PyValueError::new_err(
-            "Base SCF failed to converge for ESP calculation",
-        ));
-    }
-
     let opts = EspOptions {
         shell_multipliers: vec![1.4, 1.6, 1.8, 2.0],
         points_per_shell: points_per_shell.unwrap_or(64),
         net_charge: net_charge.unwrap_or(0.0),
+        n_threads: resolve_num_threads(n_threads),
     };
 
-    let res = compute_esp_charges(&batch, model.as_ref(), &ws.density, &opts)
-        .map_err(PyValueError::new_err)?;
+    let res = py.allow_threads(|| -> Result<mopac_core::properties::esp::EspResult, String> {
+        let mut ws = ScfWorkspace::allocate(batch.norbs);
+        let scf_opts = ScfOptions::default();
+
+        let mut scf_res = run_rhf_scf_with_options(&batch, model.as_ref(), &mut ws, &scf_opts);
+        if !scf_res.converged {
+            scf_res = mopac_core::scf::scf_loop::run_rhf_scf_adaptive_with_nddo(&batch, model.as_ref(), &mut ws, 60, 1e-5, 1e-4, true);
+        }
+        if !scf_res.converged {
+            return Err("Base SCF failed to converge for ESP calculation".to_string());
+        }
+
+        compute_esp_charges(&batch, model.as_ref(), &ws.density, &opts)
+    }).map_err(PyValueError::new_err)?;
 
     Ok(EspResultPy {
         charges: res.charges,
@@ -2186,7 +2226,7 @@ impl MopacCalculator {
     }
 
     /// Compute harmonic vibrational frequencies, normal modes, and thermodynamics.
-    #[pyo3(signature = (atomic_numbers, coordinates, temperature_k = 298.15, pressure_atm = 1.0, rotational_symmetry_number = 1.0, custom_masses = None))]
+    #[pyo3(signature = (atomic_numbers, coordinates, temperature_k = 298.15, pressure_atm = 1.0, rotational_symmetry_number = 1.0, custom_masses = None, n_threads = None))]
     fn frequencies(
         &self,
         py: Python<'_>,
@@ -2196,6 +2236,7 @@ impl MopacCalculator {
         pressure_atm: Option<f64>,
         rotational_symmetry_number: Option<f64>,
         custom_masses: Option<Vec<f64>>,
+        n_threads: Option<usize>,
     ) -> PyResult<VibrationalResultPy> {
         frequencies(
             py,
@@ -2209,6 +2250,7 @@ impl MopacCalculator {
             Some(true),
             Some(self.use_nddo),
             custom_masses,
+            n_threads,
         )
     }
 
@@ -2952,7 +2994,7 @@ pub fn export_trajectory_xyz(
 
 /// Generate a volumetric Gaussian Cube (.cube) string for a Molecular Orbital (HOMO, LUMO, etc.).
 #[pyfunction]
-#[pyo3(signature = (atomic_numbers, coordinates, method="PM6", orbital_index=None, padding_angstrom=3.5, resolution_angstrom=0.25))]
+#[pyo3(signature = (atomic_numbers, coordinates, method="PM6", orbital_index=None, padding_angstrom=3.5, resolution_angstrom=0.25, n_threads=None))]
 pub fn generate_orbital_cube(
     py: Python<'_>,
     atomic_numbers: Vec<u8>,
@@ -2961,6 +3003,7 @@ pub fn generate_orbital_cube(
     orbital_index: Option<usize>,
     padding_angstrom: f64,
     resolution_angstrom: f64,
+    n_threads: Option<usize>,
 ) -> PyResult<String> {
     let natoms = atomic_numbers.len();
     if coordinates.len() != natoms {
@@ -3012,6 +3055,7 @@ pub fn generate_orbital_cube(
         let config = mopac_core::export::cube::CubeGridConfig {
             padding_angstrom,
             resolution_angstrom,
+            n_threads: resolve_num_threads(n_threads),
         };
         Ok(mopac_core::export::cube::generate_molecular_orbital_cube(
             &batch,
@@ -3028,7 +3072,7 @@ pub fn generate_orbital_cube(
 
 /// Generate a volumetric Gaussian Cube (.cube) string for total electron density rho(r).
 #[pyfunction]
-#[pyo3(signature = (atomic_numbers, coordinates, method="PM6", padding_angstrom=3.5, resolution_angstrom=0.25))]
+#[pyo3(signature = (atomic_numbers, coordinates, method="PM6", padding_angstrom=3.5, resolution_angstrom=0.25, n_threads=None))]
 pub fn generate_density_cube(
     py: Python<'_>,
     atomic_numbers: Vec<u8>,
@@ -3036,6 +3080,7 @@ pub fn generate_density_cube(
     method: &str,
     padding_angstrom: f64,
     resolution_angstrom: f64,
+    n_threads: Option<usize>,
 ) -> PyResult<String> {
     let natoms = atomic_numbers.len();
     if coordinates.len() != natoms {
@@ -3071,6 +3116,7 @@ pub fn generate_density_cube(
         let config = mopac_core::export::cube::CubeGridConfig {
             padding_angstrom,
             resolution_angstrom,
+            n_threads: resolve_num_threads(n_threads),
         };
         Ok(mopac_core::export::cube::generate_density_cube(
             &batch,
@@ -3202,6 +3248,8 @@ fn mopac_py(m: &Bound<'_, PyModule>) -> PyResult<()> {
     m.add_function(wrap_pyfunction!(generate_density_cube, m)?)?;
     m.add_class::<BondOrderPyResult>()?;
     m.add_function(wrap_pyfunction!(bond_orders, m)?)?;
+    m.add_function(wrap_pyfunction!(set_num_threads, m)?)?;
+    m.add_function(wrap_pyfunction!(get_num_threads, m)?)?;
 
     let py = m.py();
     let py_code = r#"

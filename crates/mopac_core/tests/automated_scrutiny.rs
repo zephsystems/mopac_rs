@@ -1821,6 +1821,7 @@ fn test_scrutiny_harmonic_vibrational_frequencies_and_thermodynamics() {
         pressure_atm: 1.0,
         rotational_symmetry_number: 2.0, // C2v for H2O
         custom_masses: None,
+        ..Default::default()
     };
 
     let res = compute_hessian_and_frequencies(&mut batch, &am1, &mut ws, &scf_opts, &hess_opts);

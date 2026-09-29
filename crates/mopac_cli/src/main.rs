@@ -1377,6 +1377,7 @@ fn main() -> Result<(), Box<dyn std::error::Error>> {
             pressure_atm: 1.0,
             rotational_symmetry_number: 1.0,
             custom_masses: None,
+            n_threads: cli.threads,
         };
         let h_res = compute_hessian_and_frequencies(
             &mut batch,

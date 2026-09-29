@@ -10,6 +10,7 @@ use crate::integrals::multipoles::DerivedMultipoleParams;
 use crate::parameters::ParameterModel;
 use crate::properties::dipole::E_ANGSTROM_TO_DEBYE;
 use crate::types::{AlignedMatrix, MolecularBatch};
+use rayon::prelude::*;
 use std::f64::consts::PI;
 
 /// Conversion factor from Angstroms to Bohr (atomic units of length).
@@ -60,6 +61,8 @@ pub struct EspOptions {
     pub points_per_shell: usize,
     /// Total molecular net charge constraint (default: 0.0 for neutral molecules)
     pub net_charge: f64,
+    /// Number of parallel worker threads. None = global pool, Some(1) = serial fallback, Some(k) = bounded to k threads.
+    pub n_threads: Option<usize>,
 }
 
 impl Default for EspOptions {
@@ -68,6 +71,7 @@ impl Default for EspOptions {
             shell_multipliers: vec![1.4, 1.6, 1.8, 2.0],
             points_per_shell: 64,
             net_charge: 0.0,
+            n_threads: None,
         }
     }
 }
@@ -266,36 +270,41 @@ pub fn compute_esp_charges(
         hyb_dipoles.push(d_vec);
     }
 
-    // 3. Compute quantum electrostatic potential V(r_k) at each grid point
-    let mut v_quantum = Vec::with_capacity(m_grid);
-    let mut inv_dist = vec![vec![0.0; natoms]; m_grid];
+    // 3. Compute quantum electrostatic potential V(r_k) at each grid point (parallelized and bounded)
+    let (v_quantum, inv_dist): (Vec<f64>, Vec<Vec<f64>>) =
+        crate::threading::run_with_thread_pool(opts.n_threads, || {
+            grid_points
+                .par_iter()
+                .map(|r_k| {
+                    let mut v_k = 0.0;
+                    let mut inv_d_k = vec![0.0; natoms];
+                    for a in 0..natoms {
+                        let dx = r_k[0] - batch.x[a];
+                        let dy = r_k[1] - batch.y[a];
+                        let dz = r_k[2] - batch.z[a];
+                        let dist_ang = (dx * dx + dy * dy + dz * dz).sqrt();
+                        let dist_bohr = dist_ang * ANGSTROM_TO_BOHR;
+                        let inv_r_bohr = 1.0 / dist_bohr;
+                        inv_d_k[a] = inv_r_bohr;
 
-    for (k, r_k) in grid_points.iter().enumerate() {
-        let mut v_k = 0.0;
-        for a in 0..natoms {
-            let dx = r_k[0] - batch.x[a];
-            let dy = r_k[1] - batch.y[a];
-            let dz = r_k[2] - batch.z[a];
-            let dist_ang = (dx * dx + dy * dy + dz * dz).sqrt();
-            let dist_bohr = dist_ang * ANGSTROM_TO_BOHR;
-            let inv_r_bohr = 1.0 / dist_bohr;
-            inv_dist[k][a] = inv_r_bohr;
+                        // Monopole potential (Core - Valence)
+                        let net_atom_charge = core_charges[a] - elec_pops[a];
+                        v_k += net_atom_charge * inv_r_bohr;
 
-            // Monopole potential (Core - Valence)
-            let net_atom_charge = core_charges[a] - elec_pops[a];
-            v_k += net_atom_charge * inv_r_bohr;
-
-            // Hybridization dipole potential: (d . r) / r^3
-            let d_vec = hyb_dipoles[a];
-            let dx_bohr = dx * ANGSTROM_TO_BOHR;
-            let dy_bohr = dy * ANGSTROM_TO_BOHR;
-            let dz_bohr = dz * ANGSTROM_TO_BOHR;
-            let dot_product_bohr = d_vec[0] * dx_bohr + d_vec[1] * dy_bohr + d_vec[2] * dz_bohr;
-            let inv_r3_bohr = inv_r_bohr.powi(3);
-            v_k -= dot_product_bohr * inv_r3_bohr;
-        }
-        v_quantum.push(v_k);
-    }
+                        // Hybridization dipole potential: (d . r) / r^3
+                        let d_vec = hyb_dipoles[a];
+                        let dx_bohr = dx * ANGSTROM_TO_BOHR;
+                        let dy_bohr = dy * ANGSTROM_TO_BOHR;
+                        let dz_bohr = dz * ANGSTROM_TO_BOHR;
+                        let dot_product_bohr =
+                            d_vec[0] * dx_bohr + d_vec[1] * dy_bohr + d_vec[2] * dz_bohr;
+                        let inv_r3_bohr = inv_r_bohr.powi(3);
+                        v_k -= dot_product_bohr * inv_r3_bohr;
+                    }
+                    (v_k, inv_d_k)
+                })
+                .unzip()
+        });
 
     // 4. Build Lagrange-constrained least-squares system (natoms + 1) x (natoms + 1)
     // Minimizing sum_k (sum_A q_A / r_kA - V_k)^2 subject to sum_A q_A = Q_net
