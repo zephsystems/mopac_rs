@@ -44,7 +44,10 @@ fn element_symbol_to_z(symbol: &str) -> u8 {
 #[test]
 fn test_vulkan_gpu_t4_lysozyme_protein() {
     let manifest_dir = std::path::PathBuf::from(env!("CARGO_MANIFEST_DIR"));
-    let repo_root = manifest_dir.parent().and_then(|p| p.parent()).unwrap_or(&manifest_dir);
+    let repo_root = manifest_dir
+        .parent()
+        .and_then(|p| p.parent())
+        .unwrap_or(&manifest_dir);
     let pdb_path = repo_root.join("benchmarks/data/2lzm.pdb");
     let file = File::open(&pdb_path).expect("Failed to open 2LZM PDB file");
     let reader = BufReader::new(file);
@@ -101,7 +104,7 @@ fn test_vulkan_gpu_t4_lysozyme_protein() {
     let coords: Vec<[f64; 3]> = pdb_atoms.iter().map(|a| [a.x, a.y, a.z]).collect();
 
     let batch = MolecularBatch::new(atomic_numbers.clone(), &coords);
-    let pm6 = Pm6Model::default();
+    let pm6 = Pm6Model;
 
     // 1. Initialize Vulkan Context
     let ctx = match VulkanContext::new() {
@@ -113,9 +116,7 @@ fn test_vulkan_gpu_t4_lysozyme_protein() {
 
     println!(
         "Vulkan GPU Device: {} (Discrete: {}, Vulkan API: {:?})",
-        ctx.device_info.device_name,
-        ctx.device_info.is_discrete,
-        ctx.device_info.api_version
+        ctx.device_info.device_name, ctx.device_info.is_discrete, ctx.device_info.api_version
     );
 
     let calc = GpuCoulombCalculator::new(Arc::clone(&ctx))
@@ -129,8 +130,16 @@ fn test_vulkan_gpu_t4_lysozyme_protein() {
     let t_gpu = t0_gpu.elapsed();
 
     println!("\n[Vulkan GPU Execution]");
-    println!("  Total matrix elements evaluated: {} x {} = {}", natoms, natoms, natoms * natoms);
-    println!("  GPU Wall Time (Dispatch + VRAM DMA transfer): {:.3} ms", t_gpu.as_secs_f64() * 1000.0);
+    println!(
+        "  Total matrix elements evaluated: {} x {} = {}",
+        natoms,
+        natoms,
+        natoms * natoms
+    );
+    println!(
+        "  GPU Wall Time (Dispatch + VRAM DMA transfer): {:.3} ms",
+        t_gpu.as_secs_f64() * 1000.0
+    );
 
     // 3. Compute CPU Reference for comparison
     let t0_cpu = Instant::now();
@@ -145,14 +154,18 @@ fn test_vulkan_gpu_t4_lysozyme_protein() {
             let dy = batch.y[i] - batch.y[j];
             let dz = batch.z[i] - batch.z[j];
             let r = (dx * dx + dy * dy + dz * dz).sqrt();
-            let val = mopac_core::integrals::two_electron::dewar_klopman_monopole(r, pa.gss, pb.gss);
+            let val =
+                mopac_core::integrals::two_electron::dewar_klopman_monopole(r, pa.gss, pb.gss);
             cpu_matrix.set(i, j, val);
         }
     }
     let t_cpu = t0_cpu.elapsed();
 
     println!("\n[CPU Reference Execution]");
-    println!("  CPU Wall Time (Single-core AVX): {:.3} ms", t_cpu.as_secs_f64() * 1000.0);
+    println!(
+        "  CPU Wall Time (Single-core AVX): {:.3} ms",
+        t_cpu.as_secs_f64() * 1000.0
+    );
     let speedup = t_cpu.as_secs_f64() / t_gpu.as_secs_f64();
     println!("  Hardware Acceleration Speedup: {:.2}x", speedup);
 
@@ -167,7 +180,10 @@ fn test_vulkan_gpu_t4_lysozyme_protein() {
         }
     }
     println!("  Maximum Float64 difference GPU vs CPU: {:e} eV", max_diff);
-    assert!(max_diff < 1e-11, "Vulkan GPU Float64 mismatch exceeded threshold");
+    assert!(
+        max_diff < 1e-11,
+        "Vulkan GPU Float64 mismatch exceeded threshold"
+    );
 
     // Total classical Coulomb electrostatic energy of the protein fold
     let mut total_coulomb_ev = 0.0;
@@ -176,8 +192,11 @@ fn test_vulkan_gpu_t4_lysozyme_protein() {
             total_coulomb_ev += gpu_matrix.get(i, j);
         }
     }
-    println!("  Total Protein Fold Coulomb Repulsion: {:.2} eV ({:.2} kcal/mol)",
-        total_coulomb_ev, total_coulomb_ev * EV_TO_KCAL_MOL);
+    println!(
+        "  Total Protein Fold Coulomb Repulsion: {:.2} eV ({:.2} kcal/mol)",
+        total_coulomb_ev,
+        total_coulomb_ev * EV_TO_KCAL_MOL
+    );
 
     // 4. Generate Molstar-Compatible Files (PDB with Quantum Charges in B-factor column & PDBQT)
     let out_pdb_path = repo_root.join("benchmarks/data/2lzm_mopac_charges.pdb");
@@ -187,8 +206,16 @@ fn test_vulkan_gpu_t4_lysozyme_protein() {
     let mut pdbqt_out = File::create(&out_pdbqt_path).expect("Failed to create output PDBQT");
 
     writeln!(pdb_out, "REMARK   MOPAC_RS QUANTUM ANNOTATED PDB FILE").unwrap();
-    writeln!(pdb_out, "REMARK   B-FACTOR COLUMN CONTAINS QUANTUM COULOMB POTENTIAL (eV)").unwrap();
-    writeln!(pdb_out, "REMARK   IN MOLSTAR: SELECT COLOR -> UNCERTAINTY/B-FACTOR TO RENDER").unwrap();
+    writeln!(
+        pdb_out,
+        "REMARK   B-FACTOR COLUMN CONTAINS QUANTUM COULOMB POTENTIAL (eV)"
+    )
+    .unwrap();
+    writeln!(
+        pdb_out,
+        "REMARK   IN MOLSTAR: SELECT COLOR -> UNCERTAINTY/B-FACTOR TO RENDER"
+    )
+    .unwrap();
 
     // Compute local Coulomb potential per atom: V_i = sum_j (gamma_ij * Z_eff_j)
     let mut local_potentials = Vec::with_capacity(natoms);
@@ -204,10 +231,19 @@ fn test_vulkan_gpu_t4_lysozyme_protein() {
         local_potentials.push(pot);
     }
 
-    let min_pot = local_potentials.iter().cloned().fold(f64::INFINITY, f64::min);
-    let max_pot = local_potentials.iter().cloned().fold(f64::NEG_INFINITY, f64::max);
+    let min_pot = local_potentials
+        .iter()
+        .cloned()
+        .fold(f64::INFINITY, f64::min);
+    let max_pot = local_potentials
+        .iter()
+        .cloned()
+        .fold(f64::NEG_INFINITY, f64::max);
     let mean_pot: f64 = local_potentials.iter().sum::<f64>() / natoms as f64;
-    println!("  Local Coulomb Potential Range: [{:.2}, {:.2}] eV (Mean: {:.2} eV)", min_pot, max_pot, mean_pot);
+    println!(
+        "  Local Coulomb Potential Range: [{:.2}, {:.2}] eV (Mean: {:.2} eV)",
+        min_pot, max_pot, mean_pot
+    );
 
     for (i, atom) in pdb_atoms.iter().enumerate() {
         let pot = local_potentials[i];
@@ -233,12 +269,19 @@ fn test_vulkan_gpu_t4_lysozyme_protein() {
             1.00,
             b_factor_norm,
             mopac_core::export::sdf::z_to_symbol(atom.z_atomic)
-        ).unwrap();
+        )
+        .unwrap();
 
         // Standard PDBQT format line (Autodock charge in cols 71-76, atom type in 78-79)
         let autodock_type = match atom.z_atomic {
             1 => "HD",
-            6 => if atom.atom_name.starts_with("C") { "C" } else { "A" },
+            6 => {
+                if atom.atom_name.starts_with("C") {
+                    "C"
+                } else {
+                    "A"
+                }
+            }
             7 => "NA",
             8 => "OA",
             16 => "SA",
@@ -260,14 +303,21 @@ fn test_vulkan_gpu_t4_lysozyme_protein() {
             20.00,
             partial_charge,
             autodock_type
-        ).unwrap();
+        )
+        .unwrap();
     }
 
     writeln!(pdb_out, "END").unwrap();
     writeln!(pdbqt_out, "END").unwrap();
 
     println!("\n[Molstar Visualization Files Successfully Generated]");
-    println!("  PDB with Quantum Potential in B-factor: {}", out_pdb_path.display());
-    println!("  PDBQT with AutoDock Partial Charges:     {}", out_pdbqt_path.display());
+    println!(
+        "  PDB with Quantum Potential in B-factor: {}",
+        out_pdb_path.display()
+    );
+    println!(
+        "  PDBQT with AutoDock Partial Charges:     {}",
+        out_pdbqt_path.display()
+    );
     println!("{}", "=".repeat(80));
 }

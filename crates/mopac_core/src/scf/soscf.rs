@@ -18,11 +18,11 @@
 //!
 //! Strictly guaranteed **zero heap allocations** in iterative cycles.
 
+use crate::fock::build_fock;
+use crate::parameters::ParameterModel;
 use crate::scf::density::{compute_density_matrix, compute_electronic_energy, max_density_diff};
 use crate::scf::eigensolver::diagonalize_symmetric;
 use crate::types::{AlignedMatrix, AlignedVec64, MolecularBatch, ScfWorkspace};
-use crate::parameters::ParameterModel;
-use crate::fock::build_fock;
 
 /// Summary result of an SOSCF step.
 #[derive(Debug, Clone, Copy, PartialEq)]
@@ -100,8 +100,7 @@ pub fn soscf_step(
         let f_row = fock.row(i);
         let t_row = ws.tmp1.row_mut(i);
         t_row.fill(0.0);
-        for k in 0..norbs {
-            let f_ik = f_row[k];
+        for (k, &f_ik) in f_row.iter().enumerate().take(norbs) {
             let c_row = eigenvectors.row(k);
             for j in 0..norbs {
                 t_row[j] += f_ik * c_row[j];
@@ -302,7 +301,10 @@ pub fn run_rhf_soscf(
         let delta_e = (e_total - prev_energy).abs();
         let delta_p = max_density_diff(&ws.tmp1, &ws.density);
 
-        if iter > 1 && delta_e < energy_tol_ev && (delta_p < density_tol || step_res.max_orbital_gradient < 1e-4) {
+        if iter > 1
+            && delta_e < energy_tol_ev
+            && (delta_p < density_tol || step_res.max_orbital_gradient < 1e-4)
+        {
             converged = true;
             ws.density.data.copy_from_slice(&ws.tmp1.data);
             break;
@@ -313,7 +315,11 @@ pub fn run_rhf_soscf(
     }
 
     let homo = ws.eigenvalues[nocc - 1];
-    let lumo = if nocc < norbs { ws.eigenvalues[nocc] } else { 0.0 };
+    let lumo = if nocc < norbs {
+        ws.eigenvalues[nocc]
+    } else {
+        0.0
+    };
     let e_elec_final = compute_electronic_energy(&ws.density, &ws.h_core, &ws.fock);
 
     crate::scf::scf_loop::ScfResult {

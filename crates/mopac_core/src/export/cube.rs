@@ -96,7 +96,9 @@ pub fn evaluate_molecular_orbital_at_point(
 
     for a in 0..batch.natoms {
         let z = batch.atomic_numbers[a];
-        let p = model.get_element(z).expect("Element params missing in model");
+        let p = model
+            .get_element(z)
+            .expect("Element params missing in model");
         let ax = batch.x[a] * ANGSTROM_TO_BOHR;
         let ay = batch.y[a] * ANGSTROM_TO_BOHR;
         let az = batch.z[a] * ANGSTROM_TO_BOHR;
@@ -146,7 +148,9 @@ pub fn evaluate_density_at_point(
 
     for a in 0..batch.natoms {
         let z = batch.atomic_numbers[a];
-        let p = model.get_element(z).expect("Element params missing in model");
+        let p = model
+            .get_element(z)
+            .expect("Element params missing in model");
         let ax = batch.x[a] * ANGSTROM_TO_BOHR;
         let ay = batch.y[a] * ANGSTROM_TO_BOHR;
         let az = batch.z[a] * ANGSTROM_TO_BOHR;
@@ -172,11 +176,9 @@ pub fn evaluate_density_at_point(
     }
 
     let mut rho = 0.0;
-    for mu in 0..batch.norbs {
-        let v_mu = basis_vals[mu];
+    for (mu, &v_mu) in basis_vals.iter().enumerate().take(batch.norbs) {
         if v_mu.abs() > 1e-12 {
-            for nu in 0..batch.norbs {
-                let v_nu = basis_vals[nu];
+            for (nu, &v_nu) in basis_vals.iter().enumerate().take(batch.norbs) {
                 if v_nu.abs() > 1e-12 {
                     rho += density_matrix.get(mu, nu) * v_mu * v_nu;
                 }
@@ -313,13 +315,24 @@ pub fn generate_molecular_orbital_cube(
         origin_bohr[2]
     ));
 
-    out.push_str(&format!("{:5} {:12.6} {:12.6} {:12.6}\n", nx, step_bohr, 0.0, 0.0));
-    out.push_str(&format!("{:5} {:12.6} {:12.6} {:12.6}\n", ny, 0.0, step_bohr, 0.0));
-    out.push_str(&format!("{:5} {:12.6} {:12.6} {:12.6}\n", nz, 0.0, 0.0, step_bohr));
+    out.push_str(&format!(
+        "{:5} {:12.6} {:12.6} {:12.6}\n",
+        nx, step_bohr, 0.0, 0.0
+    ));
+    out.push_str(&format!(
+        "{:5} {:12.6} {:12.6} {:12.6}\n",
+        ny, 0.0, step_bohr, 0.0
+    ));
+    out.push_str(&format!(
+        "{:5} {:12.6} {:12.6} {:12.6}\n",
+        nz, 0.0, 0.0, step_bohr
+    ));
 
     for a in 0..batch.natoms {
         let z = batch.atomic_numbers[a];
-        let p = model.get_element(z).expect("Element params missing in model");
+        let p = model
+            .get_element(z)
+            .expect("Element params missing in model");
         let ax = batch.x[a] * ANGSTROM_TO_BOHR;
         let ay = batch.y[a] * ANGSTROM_TO_BOHR;
         let az = batch.z[a] * ANGSTROM_TO_BOHR;
@@ -334,7 +347,9 @@ pub fn generate_molecular_orbital_cube(
     let sto_atoms: Vec<PrecomputedStoAtom> = (0..batch.natoms)
         .map(|a| {
             let z = batch.atomic_numbers[a];
-            let p = model.get_element(z).expect("Element params missing in model");
+            let p = model
+                .get_element(z)
+                .expect("Element params missing in model");
             let ax = batch.x[a] * ANGSTROM_TO_BOHR;
             let ay = batch.y[a] * ANGSTROM_TO_BOHR;
             let az = batch.z[a] * ANGSTROM_TO_BOHR;
@@ -401,10 +416,10 @@ pub fn generate_molecular_orbital_cube(
                                     }
                                 }
                                 BasisType::SP | BasisType::SPD => {
-                                    for k in 0..4 {
-                                        if sto[k].abs() > 1e-12 {
+                                    for (k, &v) in sto.iter().enumerate().take(4) {
+                                        if v.abs() > 1e-12 {
                                             active_indices.push(atom.offset + k);
-                                            active_vals.push(sto[k]);
+                                            active_vals.push(v);
                                         }
                                     }
                                 }
@@ -432,7 +447,7 @@ pub fn generate_molecular_orbital_cube(
             out.push('\n');
         }
     }
-    if total_voxels % 6 != 0 {
+    if !total_voxels.is_multiple_of(6) {
         out.push('\n');
     }
 
@@ -493,13 +508,24 @@ pub fn generate_density_cube(
         batch.natoms, origin_bohr[0], origin_bohr[1], origin_bohr[2]
     ));
 
-    out.push_str(&format!("{:5} {:12.6} {:12.6} {:12.6}\n", nx, step_bohr, 0.0, 0.0));
-    out.push_str(&format!("{:5} {:12.6} {:12.6} {:12.6}\n", ny, 0.0, step_bohr, 0.0));
-    out.push_str(&format!("{:5} {:12.6} {:12.6} {:12.6}\n", nz, 0.0, 0.0, step_bohr));
+    out.push_str(&format!(
+        "{:5} {:12.6} {:12.6} {:12.6}\n",
+        nx, step_bohr, 0.0, 0.0
+    ));
+    out.push_str(&format!(
+        "{:5} {:12.6} {:12.6} {:12.6}\n",
+        ny, 0.0, step_bohr, 0.0
+    ));
+    out.push_str(&format!(
+        "{:5} {:12.6} {:12.6} {:12.6}\n",
+        nz, 0.0, 0.0, step_bohr
+    ));
 
     for a in 0..batch.natoms {
         let z = batch.atomic_numbers[a];
-        let p = model.get_element(z).expect("Element params missing in model");
+        let p = model
+            .get_element(z)
+            .expect("Element params missing in model");
         let ax = batch.x[a] * ANGSTROM_TO_BOHR;
         let ay = batch.y[a] * ANGSTROM_TO_BOHR;
         let az = batch.z[a] * ANGSTROM_TO_BOHR;
@@ -512,7 +538,9 @@ pub fn generate_density_cube(
     let sto_atoms: Vec<PrecomputedStoAtom> = (0..batch.natoms)
         .map(|a| {
             let z = batch.atomic_numbers[a];
-            let p = model.get_element(z).expect("Element params missing in model");
+            let p = model
+                .get_element(z)
+                .expect("Element params missing in model");
             let ax = batch.x[a] * ANGSTROM_TO_BOHR;
             let ay = batch.y[a] * ANGSTROM_TO_BOHR;
             let az = batch.z[a] * ANGSTROM_TO_BOHR;
@@ -579,10 +607,10 @@ pub fn generate_density_cube(
                                     }
                                 }
                                 BasisType::SP | BasisType::SPD => {
-                                    for k in 0..4 {
-                                        if sto[k].abs() > 1e-12 {
+                                    for (k, &v) in sto.iter().enumerate().take(4) {
+                                        if v.abs() > 1e-12 {
                                             active_indices.push(atom.offset + k);
-                                            active_vals.push(sto[k]);
+                                            active_vals.push(v);
                                         }
                                     }
                                 }
@@ -616,10 +644,9 @@ pub fn generate_density_cube(
             out.push('\n');
         }
     }
-    if total_voxels % 6 != 0 {
+    if !total_voxels.is_multiple_of(6) {
         out.push('\n');
     }
 
     out
 }
-

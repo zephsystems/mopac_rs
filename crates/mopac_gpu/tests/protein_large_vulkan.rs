@@ -43,7 +43,10 @@ fn element_symbol_to_z(symbol: &str) -> u8 {
 #[test]
 fn test_vulkan_gpu_large_protein_human_serum_albumin() {
     let manifest_dir = std::path::PathBuf::from(env!("CARGO_MANIFEST_DIR"));
-    let repo_root = manifest_dir.parent().and_then(|p| p.parent()).unwrap_or(&manifest_dir);
+    let repo_root = manifest_dir
+        .parent()
+        .and_then(|p| p.parent())
+        .unwrap_or(&manifest_dir);
     let pdb_path = repo_root.join("benchmarks/data/1ao6.pdb");
     let file = File::open(&pdb_path).expect("Failed to open 1AO6 PDB file");
     let reader = BufReader::new(file);
@@ -92,14 +95,17 @@ fn test_vulkan_gpu_large_protein_human_serum_albumin() {
     println!("{}", "=".repeat(80));
     println!("MOPAC_GPU VULKAN BENCHMARK: LARGE PROTEIN (HUMAN SERUM ALBUMIN, PDB: 1AO6)");
     println!("{}", "=".repeat(80));
-    println!("Loaded {} atoms from 1,156 residues (Chains A and B).", natoms);
+    println!(
+        "Loaded {} atoms from 1,156 residues (Chains A and B).",
+        natoms
+    );
     assert_eq!(natoms, 9198, "Expected 9,198 heavy atoms in 1AO6");
 
     let atomic_numbers: Vec<u8> = pdb_atoms.iter().map(|a| a.z_atomic).collect();
     let coords: Vec<[f64; 3]> = pdb_atoms.iter().map(|a| [a.x, a.y, a.z]).collect();
 
     let batch = MolecularBatch::new(atomic_numbers.clone(), &coords);
-    let pm6 = Pm6Model::default();
+    let pm6 = Pm6Model;
 
     // 1. Initialize Vulkan Context
     let ctx = match VulkanContext::new() {
@@ -111,9 +117,7 @@ fn test_vulkan_gpu_large_protein_human_serum_albumin() {
 
     println!(
         "Vulkan GPU Device: {} (Discrete: {}, Vulkan API: {:?})",
-        ctx.device_info.device_name,
-        ctx.device_info.is_discrete,
-        ctx.device_info.api_version
+        ctx.device_info.device_name, ctx.device_info.is_discrete, ctx.device_info.api_version
     );
 
     let calc = GpuCoulombCalculator::new(Arc::clone(&ctx))
@@ -125,7 +129,11 @@ fn test_vulkan_gpu_large_protein_human_serum_albumin() {
     println!("\n[Problem Scale]");
     println!("  Atoms (N):                   {}", natoms);
     println!("  Coulomb Matrix Dimensions:    {} x {}", natoms, natoms);
-    println!("  Total Integrals Evaluated:   {} ({:.2} Million)", total_elements, total_elements as f64 / 1e6);
+    println!(
+        "  Total Integrals Evaluated:   {} ({:.2} Million)",
+        total_elements,
+        total_elements as f64 / 1e6
+    );
     println!("  VRAM Buffer Allocated:       {:.2} MB (Float64)", vram_mb);
 
     // 2. Dispatch on GPU (NVIDIA RTX 4050)
@@ -136,10 +144,16 @@ fn test_vulkan_gpu_large_protein_human_serum_albumin() {
     let t_gpu = t0_gpu.elapsed();
 
     println!("\n[Vulkan GPU Execution]");
-    println!("  GPU Wall Time (Dispatch + DMA Transfer): {:.3} ms ({:.2} s)",
-        t_gpu.as_secs_f64() * 1000.0, t_gpu.as_secs_f64());
+    println!(
+        "  GPU Wall Time (Dispatch + DMA Transfer): {:.3} ms ({:.2} s)",
+        t_gpu.as_secs_f64() * 1000.0,
+        t_gpu.as_secs_f64()
+    );
     let gflops = (total_elements as f64 * 25.0) / (t_gpu.as_secs_f64() * 1e9); // ~25 FLOPs per integral
-    println!("  Effective GPU Compute Throughput:        {:.2} GFLOPs", gflops);
+    println!(
+        "  Effective GPU Compute Throughput:        {:.2} GFLOPs",
+        gflops
+    );
 
     // 3. Compute CPU Reference Sample (1,000,000 interactions for exact speedup & precision audit)
     let sample_n = 1000;
@@ -155,7 +169,8 @@ fn test_vulkan_gpu_large_protein_human_serum_albumin() {
             let dy = batch.y[i] - batch.y[j];
             let dz = batch.z[i] - batch.z[j];
             let r = (dx * dx + dy * dy + dz * dz).sqrt();
-            let cpu_val = mopac_core::integrals::two_electron::dewar_klopman_monopole(r, pa.gss, pb.gss);
+            let cpu_val =
+                mopac_core::integrals::two_electron::dewar_klopman_monopole(r, pa.gss, pb.gss);
             let gpu_val = gpu_matrix.get(i, j);
             let diff = (gpu_val - cpu_val).abs();
             if diff > max_diff {
@@ -164,15 +179,31 @@ fn test_vulkan_gpu_large_protein_human_serum_albumin() {
         }
     }
     let t_cpu_sample = t0_cpu.elapsed();
-    let cpu_projected_total_s = (t_cpu_sample.as_secs_f64() / (sample_n * sample_n) as f64) * total_elements as f64;
+    let cpu_projected_total_s =
+        (t_cpu_sample.as_secs_f64() / (sample_n * sample_n) as f64) * total_elements as f64;
     let speedup = cpu_projected_total_s / t_gpu.as_secs_f64();
 
     println!("\n[CPU Performance Comparison & Precision Audit]");
-    println!("  Sample Evaluated on CPU:                 {} x {} = 1.00 Million Integrals", sample_n, sample_n);
-    println!("  CPU Sample Time (Single-core AVX):       {:.3} ms", t_cpu_sample.as_secs_f64() * 1000.0);
-    println!("  Projected CPU Full Matrix Time:          {:.2} s", cpu_projected_total_s);
-    println!("  Hardware Acceleration Speedup:           {:.2}x faster on RTX 4050 GPU", speedup);
-    println!("  Maximum Float64 Difference (GPU vs CPU): {:e} eV", max_diff);
+    println!(
+        "  Sample Evaluated on CPU:                 {} x {} = 1.00 Million Integrals",
+        sample_n, sample_n
+    );
+    println!(
+        "  CPU Sample Time (Single-core AVX):       {:.3} ms",
+        t_cpu_sample.as_secs_f64() * 1000.0
+    );
+    println!(
+        "  Projected CPU Full Matrix Time:          {:.2} s",
+        cpu_projected_total_s
+    );
+    println!(
+        "  Hardware Acceleration Speedup:           {:.2}x faster on RTX 4050 GPU",
+        speedup
+    );
+    println!(
+        "  Maximum Float64 Difference (GPU vs CPU): {:e} eV",
+        max_diff
+    );
     assert!(max_diff < 1e-11, "Float64 discrepancy exceeded threshold");
 
     // Total classical Coulomb electrostatic energy of the albumin dimer fold
@@ -184,8 +215,11 @@ fn test_vulkan_gpu_large_protein_human_serum_albumin() {
         }
     }
     println!("\n[Biophysical Energetics]");
-    println!("  Total Albumin Electrostatic Repulsion:   {:.2} eV ({:.2} kcal/mol)",
-        total_coulomb_ev, total_coulomb_ev * EV_TO_KCAL_MOL);
+    println!(
+        "  Total Albumin Electrostatic Repulsion:   {:.2} eV ({:.2} kcal/mol)",
+        total_coulomb_ev,
+        total_coulomb_ev * EV_TO_KCAL_MOL
+    );
 
     // 4. Generate Molstar-Compatible Files (PDB with Quantum Potential in B-factor & PDBQT)
     let out_pdb_path = repo_root.join("benchmarks/data/1ao6_mopac_charges.pdb");
@@ -194,9 +228,21 @@ fn test_vulkan_gpu_large_protein_human_serum_albumin() {
     let mut pdb_out = File::create(&out_pdb_path).expect("Failed to create output PDB");
     let mut pdbqt_out = File::create(&out_pdbqt_path).expect("Failed to create output PDBQT");
 
-    writeln!(pdb_out, "REMARK   MOPAC_RS QUANTUM ANNOTATED PDB FILE: HUMAN SERUM ALBUMIN").unwrap();
-    writeln!(pdb_out, "REMARK   B-FACTOR COLUMN CONTAINS QUANTUM COULOMB POTENTIAL (eV)").unwrap();
-    writeln!(pdb_out, "REMARK   IN MOLSTAR: SELECT COLOR -> UNCERTAINTY/B-FACTOR TO RENDER").unwrap();
+    writeln!(
+        pdb_out,
+        "REMARK   MOPAC_RS QUANTUM ANNOTATED PDB FILE: HUMAN SERUM ALBUMIN"
+    )
+    .unwrap();
+    writeln!(
+        pdb_out,
+        "REMARK   B-FACTOR COLUMN CONTAINS QUANTUM COULOMB POTENTIAL (eV)"
+    )
+    .unwrap();
+    writeln!(
+        pdb_out,
+        "REMARK   IN MOLSTAR: SELECT COLOR -> UNCERTAINTY/B-FACTOR TO RENDER"
+    )
+    .unwrap();
 
     let mut local_potentials = Vec::with_capacity(natoms);
     for i in 0..natoms {
@@ -211,10 +257,19 @@ fn test_vulkan_gpu_large_protein_human_serum_albumin() {
         local_potentials.push(pot);
     }
 
-    let min_pot = local_potentials.iter().cloned().fold(f64::INFINITY, f64::min);
-    let max_pot = local_potentials.iter().cloned().fold(f64::NEG_INFINITY, f64::max);
+    let min_pot = local_potentials
+        .iter()
+        .cloned()
+        .fold(f64::INFINITY, f64::min);
+    let max_pot = local_potentials
+        .iter()
+        .cloned()
+        .fold(f64::NEG_INFINITY, f64::max);
     let mean_pot: f64 = local_potentials.iter().sum::<f64>() / natoms as f64;
-    println!("  Local Coulomb Potential Range: [{:.2}, {:.2}] eV (Mean: {:.2} eV)", min_pot, max_pot, mean_pot);
+    println!(
+        "  Local Coulomb Potential Range: [{:.2}, {:.2}] eV (Mean: {:.2} eV)",
+        min_pot, max_pot, mean_pot
+    );
 
     for (i, atom) in pdb_atoms.iter().enumerate() {
         let pot = local_potentials[i];
@@ -238,11 +293,18 @@ fn test_vulkan_gpu_large_protein_human_serum_albumin() {
             1.00,
             b_factor_norm,
             mopac_core::export::sdf::z_to_symbol(atom.z_atomic)
-        ).unwrap();
+        )
+        .unwrap();
 
         let autodock_type = match atom.z_atomic {
             1 => "HD",
-            6 => if atom.atom_name.starts_with("C") { "C" } else { "A" },
+            6 => {
+                if atom.atom_name.starts_with("C") {
+                    "C"
+                } else {
+                    "A"
+                }
+            }
             7 => "NA",
             8 => "OA",
             16 => "SA",
@@ -264,14 +326,21 @@ fn test_vulkan_gpu_large_protein_human_serum_albumin() {
             20.00,
             partial_charge,
             autodock_type
-        ).unwrap();
+        )
+        .unwrap();
     }
 
     writeln!(pdb_out, "END").unwrap();
     writeln!(pdbqt_out, "END").unwrap();
 
     println!("\n[Molstar Visualization Files Successfully Generated]");
-    println!("  PDB with Quantum Potential in B-factor: {}", out_pdb_path.display());
-    println!("  PDBQT with AutoDock Partial Charges:     {}", out_pdbqt_path.display());
+    println!(
+        "  PDB with Quantum Potential in B-factor: {}",
+        out_pdb_path.display()
+    );
+    println!(
+        "  PDBQT with AutoDock Partial Charges:     {}",
+        out_pdbqt_path.display()
+    );
     println!("{}", "=".repeat(80));
 }

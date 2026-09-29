@@ -28,19 +28,19 @@ fn test_adversarial_permutational_invariance_alanine() {
     // Alanine zwitterion / neutral model (13 atoms)
     let z_canonical = vec![6, 6, 8, 8, 7, 6, 1, 1, 1, 1, 1, 1, 1];
     let coords_canonical = vec![
-        [0.000,  0.000,  0.000], // C_alpha
-        [1.520,  0.000,  0.000], // C_carboxyl
-        [2.150,  1.080,  0.000], // O1
-        [2.100, -1.150,  0.000], // O2
-        [-0.550, 1.360,  0.000], // N_amino
-        [-0.550, -0.750, 1.250], // C_beta (methyl)
+        [0.000, 0.000, 0.000],    // C_alpha
+        [1.520, 0.000, 0.000],    // C_carboxyl
+        [2.150, 1.080, 0.000],    // O1
+        [2.100, -1.150, 0.000],   // O2
+        [-0.550, 1.360, 0.000],   // N_amino
+        [-0.550, -0.750, 1.250],  // C_beta (methyl)
         [-0.350, -0.550, -0.880], // H_alpha
-        [-0.200, 1.880,  0.810],  // H_N1
+        [-0.200, 1.880, 0.810],   // H_N1
         [-0.200, 1.880, -0.810],  // H_N2
         [-1.640, -0.750, 1.250],  // H_Me1
         [-0.180, -0.250, 2.150],  // H_Me2
         [-0.180, -1.780, 1.250],  // H_Me3
-        [3.050,  1.000,  0.000],  // H_O
+        [3.050, 1.000, 0.000],    // H_O
     ];
 
     // 1. Rigorous Overlap Reciprocity Invariant: S_{AB}(\vec{R}) = [S_{BA}(-\vec{R})]^T
@@ -48,22 +48,28 @@ fn test_adversarial_permutational_invariance_alanine() {
         let h_param = model.get_element(1).unwrap();
         let c_param = model.get_element(6).unwrap();
         let o_param = model.get_element(8).unwrap();
-        let dx = 0.5f64; let dy = 0.7f64; let dz = 0.9f64;
-        let r = (dx*dx + dy*dy + dz*dz).sqrt();
+        let dx = 0.5f64;
+        let dy = 0.7f64;
+        let dz = 0.9f64;
+        let r = (dx * dx + dy * dy + dz * dz).sqrt();
 
         // O - H reciprocity
         let mut s_oh = [[0.0f64; 9]; 9];
         let mut s_ho = [[0.0f64; 9]; 9];
         mopac_core::integrals::overlap::compute_diatomic_overlap_matrix_9x9(
-            8, 1, 4, 1, &o_param, &h_param, dx, dy, dz, r, &mut s_oh
+            8, 1, 4, 1, &o_param, &h_param, dx, dy, dz, r, &mut s_oh,
         );
         mopac_core::integrals::overlap::compute_diatomic_overlap_matrix_9x9(
-            1, 8, 1, 4, &h_param, &o_param, -dx, -dy, -dz, r, &mut s_ho
+            1, 8, 1, 4, &h_param, &o_param, -dx, -dy, -dz, r, &mut s_ho,
         );
         for i in 0..4 {
             for j in 0..1 {
                 let diff = (s_oh[i][j] - s_ho[j][i]).abs();
-                assert!(diff < 1e-12, "O-H overlap reciprocity violated: diff = {:e}", diff);
+                assert!(
+                    diff < 1e-12,
+                    "O-H overlap reciprocity violated: diff = {:e}",
+                    diff
+                );
             }
         }
 
@@ -71,15 +77,19 @@ fn test_adversarial_permutational_invariance_alanine() {
         let mut s_co = [[0.0f64; 9]; 9];
         let mut s_oc = [[0.0f64; 9]; 9];
         mopac_core::integrals::overlap::compute_diatomic_overlap_matrix_9x9(
-            6, 8, 4, 4, &c_param, &o_param, dx, dy, dz, r, &mut s_co
+            6, 8, 4, 4, &c_param, &o_param, dx, dy, dz, r, &mut s_co,
         );
         mopac_core::integrals::overlap::compute_diatomic_overlap_matrix_9x9(
-            8, 6, 4, 4, &o_param, &c_param, -dx, -dy, -dz, r, &mut s_oc
+            8, 6, 4, 4, &o_param, &c_param, -dx, -dy, -dz, r, &mut s_oc,
         );
         for i in 0..4 {
             for j in 0..4 {
                 let diff = (s_co[i][j] - s_oc[j][i]).abs();
-                assert!(diff < 1e-12, "C-O overlap reciprocity violated: diff = {:e}", diff);
+                assert!(
+                    diff < 1e-12,
+                    "C-O overlap reciprocity violated: diff = {:e}",
+                    diff
+                );
             }
         }
     }
@@ -151,25 +161,23 @@ fn test_adversarial_collinear_gimbal_lock_co2() {
 
     // 1. CO2 along Cartesian Z axis: R_xy = 0 (singular direction cosine if not handled)
     let z_co2 = vec![6, 8, 8];
-    let coords_z = vec![
-        [0.0, 0.0, 0.0],
-        [0.0, 0.0, 1.16],
-        [0.0, 0.0, -1.16],
-    ];
+    let coords_z = vec![[0.0, 0.0, 0.0], [0.0, 0.0, 1.16], [0.0, 0.0, -1.16]];
     let batch_z = MolecularBatch::new(z_co2.clone(), &coords_z);
     let mut ws_z = ScfWorkspace::allocate(batch_z.norbs);
     let res_z = run_rhf_scf_adaptive(&batch_z, &model, &mut ws_z, 50, 1e-8, 1e-7);
-    assert!(res_z.converged, "CO2 along Z axis must converge without division by zero");
-    assert!(res_z.total_energy_ev.is_finite(), "CO2 along Z produced non-finite energy");
+    assert!(
+        res_z.converged,
+        "CO2 along Z axis must converge without division by zero"
+    );
+    assert!(
+        res_z.total_energy_ev.is_finite(),
+        "CO2 along Z produced non-finite energy"
+    );
 
     // 2. CO2 along body diagonal (1, 1, 1) / sqrt(3)
     let inv_sqrt3 = 1.0 / 3.0f64.sqrt();
     let d = 1.16 * inv_sqrt3;
-    let coords_diag = vec![
-        [0.0, 0.0, 0.0],
-        [d, d, d],
-        [-d, -d, -d],
-    ];
+    let coords_diag = vec![[0.0, 0.0, 0.0], [d, d, d], [-d, -d, -d]];
     let batch_diag = MolecularBatch::new(z_co2, &coords_diag);
     let mut ws_diag = ScfWorkspace::allocate(batch_diag.norbs);
     let res_diag = run_rhf_scf_adaptive(&batch_diag, &model, &mut ws_diag, 50, 1e-8, 1e-7);
@@ -262,7 +270,10 @@ fn test_adversarial_dissociation_h2_uhf() {
         "[DISSOCIATION H2] R = 0.74 A: E = {:.4} eV, <S^2> = {:.4} (Pure Singlet)",
         res_eq.total_energy_ev, res_eq.s_squared
     );
-    assert!(res_eq.s_squared < 1e-4, "Equilibrium H2 must be a closed-shell singlet with <S^2> = 0");
+    assert!(
+        res_eq.s_squared < 1e-4,
+        "Equilibrium H2 must be a closed-shell singlet with <S^2> = 0"
+    );
 
     // 2. Stretched H2 (R = 10.0 A) -> Should approach 2 isolated H atoms
     let coords_inf = vec![[0.0, 0.0, 0.0], [0.0, 0.0, 10.0]];
@@ -308,9 +319,18 @@ fn test_adversarial_severe_atomic_clash() {
 
     // Nuclear repulsion in MNDO/AM1 uses Klopman-Ohno (ss|ss) integrals with exponential terms,
     // which remains finite (~ 32 eV for H-H at 0.1 A) rather than a 1/R point-charge singularity.
-    assert!(res.nuclear_repulsion_ev > 20.0, "Core repulsion must be strongly repulsive at R = 0.10 A");
-    assert!(res.total_energy_ev.is_finite(), "Total energy must not be NaN at clash");
-    assert!(res.nuclear_repulsion_ev.is_finite(), "Core repulsion must not be NaN at clash");
+    assert!(
+        res.nuclear_repulsion_ev > 20.0,
+        "Core repulsion must be strongly repulsive at R = 0.10 A"
+    );
+    assert!(
+        res.total_energy_ev.is_finite(),
+        "Total energy must not be NaN at clash"
+    );
+    assert!(
+        res.nuclear_repulsion_ev.is_finite(),
+        "Core repulsion must not be NaN at clash"
+    );
 }
 
 /// Domain 6: Open-Shell Triplet Ground State of Molecular Oxygen (O2).
@@ -349,6 +369,7 @@ fn test_adversarial_open_shell_triplet_oxygen_o2() {
     assert!(
         s2_err < 0.15,
         "Triplet O2 spin contamination excessive: <S^2> = {:.4} (diff from 2.0 = {:.4})",
-        res.s_squared, s2_err
+        res.s_squared,
+        s2_err
     );
 }

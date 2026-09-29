@@ -5,7 +5,7 @@
 //! supporting bounded thread pools, fallback to strict single-core execution,
 //! and dynamic work-stealing across homogeneous and heterogeneous CPU topologies.
 
-use rayon::{ThreadPoolBuilder};
+use rayon::ThreadPoolBuilder;
 
 /// Executes a closure within a bounded Rayon thread pool if `n_threads` is specified,
 /// or within the ambient global pool if `n_threads` is `None` or `Some(0)`.

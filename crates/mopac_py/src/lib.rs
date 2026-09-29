@@ -1443,20 +1443,33 @@ pub fn esp_charges(
         n_threads: resolve_num_threads(n_threads),
     };
 
-    let res = py.allow_threads(|| -> Result<mopac_core::properties::esp::EspResult, String> {
-        let mut ws = ScfWorkspace::allocate(batch.norbs);
-        let scf_opts = ScfOptions::default();
+    let res = py
+        .allow_threads(
+            || -> Result<mopac_core::properties::esp::EspResult, String> {
+                let mut ws = ScfWorkspace::allocate(batch.norbs);
+                let scf_opts = ScfOptions::default();
 
-        let mut scf_res = run_rhf_scf_with_options(&batch, model.as_ref(), &mut ws, &scf_opts);
-        if !scf_res.converged {
-            scf_res = mopac_core::scf::scf_loop::run_rhf_scf_adaptive_with_nddo(&batch, model.as_ref(), &mut ws, 60, 1e-5, 1e-4, true);
-        }
-        if !scf_res.converged {
-            return Err("Base SCF failed to converge for ESP calculation".to_string());
-        }
+                let mut scf_res =
+                    run_rhf_scf_with_options(&batch, model.as_ref(), &mut ws, &scf_opts);
+                if !scf_res.converged {
+                    scf_res = mopac_core::scf::scf_loop::run_rhf_scf_adaptive_with_nddo(
+                        &batch,
+                        model.as_ref(),
+                        &mut ws,
+                        60,
+                        1e-5,
+                        1e-4,
+                        true,
+                    );
+                }
+                if !scf_res.converged {
+                    return Err("Base SCF failed to converge for ESP calculation".to_string());
+                }
 
-        compute_esp_charges(&batch, model.as_ref(), &ws.density, &opts)
-    }).map_err(PyValueError::new_err)?;
+                compute_esp_charges(&batch, model.as_ref(), &ws.density, &opts)
+            },
+        )
+        .map_err(PyValueError::new_err)?;
 
     Ok(EspResultPy {
         charges: res.charges,
@@ -2939,7 +2952,9 @@ pub fn export_sdf(
 ) -> PyResult<String> {
     let natoms = atomic_numbers.len();
     if coordinates.len() != natoms {
-        return Err(PyValueError::new_err("Mismatch between atomic_numbers and coordinates length"));
+        return Err(PyValueError::new_err(
+            "Mismatch between atomic_numbers and coordinates length",
+        ));
     }
     let mut coords_3d = Vec::with_capacity(natoms);
     for c in coordinates {
@@ -2949,7 +2964,10 @@ pub fn export_sdf(
         coords_3d.push([c[0], c[1], c[2]]);
     }
     let props_refs: Vec<(&str, &str)> = match &properties {
-        Some(props) => props.iter().map(|(k, v)| (k.as_str(), v.as_str())).collect(),
+        Some(props) => props
+            .iter()
+            .map(|(k, v)| (k.as_str(), v.as_str()))
+            .collect(),
         None => Vec::new(),
     };
     Ok(mopac_core::export::sdf::export_sdf_v2000(
@@ -2973,7 +2991,9 @@ pub fn export_trajectory_xyz(
     let mut frames_3d = Vec::with_capacity(frames.len());
     for f in frames {
         if f.len() != natoms {
-            return Err(PyValueError::new_err("Each frame coordinate count must match atomic_numbers length"));
+            return Err(PyValueError::new_err(
+                "Each frame coordinate count must match atomic_numbers length",
+            ));
         }
         let mut frame_coords = Vec::with_capacity(natoms);
         for c in f {
@@ -3007,7 +3027,9 @@ pub fn generate_orbital_cube(
 ) -> PyResult<String> {
     let natoms = atomic_numbers.len();
     if coordinates.len() != natoms {
-        return Err(PyValueError::new_err("Mismatch between atomic_numbers and coordinates length"));
+        return Err(PyValueError::new_err(
+            "Mismatch between atomic_numbers and coordinates length",
+        ));
     }
     let mut coords_3d = Vec::with_capacity(natoms);
     for c in coordinates {
@@ -3028,7 +3050,8 @@ pub fn generate_orbital_cube(
     let target_idx = orbital_index.unwrap_or(nocc); // 1-indexed: default is HOMO (nocc)
     if target_idx == 0 || target_idx > batch.norbs {
         return Err(PyValueError::new_err(format!(
-            "orbital_index {} out of range [1, {}]", target_idx, batch.norbs
+            "orbital_index {} out of range [1, {}]",
+            target_idx, batch.norbs
         )));
     }
     let target_idx_0 = target_idx - 1;
@@ -3045,7 +3068,15 @@ pub fn generate_orbital_cube(
         };
         let mut scf_res = run_rhf_scf_with_options(&batch, model.as_ref(), &mut ws, &scf_opts);
         if !scf_res.converged {
-            scf_res = mopac_core::scf::scf_loop::run_rhf_scf_adaptive_with_nddo(&batch, model.as_ref(), &mut ws, 60, 1e-5, 1e-4, true);
+            scf_res = mopac_core::scf::scf_loop::run_rhf_scf_adaptive_with_nddo(
+                &batch,
+                model.as_ref(),
+                &mut ws,
+                60,
+                1e-5,
+                1e-4,
+                true,
+            );
         }
         if !scf_res.converged {
             return Err("SCF failed to converge for Cube generation");
@@ -3084,7 +3115,9 @@ pub fn generate_density_cube(
 ) -> PyResult<String> {
     let natoms = atomic_numbers.len();
     if coordinates.len() != natoms {
-        return Err(PyValueError::new_err("Mismatch between atomic_numbers and coordinates length"));
+        return Err(PyValueError::new_err(
+            "Mismatch between atomic_numbers and coordinates length",
+        ));
     }
     let mut coords_3d = Vec::with_capacity(natoms);
     for c in coordinates {
@@ -3108,7 +3141,15 @@ pub fn generate_density_cube(
         };
         let mut scf_res = run_rhf_scf_with_options(&batch, model.as_ref(), &mut ws, &scf_opts);
         if !scf_res.converged {
-            scf_res = mopac_core::scf::scf_loop::run_rhf_scf_adaptive_with_nddo(&batch, model.as_ref(), &mut ws, 60, 1e-5, 1e-4, true);
+            scf_res = mopac_core::scf::scf_loop::run_rhf_scf_adaptive_with_nddo(
+                &batch,
+                model.as_ref(),
+                &mut ws,
+                60,
+                1e-5,
+                1e-4,
+                true,
+            );
         }
         if !scf_res.converged {
             return Err("SCF failed to converge for Density Cube generation");
@@ -3168,7 +3209,9 @@ pub fn bond_orders(
 ) -> PyResult<BondOrderPyResult> {
     let natoms = atomic_numbers.len();
     if coordinates.len() != natoms {
-        return Err(PyValueError::new_err("Mismatch between atomic_numbers and coordinates length"));
+        return Err(PyValueError::new_err(
+            "Mismatch between atomic_numbers and coordinates length",
+        ));
     }
     let mut coords_3d = Vec::with_capacity(natoms);
     for c in coordinates {
@@ -3181,9 +3224,19 @@ pub fn bond_orders(
     let model = get_model(m_str)?;
     let batch = MolecularBatch::new_for_model(atomic_numbers, &coords_3d, model.as_ref());
     let mut ws = ScfWorkspace::allocate(batch.norbs);
-    let scf_res = mopac_core::scf::scf_loop::run_rhf_scf_adaptive_with_nddo(&batch, model.as_ref(), &mut ws, 60, 1e-5, 1e-4, true);
+    let scf_res = mopac_core::scf::scf_loop::run_rhf_scf_adaptive_with_nddo(
+        &batch,
+        model.as_ref(),
+        &mut ws,
+        60,
+        1e-5,
+        1e-4,
+        true,
+    );
     if !scf_res.converged {
-        return Err(PyValueError::new_err("SCF failed to converge for bond order calculation"));
+        return Err(PyValueError::new_err(
+            "SCF failed to converge for bond order calculation",
+        ));
     }
     let bo = mopac_core::properties::bonds::compute_bond_orders(&batch, &ws.density);
     let mut bo_mat = Vec::with_capacity(natoms);

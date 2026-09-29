@@ -252,7 +252,11 @@ mod tests {
         let batch = MolecularBatch::new(z, &coords);
         let lewis = construct_lewis_structure(&batch);
 
-        assert_eq!(lewis.bonds.len(), 1, "Disulfide must form single bond between S atoms");
+        assert_eq!(
+            lewis.bonds.len(),
+            1,
+            "Disulfide must form single bond between S atoms"
+        );
         assert_eq!(lewis.bonds[0].order, 1);
         assert_eq!(lewis.bonds[0].atom1, 0);
         assert_eq!(lewis.bonds[0].atom2, 1);
@@ -273,8 +277,18 @@ mod tests {
         let batch = MolecularBatch::new(z, &coords);
         let lewis = construct_lewis_structure(&batch);
 
-        assert_eq!(lewis.coordination_numbers[0], 4, "Fe center must have coordination number 4");
-        assert_eq!(lewis.formal_charges[0], 2, "Fe(II) formal oxidation state must be +2");
-        assert_eq!(lewis.bonds.len(), 4, "Fe must form 4 coordination bonds with porphyrin N");
+        assert_eq!(
+            lewis.coordination_numbers[0], 4,
+            "Fe center must have coordination number 4"
+        );
+        assert_eq!(
+            lewis.formal_charges[0], 2,
+            "Fe(II) formal oxidation state must be +2"
+        );
+        assert_eq!(
+            lewis.bonds.len(),
+            4,
+            "Fe must form 4 coordination bonds with porphyrin N"
+        );
     }
 }

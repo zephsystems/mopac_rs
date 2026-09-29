@@ -20,8 +20,8 @@ pub mod reactions;
 pub mod ri;
 pub mod scf;
 pub mod solvation;
-pub mod types;
 pub mod threading;
+pub mod types;
 pub mod vibrations;
 
 pub use ci::*;

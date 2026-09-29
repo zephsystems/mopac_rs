@@ -411,11 +411,7 @@ mod tests {
     fn test_lbfgs_cosmo_water_optimization() {
         let z = vec![8, 1, 1];
         // Start slightly distorted from minimum
-        let coords = vec![
-            [0.0, 0.0, 0.0],
-            [0.0, 0.85, 0.50],
-            [0.0, -0.85, 0.50],
-        ];
+        let coords = vec![[0.0, 0.0, 0.0], [0.0, 0.85, 0.50], [0.0, -0.85, 0.50]];
         let mut batch = MolecularBatch::new(z, &coords);
         let model = Am1Model;
         let mut scf_ws = ScfWorkspace::allocate(batch.norbs);

@@ -150,7 +150,10 @@ pub fn export_sdf_v2000(
 
     // Counts line: aaabbblllfffcccsssxxxrrrpppiiimmmvvvvvv
     // natoms (3), nbonds (3), 0 0 0 0 0 0 0 0999 V2000
-    out.push_str(&format!("{:3}{:3}  0  0  0  0  0  0  0  0999 V2000\n", natoms, nbonds));
+    out.push_str(&format!(
+        "{:3}{:3}  0  0  0  0  0  0  0  0999 V2000\n",
+        natoms, nbonds
+    ));
 
     // Atom block: x(10.4) y(10.4) z(10.4) symbol(3) mass_diff(2) charge(3) ...
     for i in 0..natoms {

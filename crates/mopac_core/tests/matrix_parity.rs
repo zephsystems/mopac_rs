@@ -37,7 +37,9 @@ fn test_core_hamiltonian_and_overlap_water_am1() {
         assert!(
             (s_mat.get(i, i) - 1.0).abs() < 1e-12,
             "Overlap matrix diagonal S_{{{},{}}} != 1.0: {}",
-            i, i, s_mat.get(i, i)
+            i,
+            i,
+            s_mat.get(i, i)
         );
     }
 
@@ -48,7 +50,9 @@ fn test_core_hamiltonian_and_overlap_water_am1() {
             assert!(
                 diff < 1e-14,
                 "Symmetry violation in overlap matrix S_{{{},{}}}: diff = {}",
-                i, j, diff
+                i,
+                j,
+                diff
             );
         }
     }
@@ -60,7 +64,8 @@ fn test_core_hamiltonian_and_overlap_water_am1() {
         assert!(
             eval > 1e-4,
             "Overlap eigenvalue {} is not strictly positive: {}",
-            k, eval
+            k,
+            eval
         );
     }
 
@@ -74,7 +79,9 @@ fn test_core_hamiltonian_and_overlap_water_am1() {
             assert!(
                 diff < 1e-14,
                 "Symmetry violation in core Hamiltonian H_{{{},{}}}: diff = {}",
-                i, j, diff
+                i,
+                j,
+                diff
             );
         }
     }
@@ -114,8 +121,16 @@ fn test_core_hamiltonian_and_overlap_methane_pm6() {
         [0.0, 0.0, 0.0],
         [r, 0.0, 0.0],
         [-r / 3.0, r * (8.0f64 / 9.0).sqrt(), 0.0],
-        [-r / 3.0, -r * (2.0f64 / 9.0).sqrt(), r * (2.0f64 / 3.0).sqrt()],
-        [-r / 3.0, -r * (2.0f64 / 9.0).sqrt(), -r * (2.0f64 / 3.0).sqrt()],
+        [
+            -r / 3.0,
+            -r * (2.0f64 / 9.0).sqrt(),
+            r * (2.0f64 / 3.0).sqrt(),
+        ],
+        [
+            -r / 3.0,
+            -r * (2.0f64 / 9.0).sqrt(),
+            -r * (2.0f64 / 3.0).sqrt(),
+        ],
     ];
     let batch = MolecularBatch::new(z, &coords);
     let model = Pm6Model;
@@ -154,7 +169,9 @@ fn test_core_hamiltonian_and_overlap_methane_pm6() {
             assert!(
                 diff < 1e-8,
                 "Density matrix idempotency (P^2 = 2P) violated at ({}, {}): diff = {}",
-                i, j, diff
+                i,
+                j,
+                diff
             );
         }
     }

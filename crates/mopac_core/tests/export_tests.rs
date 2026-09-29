@@ -32,16 +32,8 @@ fn test_sdf_v2000_export() {
 #[test]
 fn test_trajectory_xyz_export() {
     let atomic_numbers = vec![8, 1, 1];
-    let frame1 = vec![
-        [0.0, 0.0, 0.0],
-        [0.0, 0.8, -0.5],
-        [0.0, -0.8, -0.5],
-    ];
-    let frame2 = vec![
-        [0.0, 0.0, 0.1],
-        [0.0, 0.75, -0.47],
-        [0.0, -0.75, -0.47],
-    ];
+    let frame1 = vec![[0.0, 0.0, 0.0], [0.0, 0.8, -0.5], [0.0, -0.8, -0.5]];
+    let frame2 = vec![[0.0, 0.0, 0.1], [0.0, 0.75, -0.47], [0.0, -0.75, -0.47]];
 
     let comments = vec![
         "Cycle 1 E = -380.00 eV".to_string(),
@@ -64,7 +56,7 @@ fn test_gaussian_cube_generation() {
         [0.0, -0.757, -0.469],
     ];
 
-    let model = Pm6Model::default();
+    let model = Pm6Model;
     let batch = MolecularBatch::new(atomic_numbers.clone(), &coords);
     let mut ws = ScfWorkspace::allocate(batch.norbs);
 
@@ -82,7 +74,14 @@ fn test_gaussian_cube_generation() {
     let homo_energy = ws.eigenvalues[homo_idx];
     let homo_coeffs = ws.eigenvectors.row(homo_idx);
 
-    let mo_cube = generate_molecular_orbital_cube(&batch, &model, homo_coeffs, homo_idx + 1, homo_energy, &config);
+    let mo_cube = generate_molecular_orbital_cube(
+        &batch,
+        &model,
+        homo_coeffs,
+        homo_idx + 1,
+        homo_energy,
+        &config,
+    );
     assert!(mo_cube.contains("MOPAC_RS Molecular Orbital Cube File"));
     assert!(mo_cube.contains(&format!("Orbital {} Energy", homo_idx + 1)));
     assert!(mo_cube.lines().count() > 10);
