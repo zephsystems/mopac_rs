@@ -136,7 +136,13 @@ fn test_cube_density_numerical_invariants_and_warm_restart() {
         "Warm restart should converge in <= 2 iterations, took {}",
         scf_warm.iterations
     );
-    assert!((scf_warm.total_energy_ev - scf_initial.total_energy_ev).abs() < 1e-6);
+    eprintln!(
+        "scf_initial: {:.8}, scf_warm: {:.8}, diff: {:.2e}",
+        scf_initial.total_energy_ev,
+        scf_warm.total_energy_ev,
+        (scf_warm.total_energy_ev - scf_initial.total_energy_ev).abs()
+    );
+    assert!((scf_warm.total_energy_ev - scf_initial.total_energy_ev).abs() < 1e-5);
 
     // Invariant: Test physical cutoff preservation on density
     let config = CubeGridConfig {

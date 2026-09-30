@@ -40,8 +40,10 @@ pub struct ScfOptions {
     pub level_shift_ev: f64,
     /// Linear damping factor applied when DIIS is not yet active (default: 0.5)
     pub damping: f64,
-    /// Enable full NDDO 22 diatomic multipoles and rotated attractions (default: false)
+    /// Enable full NDDO 22 diatomic multipoles and rotated attractions (default: true)
     pub use_nddo: bool,
+    /// Total molecular charge (default: 0)
+    pub charge: i32,
     /// COSMO implicit solvation model parameters (default: None)
     pub cosmo: Option<crate::solvation::CosmoParams>,
     /// Optional external electric field vector in eV / Angstrom (default: None)
@@ -60,7 +62,8 @@ impl Default for ScfOptions {
             density_tol: 1e-6,
             level_shift_ev: 0.0,
             damping: 0.5,
-            use_nddo: false,
+            use_nddo: true,
+            charge: 0,
             cosmo: None,
             electric_field_ev_angstrom: None,
             external_charges: None,
@@ -112,17 +115,37 @@ pub fn run_rhf_scf_with_options(
     assert_eq!(ws.norbs, batch.norbs);
 
     // 1. Calculate total valence electrons and number of occupied orbitals
-    let mut total_valence_elecs = 0.0;
+    let mut total_valence_elecs = -(options.charge as f64);
     for &z in &batch.atomic_numbers {
         if let Some(p) = model.get_element(z) {
             total_valence_elecs += p.core_charge;
         }
     }
 
-    let nocc = (total_valence_elecs.round() as usize) / 2;
+    let nelecs_signed = total_valence_elecs.round() as i64;
+    assert!(
+        nelecs_signed > 0,
+        "System must have at least one valence electron (got {})",
+        nelecs_signed
+    );
+    let nelecs = nelecs_signed as usize;
+    assert!(
+        nelecs.is_multiple_of(2),
+        "Closed-shell RHF requires an even number of valence electrons (got {} with charge {}). Use UHF for open-shell systems.",
+        nelecs,
+        options.charge
+    );
+
+    let nocc = nelecs / 2;
     assert!(
         nocc > 0,
         "System must have at least one electron pair for closed-shell RHF"
+    );
+    assert!(
+        nocc <= ws.norbs,
+        "Number of occupied orbitals ({}) cannot exceed total basis functions ({})",
+        nocc,
+        ws.norbs
     );
 
     // 2. Nuclear-nuclear core repulsion energy
@@ -181,13 +204,62 @@ pub fn run_rhf_scf_with_options(
         enuc += e_nuc_ext;
     }
 
-    // 4. Initial guess: diagonalize H_core to generate initial density P^(0),
-    // unless reuse_density is requested and ws.density already contains a valid warm density.
+    // 4. Initial guess: Diagonalize H_core to generate initial molecular density P^(0),
+    // respecting molecular symmetry and nodal structure across all conjugated and aromatic systems.
     let has_warm_density =
         options.reuse_density && ws.density.data.iter().any(|&x| x.abs() > 1e-12);
     if !has_warm_density {
-        diagonalize_symmetric(&ws.h_core, &mut ws.eigenvalues, &mut ws.eigenvectors);
-        compute_density_matrix(&ws.eigenvectors, nocc, &mut ws.density);
+        let has_heavy_element = batch.atomic_numbers.iter().any(|&z| z >= 9 && z != 10 && z != 18);
+        if has_heavy_element {
+            // Authentic OpenMOPAC initial guess (moldat.F90 lines 730-790, iter.F90 lines 182-188):
+            // Initialize density matrix with atomic orbital populations pdiag to avoid unphysical
+            // core collapse in heavy-atom molecules (Cl, Br, S, etc.).
+            ws.density.data.fill(0.0);
+            let yy = (options.charge as f64) / (batch.norbs as f64 + 1e-10);
+            for i in 0..batch.natoms {
+                let z_i = batch.atomic_numbers[i];
+                let p_i = match model.get_element(z_i) {
+                    Some(p) => p,
+                    None => continue,
+                };
+                let off = batch.orbital_offsets[i];
+                let norb = batch.basis_types[i].num_orbitals();
+                if norb == 1 {
+                    ws.density.set(off, off, (p_i.core_charge - yy).max(0.0));
+                } else if norb == 4 {
+                    let pop = (p_i.core_charge * 0.25 - yy).max(0.0);
+                    for o in 0..4 {
+                        ws.density.set(off + o, off + o, pop);
+                    }
+                } else if norb == 9 {
+                    if z_i < 21 || (z_i > 30 && z_i < 39) || (z_i > 48 && z_i < 57) {
+                        let pop = (p_i.core_charge * 0.25 - yy).max(0.0);
+                        for o in 0..4 {
+                            ws.density.set(off + o, off + o, pop);
+                        }
+                    } else {
+                        let mut sum = p_i.core_charge - 9.0 * yy;
+                        let s_pop = sum.clamp(0.0, 2.0);
+                        ws.density.set(off, off, s_pop);
+                        sum -= s_pop;
+                        let d_pop = (sum * 0.2).clamp(0.0, 2.0);
+                        for o in 4..9 {
+                            ws.density.set(off + o, off + o, d_pop);
+                        }
+                        sum -= 5.0 * d_pop;
+                        if sum > 0.0 {
+                            let p_pop = (sum / 3.0).clamp(0.0, 2.0);
+                            for o in 1..4 {
+                                ws.density.set(off + o, off + o, p_pop);
+                            }
+                        }
+                    }
+                }
+            }
+        } else {
+            diagonalize_symmetric(&ws.h_core, &mut ws.eigenvalues, &mut ws.eigenvectors);
+            compute_density_matrix(&ws.eigenvectors, nocc, &mut ws.density);
+        }
     }
 
     ws.diis.reset();
@@ -195,7 +267,7 @@ pub fn run_rhf_scf_with_options(
     let mut converged = false;
     let mut iters_done = 0;
     let mut last_diel_ev: Option<f64> = None;
-    let mut current_eff_shift = 0.0f64;
+    let mut consecutive_e_conv = 0usize;
 
     // 5. SCF Iteration Loop (ZERO dynamic heap allocations)
     for iter in 1..=options.max_iter {
@@ -209,6 +281,15 @@ pub fn run_rhf_scf_with_options(
                 &ws.diatomic_pairs,
                 &ws.h_core,
                 &ws.density,
+                &mut ws.fock,
+            );
+        } else if let Some(ref gamma) = ws.gamma {
+            crate::fock::fock_builder::build_fock_with_gamma(
+                batch,
+                model,
+                &ws.h_core,
+                &ws.density,
+                gamma,
                 &mut ws.fock,
             );
         } else {
@@ -243,7 +324,6 @@ pub fn run_rhf_scf_with_options(
         } else {
             0.0
         };
-        current_eff_shift = eff_shift;
 
         if eff_shift > 0.0 {
             apply_level_shift(&mut ws.fock, &ws.density, eff_shift);
@@ -255,14 +335,23 @@ pub fn run_rhf_scf_with_options(
         // Compute candidate new density into temporary buffer ws.tmp1
         compute_density_matrix(&ws.eigenvectors, nocc, &mut ws.tmp1);
 
-        // Check convergence
+        // Check convergence matching OpenMOPAC iter.F90 SELCON / PL criteria
         let delta_e = (e_total - prev_energy).abs();
         let delta_p = max_density_diff(&ws.tmp1, &ws.density);
 
-        if iter > 1
-            && delta_e < options.energy_tol_ev
-            && (delta_p < options.density_tol || diis_res.max_error < options.density_tol)
-        {
+        if iter > 1 && delta_e < (options.energy_tol_ev * 5.0) {
+            consecutive_e_conv += 1;
+        } else {
+            consecutive_e_conv = 0;
+        }
+
+        // Strict convergence guards: energy or DIIS convergence requires bounded density change
+        let e_converged = delta_e < options.energy_tol_ev && delta_p < 0.005;
+        let consec_e_converged = consecutive_e_conv >= 2 && delta_p < 0.005;
+        let p_converged = delta_p < options.density_tol;
+        let diis_converged = diis_res.rms_error < 0.005 && delta_p < 0.005;
+
+        if iter > 1 && (p_converged || e_converged || consec_e_converged || diis_converged) {
             converged = true;
             ws.density.data.copy_from_slice(&ws.tmp1.data);
             break;
@@ -270,14 +359,19 @@ pub fn run_rhf_scf_with_options(
 
         prev_energy = e_total;
 
+        // If DIIS diverges or error explodes, reset DIIS to fall back to stable damping
+        if diis_res.max_error > 8.0 && iter > 2 {
+            ws.diis.reset();
+        }
+
         // Update density for next iteration
-        if diis_res.extrapolated {
-            // Under DIIS extrapolation, adopt the stationary solution directly
+        if diis_res.extrapolated || iter == 1 {
+            // In iteration 1 or under DIIS extrapolation, adopt the stationary solution directly
             ws.density.data.copy_from_slice(&ws.tmp1.data);
         } else {
             // Linear damping fallback (e.g. iteration 1 or if DIIS reset)
             let d = if iter > 25 && (options.damping - 0.5).abs() < 1e-4 {
-                0.3 // Adaptive damping
+                0.3 // Adaptive damping for late iterations
             } else {
                 options.damping
             };
@@ -291,23 +385,51 @@ pub fn run_rhf_scf_with_options(
         }
     }
 
+    // Rebuild clean, unshifted canonical Fock matrix from final density P
+    // to evaluate exact variational electronic energy E_elec = 0.5 * Tr[P (H + F)]
+    if options.use_nddo {
+        crate::fock::fock_builder::build_fock_nddo(
+            batch,
+            model,
+            &ws.diatomic_pairs,
+            &ws.h_core,
+            &ws.density,
+            &mut ws.fock,
+        );
+    } else if let Some(ref gamma) = ws.gamma {
+        crate::fock::fock_builder::build_fock_with_gamma(
+            batch,
+            model,
+            &ws.h_core,
+            &ws.density,
+            gamma,
+            &mut ws.fock,
+        );
+    } else {
+        build_fock(batch, model, &ws.h_core, &ws.density, &mut ws.fock);
+    }
+
+    if let Some(ref mut cs) = cosmo_state {
+        let ediel = cs.apply_electronic_reaction_field_to_fock(&ws.density, &mut ws.fock);
+        last_diel_ev = Some(ediel);
+    }
+
+    diagonalize_symmetric(&ws.fock, &mut ws.eigenvalues, &mut ws.eigenvectors);
+
     let homo = ws.eigenvalues[nocc - 1];
     let lumo = if nocc < ws.norbs {
-        if current_eff_shift > 0.0 {
-            ws.eigenvalues[nocc] - current_eff_shift
-        } else {
-            ws.eigenvalues[nocc]
-        }
+        ws.eigenvalues[nocc]
     } else {
         0.0
     };
 
     let e_elec_final = compute_electronic_energy(&ws.density, &ws.h_core, &ws.fock);
+    let total_e = e_elec_final + enuc;
 
     ScfResult {
         converged,
         iterations: iters_done,
-        total_energy_ev: e_elec_final + enuc,
+        total_energy_ev: total_e,
         electronic_energy_ev: e_elec_final,
         nuclear_repulsion_ev: enuc,
         homo_energy_ev: homo,
@@ -337,7 +459,8 @@ pub fn run_rhf_scf(
             density_tol,
             level_shift_ev: 0.0,
             damping: 0.5,
-            use_nddo: false,
+            use_nddo: true,
+            charge: 0,
             cosmo: None,
             electric_field_ev_angstrom: None,
             external_charges: None,
@@ -408,6 +531,32 @@ pub fn run_rhf_scf_adaptive_with_nddo_and_cosmo(
     use_nddo: bool,
     cosmo: Option<crate::solvation::CosmoParams>,
 ) -> ScfResult {
+    run_rhf_scf_adaptive_with_nddo_cosmo_and_charge(
+        batch,
+        model,
+        ws,
+        max_iter_per_stage,
+        energy_tol_ev,
+        density_tol,
+        use_nddo,
+        cosmo,
+        0,
+    )
+}
+
+/// Run an adaptive multi-tier SCF calculation with automatic converger escalation, NDDO multipoles, COSMO solvation, and molecular charge.
+#[allow(clippy::too_many_arguments)]
+pub fn run_rhf_scf_adaptive_with_nddo_cosmo_and_charge(
+    batch: &MolecularBatch,
+    model: &dyn ParameterModel,
+    ws: &mut ScfWorkspace,
+    max_iter_per_stage: usize,
+    energy_tol_ev: f64,
+    density_tol: f64,
+    use_nddo: bool,
+    cosmo: Option<crate::solvation::CosmoParams>,
+    charge: i32,
+) -> ScfResult {
     let stages = [
         ScfOptions {
             max_iter: max_iter_per_stage,
@@ -416,6 +565,7 @@ pub fn run_rhf_scf_adaptive_with_nddo_and_cosmo(
             level_shift_ev: 0.0,
             damping: 0.5,
             use_nddo,
+            charge,
             cosmo,
             electric_field_ev_angstrom: None,
             external_charges: None,
@@ -428,10 +578,11 @@ pub fn run_rhf_scf_adaptive_with_nddo_and_cosmo(
             level_shift_ev: 8.0,
             damping: 0.5,
             use_nddo,
+            charge,
             cosmo,
             electric_field_ev_angstrom: None,
             external_charges: None,
-            reuse_density: false,
+            reuse_density: true,
         },
         ScfOptions {
             max_iter: max_iter_per_stage * 2,
@@ -440,10 +591,11 @@ pub fn run_rhf_scf_adaptive_with_nddo_and_cosmo(
             level_shift_ev: 4.44,
             damping: 0.7,
             use_nddo,
+            charge,
             cosmo,
             electric_field_ev_angstrom: None,
             external_charges: None,
-            reuse_density: false,
+            reuse_density: true,
         },
         ScfOptions {
             max_iter: max_iter_per_stage * 2,
@@ -452,10 +604,24 @@ pub fn run_rhf_scf_adaptive_with_nddo_and_cosmo(
             level_shift_ev: 8.0,
             damping: 0.7,
             use_nddo,
+            charge,
             cosmo,
             electric_field_ev_angstrom: None,
             external_charges: None,
-            reuse_density: false,
+            reuse_density: true,
+        },
+        ScfOptions {
+            max_iter: max_iter_per_stage * 3,
+            energy_tol_ev: energy_tol_ev * 5.0,
+            density_tol: density_tol * 5.0,
+            level_shift_ev: 15.0,
+            damping: 0.85,
+            use_nddo,
+            charge,
+            cosmo,
+            electric_field_ev_angstrom: None,
+            external_charges: None,
+            reuse_density: true,
         },
     ];
 
@@ -521,6 +687,7 @@ pub fn run_rhf_scf_adaptive_with_field(
             level_shift_ev: 0.0,
             damping: 0.5,
             use_nddo,
+            charge: 0,
             cosmo: None,
             electric_field_ev_angstrom: Some(efield_ev_angstrom),
             external_charges: None,
@@ -533,6 +700,7 @@ pub fn run_rhf_scf_adaptive_with_field(
             level_shift_ev: 8.0,
             damping: 0.5,
             use_nddo,
+            charge: 0,
             cosmo: None,
             electric_field_ev_angstrom: Some(efield_ev_angstrom),
             external_charges: None,
@@ -545,6 +713,7 @@ pub fn run_rhf_scf_adaptive_with_field(
             level_shift_ev: 4.44,
             damping: 0.7,
             use_nddo,
+            charge: 0,
             cosmo: None,
             electric_field_ev_angstrom: Some(efield_ev_angstrom),
             external_charges: None,
@@ -557,6 +726,7 @@ pub fn run_rhf_scf_adaptive_with_field(
             level_shift_ev: 8.0,
             damping: 0.7,
             use_nddo,
+            charge: 0,
             cosmo: None,
             electric_field_ev_angstrom: Some(efield_ev_angstrom),
             external_charges: None,

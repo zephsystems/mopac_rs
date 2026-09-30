@@ -331,6 +331,77 @@ class TestMopacPyBindings(unittest.TestCase):
         self.assertIn("HOMO", bundle)
         self.assertIn("LUMO", bundle)
 
+    def test_gpu_acceleration_and_parity(self):
+        """Verify Vulkan GPU compute acceleration in Python API and parity with CPU reference."""
+        # 1. Single-point SCF calculation with GPU
+        res_gpu = mopac_py.calculate(self.h2o_atoms, self.h2o_coords, method="PM7", use_gpu=True)
+        res_cpu = mopac_py.calculate(self.h2o_atoms, self.h2o_coords, method="PM7", use_gpu=False)
+
+        self.assertTrue(res_gpu.converged)
+        self.assertTrue(res_cpu.converged)
+        self.assertAlmostEqual(res_gpu.total_energy_ev, res_cpu.total_energy_ev, places=5)
+        self.assertAlmostEqual(res_gpu.heat_of_formation_kcal, res_cpu.heat_of_formation_kcal, places=4)
+        self.assertAlmostEqual(res_gpu.dipole_debye[3], res_cpu.dipole_debye[3], places=4)
+
+        # 2. GPU Gaussian Cube generation for Orbitals and Density
+        calc_gpu = mopac_py.MopacCalculator("PM7", use_gpu=True)
+        orb_cube_gpu = calc_gpu.generate_orbital_cube(self.h2o_atoms, self.h2o_coords, use_gpu=True)
+        dens_cube_gpu = calc_gpu.generate_density_cube(self.h2o_atoms, self.h2o_coords, use_gpu=True)
+
+        self.assertIn("MOPAC_RS Molecular Orbital Cube File", orb_cube_gpu)
+        self.assertIn("MOPAC_RS Total Electron Density Cube File", dens_cube_gpu)
+
+        # 3. GPU Mol* bundle generation
+        bundle_gpu = calc_gpu.export_molstar_bundle(
+            self.h2o_atoms,
+            self.h2o_coords,
+            output_prefix="water_gpu",
+            orbitals=["HOMO", "LUMO"],
+            include_density=True,
+            use_gpu=True,
+        )
+        self.assertIn("water_gpu_molstar.pdb", bundle_gpu)
+        self.assertIn("water_gpu_session.mvs.json", bundle_gpu)
+        self.assertIn("HOMO", bundle_gpu)
+        self.assertIn("LUMO", bundle_gpu)
+        self.assertIn("density", bundle_gpu)
+
+    def test_uhf_radicals_and_optimization(self):
+        """Verify UHF open-shell radical calculation and L-BFGS optimization."""
+        # Methyl radical CH3. (Doublet, 7 valence electrons)
+        ch3_atoms = [6, 1, 1, 1]
+        ch3_coords = [
+            [0.0, 0.0, 0.0],
+            [1.08, 0.0, 0.0],
+            [-0.54, 0.935, 0.0],
+            [-0.54, -0.935, 0.2],  # Slightly non-planar
+        ]
+        # Single point
+        res_uhf = mopac_py.calculate(ch3_atoms, ch3_coords, method="AM1", uhf=True, multiplicity=2)
+        self.assertTrue(res_uhf.converged)
+        self.assertLess(res_uhf.total_energy_ev, -150.0)
+        self.assertEqual(len(res_uhf.gradients_kcal_mol_angstrom), 4)
+
+        # L-BFGS geometry optimization for radical
+        opt_res = mopac_py.optimize(ch3_atoms, ch3_coords, method="AM1", uhf=True, multiplicity=2, max_cycles=30)
+        self.assertTrue(opt_res.converged)
+        self.assertLess(opt_res.final_grad_rms, 1.0)
+        # Optimized CH3. must be planar (carbon z close to hydrogen average z)
+        coords = opt_res.coordinates
+        avg_hz = (coords[1][2] + coords[2][2] + coords[3][2]) / 3.0
+        out_of_plane = abs(coords[0][2] - avg_hz)
+        self.assertLess(out_of_plane, 0.08)
+
+    def test_cosmo_lbfgs_optimization(self):
+        """Verify L-BFGS geometry optimization with COSMO implicit solvation."""
+        opt_gas = mopac_py.optimize(self.h2o_atoms, self.h2o_coords, method="PM6", use_nddo=True)
+        opt_solv = mopac_py.optimize(self.h2o_atoms, self.h2o_coords, method="PM6", cosmo_eps=78.4, use_nddo=True)
+        self.assertTrue(opt_gas.converged)
+        self.assertTrue(opt_solv.converged)
+        self.assertLess(opt_solv.final_grad_rms, 1.0)
+        self.assertLess(opt_gas.final_grad_rms, 1.0)
+
 
 if __name__ == "__main__":
     unittest.main(verbosity=2)
+

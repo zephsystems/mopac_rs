@@ -1,0 +1,183 @@
+{
+  "metadata": {
+    "dataset": "Stewart Validation Set",
+    "citation": "Stewart, J. Mol. Model. 19:1-32 (2013)",
+    "sample_size": 20,
+    "date": "2026-09-29 12:35:19",
+    "openmopac_oracle": "mopac"
+  },
+  "methods": {
+    "PM7": {
+      "converged": 20,
+      "total": 20,
+      "convergence_pct": 100.0,
+      "wall_time_s": 0.8439752539998153,
+      "throughput_mol_per_s": 23.697377269315503,
+      "mean_calc_time_ms": 29.273715100225672,
+      "oracle_parity_hof": {
+        "count": 10,
+        "mean_signed_error": -740.9874594004378,
+        "mae": 743.3217886870523,
+        "rmse": 1626.5897246534296,
+        "p50": 2.6964149900886767,
+        "p90": 3632.964548368739,
+        "p99": 3639.181710637987,
+        "max_abs_error": 3639.872506445681
+      },
+      "oracle_parity_etot": {
+        "count": 10,
+        "mean_signed_error": -0.1136275379959443,
+        "mae": 1.1928879927992058,
+        "rmse": 2.1329761955540834,
+        "p50": 0.013057011201169644,
+        "p90": 3.115084391858226,
+        "p99": 5.2343350141773755,
+        "max_abs_error": 5.469807305546169
+      },
+      "outliers": [
+        {
+          "name": "-Te-S-_CH2_3-",
+          "natoms": 11,
+          "mopacrs_hof": -3627.493327471301,
+          "oracle_hof": 4.70367,
+          "diff_hof": -3632.196997471301
+        },
+        {
+          "name": "-Te-S-_CH2_3-r",
+          "natoms": 11,
+          "mopacrs_hof": -3633.261626445681,
+          "oracle_hof": 6.61088,
+          "diff_hof": -3639.872506445681
+        },
+        {
+          "name": "01_NH3_dimer",
+          "natoms": 8,
+          "mopacrs_hof": -10.081878391578016,
+          "oracle_hof": -11.6166,
+          "diff_hof": 1.5347216084219841
+        },
+        {
+          "name": "01_Water_-_Water",
+          "natoms": 6,
+          "mopacrs_hof": -118.29179617497243,
+          "oracle_hof": -120.40756,
+          "diff_hof": 2.115763825027571
+        },
+        {
+          "name": "02_Methane_-_Cl2",
+          "natoms": 7,
+          "mopacrs_hof": -34.760582676786726,
+          "oracle_hof": -11.0938,
+          "diff_hof": -23.666782676786724
+        },
+        {
+          "name": "02_Water_-_Methanol",
+          "natoms": 9,
+          "mopacrs_hof": -108.4446485175099,
+          "oracle_hof": -111.05042,
+          "diff_hof": 2.6057714824900984
+        },
+        {
+          "name": "02_water_dimer",
+          "natoms": 6,
+          "mopacrs_hof": -118.34074488119052,
+          "oracle_hof": -120.46951,
+          "diff_hof": 2.1287651188094827
+        },
+        {
+          "name": "03_Methane_-_Br2",
+          "natoms": 7,
+          "mopacrs_hof": -131.9742238436815,
+          "oracle_hof": -6.16427,
+          "diff_hof": -125.8099538436815
+        },
+        {
+          "name": "03_Water_-_MeNH2",
+          "natoms": 10,
+          "mopacrs_hof": -64.52514150231275,
+          "oracle_hof": -67.3122,
+          "diff_hof": 2.787058497687255
+        }
+      ]
+    },
+    "PM6": {
+      "converged": 18,
+      "total": 20,
+      "convergence_pct": 90.0,
+      "wall_time_s": 0.7243048229993292,
+      "throughput_mol_per_s": 24.85141535501921,
+      "mean_calc_time_ms": 29.22147361126311,
+      "oracle_parity_hof": {
+        "count": 8,
+        "mean_signed_error": -2316.403279743379,
+        "mae": 2316.5173271567537,
+        "rmse": 5461.960601746552,
+        "p50": 0.7330527535426867,
+        "p90": 6948.561810312105,
+        "p99": 14242.359291670484,
+        "max_abs_error": 15052.78123404364
+      },
+      "oracle_parity_etot": {
+        "count": 8,
+        "mean_signed_error": -100.44875331139733,
+        "mae": 100.45369877935846,
+        "rmse": 236.8530286198724,
+        "p50": 0.03178579254694114,
+        "p90": 301.31815950394366,
+        "p99": 617.6071519739966,
+        "max_abs_error": 652.7503733595581
+      },
+      "outliers": [
+        {
+          "name": "01_NH3_dimer",
+          "natoms": 8,
+          "mopacrs_hof": -9.08424060963398,
+          "oracle_hof": -8.39678,
+          "diff_hof": -0.6874606096339804
+        },
+        {
+          "name": "01_Water_-_Water",
+          "natoms": 6,
+          "mopacrs_hof": -112.96758173982596,
+          "oracle_hof": -112.19922,
+          "diff_hof": -0.7683617398259628
+        },
+        {
+          "name": "02_Methane_-_Cl2",
+          "natoms": 7,
+          "mopacrs_hof": -15066.38248404364,
+          "oracle_hof": -13.60125,
+          "diff_hof": -15052.78123404364
+        },
+        {
+          "name": "02_Water_-_Methanol",
+          "natoms": 9,
+          "mopacrs_hof": -106.83014376725941,
+          "oracle_hof": -106.1324,
+          "diff_hof": -0.6977437672594107
+        },
+        {
+          "name": "02_water_dimer",
+          "natoms": 6,
+          "mopacrs_hof": -113.09857518662722,
+          "oracle_hof": -112.3185,
+          "diff_hof": -0.7800751866272151
+        },
+        {
+          "name": "03_Methane_-_Br2",
+          "natoms": 7,
+          "mopacrs_hof": -3486.5702844271655,
+          "oracle_hof": -11.24537,
+          "diff_hof": -3475.3249144271654
+        },
+        {
+          "name": "03_Water_-_MeNH2",
+          "natoms": 10,
+          "mopacrs_hof": -60.60531782637952,
+          "oracle_hof": -59.96268,
+          "diff_hof": -0.64263782637952
+        }
+      ]
+    }
+  }
+}

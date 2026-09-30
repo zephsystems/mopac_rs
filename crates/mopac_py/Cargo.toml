@@ -17,4 +17,6 @@ test = false
 
 [dependencies]
 mopac_core = { path = "../mopac_core" }
+mopac_gpu = { path = "../mopac_gpu" }
 pyo3 = { version = "0.22", features = ["abi3-py38", "extension-module"] }
+

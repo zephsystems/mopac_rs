@@ -14,6 +14,7 @@ impl ParameterModel for Am1Model {
         "AM1"
     }
 
+    #[allow(clippy::approx_constant)]
     fn get_element(&self, z: u8) -> Option<SemiEmpiricalElementParams> {
         match z {
             // Element 1: Hydrogen
@@ -164,24 +165,24 @@ impl ParameterModel for Am1Model {
                 alpha: 2.9472860,
                 gss: 13.5900000,
                 gsp: 12.6600000,
-                gpp: 12.6600000,
-                gp2: 11.0800000,
-                hsp: 2.4300000,
+                gpp: 12.9800000,
+                gp2: 11.5900000,
+                hsp: 3.1400000,
                 gaussians: [
                     GaussianCoreCorrection {
-                        a: 0.0500000,
+                        a: 0.0252510,
                         b: 5.0,
-                        c: 1.45,
+                        c: 1.50,
                     },
                     GaussianCoreCorrection {
-                        a: 0.0500000,
-                        b: 5.0,
-                        c: 1.70,
-                    },
-                    GaussianCoreCorrection {
-                        a: -0.0200000,
+                        a: 0.0289530,
                         b: 5.0,
                         c: 2.10,
+                    },
+                    GaussianCoreCorrection {
+                        a: -0.0058060,
+                        b: 2.0,
+                        c: 2.40,
                     },
                     GaussianCoreCorrection {
                         a: 0.0,

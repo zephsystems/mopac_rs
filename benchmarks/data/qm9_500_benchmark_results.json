@@ -1,0 +1,748 @@
+{
+  "metadata": {
+    "dataset": "QM9",
+    "citation": "Ramakrishnan et al., Sci. Data 1:140022 (2014)",
+    "sample_size": 500,
+    "date": "2026-09-29 12:35:30",
+    "openmopac_oracle": "mopac"
+  },
+  "methods": {
+    "AM1": {
+      "converged": 500,
+      "total": 500,
+      "convergence_pct": 100.0,
+      "wall_time_s": 7.969475354999304,
+      "throughput_mol_per_s": 62.73938719019273,
+      "mean_calc_time_ms": 13.462674968031934,
+      "oracle_parity_hof": {
+        "count": 50,
+        "mean_signed_error": -0.11295233139337837,
+        "mae": 0.2882622470001159,
+        "rmse": 0.4233827299323362,
+        "p50": 0.19351022479517255,
+        "p90": 0.6167612388833655,
+        "p99": 1.3449482831746153,
+        "max_abs_error": 1.5421047806287653
+      },
+      "oracle_parity_etot": {
+        "count": 50,
+        "mean_signed_error": -0.003891128585539718,
+        "mae": 0.011493507112579664,
+        "rmse": 0.01682242410523223,
+        "p50": 0.008129759871394526,
+        "p90": 0.024409279798226182,
+        "p99": 0.0564923682162421,
+        "max_abs_error": 0.0668689421986528
+      },
+      "vs_b3lyp_gap": {
+        "count": 500,
+        "mean_signed_error": 4.342098849784175,
+        "mae": 4.510608704944965,
+        "rmse": 4.562898123871292,
+        "p50": 4.462316081852293,
+        "p90": 5.369542129504578,
+        "p99": 5.951710467844292,
+        "max_abs_error": 7.497824731404443
+      },
+      "vs_b3lyp_dipole": {
+        "count": 500,
+        "mean_signed_error": 0.13161579961205178,
+        "mae": 0.5318474290644918,
+        "rmse": 4.1509900926969125,
+        "p50": 0.19567776564063255,
+        "p90": 0.7808460528966075,
+        "p99": 1.3754966537491877,
+        "max_abs_error": 84.935639291485
+      },
+      "outliers": [
+        {
+          "mol_id": "gdb_1",
+          "smiles": "C",
+          "mopacrs_hof": -9.13664093430981,
+          "oracle_hof": -8.08284,
+          "diff_hof": -1.0538009343098107
+        },
+        {
+          "mol_id": "gdb_5",
+          "smiles": "C#N",
+          "mopacrs_hof": 31.308817732136163,
+          "oracle_hof": 31.11114,
+          "diff_hof": 0.1976777321361638
+        },
+        {
+          "mol_id": "gdb_6",
+          "smiles": "C=O",
+          "mopacrs_hof": -30.35329459160539,
+          "oracle_hof": -30.52143,
+          "diff_hof": 0.16813540839460828
+        },
+        {
+          "mol_id": "gdb_7",
+          "smiles": "CC",
+          "mopacrs_hof": -15.552081440582015,
+          "oracle_hof": -15.65973,
+          "diff_hof": 0.10764855941798501
+        },
+        {
+          "mol_id": "gdb_8",
+          "smiles": "CO",
+          "mopacrs_hof": -56.809652180807916,
+          "oracle_hof": -56.09279,
+          "diff_hof": -0.7168621808079152
+        },
+        {
+          "mol_id": "gdb_9",
+          "smiles": "CC#C",
+          "mopacrs_hof": 44.637216368177405,
+          "oracle_hof": 44.74678,
+          "diff_hof": -0.10956363182259565
+        },
+        {
+          "mol_id": "gdb_10",
+          "smiles": "CC#N",
+          "mopacrs_hof": 20.519074823278288,
+          "oracle_hof": 20.4016,
+          "diff_hof": 0.11747482327828962
+        },
+        {
+          "mol_id": "gdb_11",
+          "smiles": "CC=O",
+          "mopacrs_hof": -40.059492945507486,
+          "oracle_hof": -39.78955,
+          "diff_hof": -0.26994294550748776
+        },
+        {
+          "mol_id": "gdb_13",
+          "smiles": "CCC",
+          "mopacrs_hof": -22.352527126576433,
+          "oracle_hof": -21.86272,
+          "diff_hof": -0.48980712657643366
+        },
+        {
+          "mol_id": "gdb_14",
+          "smiles": "CCO",
+          "mopacrs_hof": -61.307210533480884,
+          "oracle_hof": -61.45071,
+          "diff_hof": 0.14349946651911694
+        },
+        {
+          "mol_id": "gdb_15",
+          "smiles": "COC",
+          "mopacrs_hof": -50.85489145157476,
+          "oracle_hof": -51.41323,
+          "diff_hof": 0.5583385484252403
+        },
+        {
+          "mol_id": "gdb_16",
+          "smiles": "C1CC1",
+          "mopacrs_hof": 18.4955879790906,
+          "oracle_hof": 18.89446,
+          "diff_hof": -0.39887202090939766
+        },
+        {
+          "mol_id": "gdb_17",
+          "smiles": "C1CO1",
+          "mopacrs_hof": -7.6674664912483195,
+          "oracle_hof": -7.90219,
+          "diff_hof": 0.23472350875168058
+        },
+        {
+          "mol_id": "gdb_18",
+          "smiles": "CC(=O)C",
+          "mopacrs_hof": -46.30983321652013,
+          "oracle_hof": -46.44086,
+          "diff_hof": 0.13102678347986796
+        },
+        {
+          "mol_id": "gdb_19",
+          "smiles": "CC(=O)N",
+          "mopacrs_hof": -48.29016585260683,
+          "oracle_hof": -47.61494,
+          "diff_hof": -0.675225852606836
+        },
+        {
+          "mol_id": "gdb_20",
+          "smiles": "C(=O)(N)N",
+          "mopacrs_hof": -40.34882458174275,
+          "oracle_hof": -39.20908,
+          "diff_hof": -1.1397445817427467
+        },
+        {
+          "mol_id": "gdb_21",
+          "smiles": "CC(C)C",
+          "mopacrs_hof": -26.027768812731665,
+          "oracle_hof": -26.48015,
+          "diff_hof": 0.4523811872683332
+        },
+        {
+          "mol_id": "gdb_22",
+          "smiles": "CC(C)O",
+          "mopacrs_hof": -66.1040642492909,
+          "oracle_hof": -66.3881,
+          "diff_hof": 0.28403575070909426
+        },
+        {
+          "mol_id": "gdb_23",
+          "smiles": "C#CC#C",
+          "mopacrs_hof": 106.07560933157731,
+          "oracle_hof": 106.2611,
+          "diff_hof": -0.18549066842268758
+        },
+        {
+          "mol_id": "gdb_24",
+          "smiles": "C#CC#N",
+          "mopacrs_hof": 85.94258965780648,
+          "oracle_hof": 85.87232,
+          "diff_hof": 0.07026965780647743
+        },
+        {
+          "mol_id": "gdb_25",
+          "smiles": "C(#N)C#N",
+          "mopacrs_hof": 67.42306210864587,
+          "oracle_hof": 68.02785,
+          "diff_hof": -0.6047878913541354
+        },
+        {
+          "mol_id": "gdb_26",
+          "smiles": "C#CC=O",
+          "mopacrs_hof": 24.8202431343409,
+          "oracle_hof": 24.5937,
+          "diff_hof": 0.22654313434090056
+        },
+        {
+          "mol_id": "gdb_28",
+          "smiles": "C(=O)C=O",
+          "mopacrs_hof": -57.17331293395898,
+          "oracle_hof": -56.95926,
+          "diff_hof": -0.21405293395898184
+        },
+        {
+          "mol_id": "gdb_29",
+          "smiles": "CC#CC",
+          "mopacrs_hof": 34.784592542462406,
+          "oracle_hof": 34.87796,
+          "diff_hof": -0.09336745753759601
+        },
+        {
+          "mol_id": "gdb_30",
+          "smiles": "CCC#C",
+          "mopacrs_hof": 39.249019850828745,
+          "oracle_hof": 39.59052,
+          "diff_hof": -0.34150014917125304
+        },
+        {
+          "mol_id": "gdb_32",
+          "smiles": "C(C#N)N",
+          "mopacrs_hof": 27.842409814761368,
+          "oracle_hof": 27.62568,
+          "diff_hof": 0.21672981476136854
+        },
+        {
+          "mol_id": "gdb_33",
+          "smiles": "C#CCO",
+          "mopacrs_hof": 3.1720348293081315,
+          "oracle_hof": 3.7823,
+          "diff_hof": -0.6102651706918687
+        },
+        {
+          "mol_id": "gdb_34",
+          "smiles": "C(C#N)O",
+          "mopacrs_hof": -20.111399883081504,
+          "oracle_hof": -19.80515,
+          "diff_hof": -0.30624988308150236
+        },
+        {
+          "mol_id": "gdb_35",
+          "smiles": "CCC=O",
+          "mopacrs_hof": -45.30995187676842,
+          "oracle_hof": -45.38829,
+          "diff_hof": 0.07833812323157474
+        },
+        {
+          "mol_id": "gdb_36",
+          "smiles": "CNC=O",
+          "mopacrs_hof": -38.35783513155366,
+          "oracle_hof": -38.42264,
+          "diff_hof": 0.0648048684463447
+        },
+        {
+          "mol_id": "gdb_37",
+          "smiles": "COC=O",
+          "mopacrs_hof": -79.62934159728297,
+          "oracle_hof": -79.57172,
+          "diff_hof": -0.057621597282974335
+        },
+        {
+          "mol_id": "gdb_38",
+          "smiles": "C(C=O)O",
+          "mopacrs_hof": -84.40150728254582,
+          "oracle_hof": -84.59085,
+          "diff_hof": 0.1893427174541813
+        },
+        {
+          "mol_id": "gdb_39",
+          "smiles": "CCCC",
+          "mopacrs_hof": -27.73280167001485,
+          "oracle_hof": -27.89007,
+          "diff_hof": 0.1572683299851505
+        },
+        {
+          "mol_id": "gdb_41",
+          "smiles": "CCOC",
+          "mopacrs_hof": -56.553084011957594,
+          "oracle_hof": -56.63007,
+          "diff_hof": 0.0769859880424093
+        },
+        {
+          "mol_id": "gdb_42",
+          "smiles": "C(CO)O",
+          "mopacrs_hof": -109.47709545597309,
+          "oracle_hof": -109.73935,
+          "diff_hof": 0.2622545440269164
+        },
+        {
+          "mol_id": "gdb_43",
+          "smiles": "CC1CC1",
+          "mopacrs_hof": 12.452548469362682,
+          "oracle_hof": 12.88224,
+          "diff_hof": -0.42969153063731724
+        },
+        {
+          "mol_id": "gdb_44",
+          "smiles": "CC1CO1",
+          "mopacrs_hof": -13.843793337599664,
+          "oracle_hof": -13.99106,
+          "diff_hof": 0.1472666624003356
+        },
+        {
+          "mol_id": "gdb_45",
+          "smiles": "CN1CC1",
+          "mopacrs_hof": 36.171905598735634,
+          "oracle_hof": 36.61927,
+          "diff_hof": -0.44736440126436605
+        },
+        {
+          "mol_id": "gdb_46",
+          "smiles": "C1CC1O",
+          "mopacrs_hof": -26.028808138360432,
+          "oracle_hof": -25.79899,
+          "diff_hof": -0.2298181383604323
+        },
+        {
+          "mol_id": "gdb_47",
+          "smiles": "C1CCC1",
+          "mopacrs_hof": 3.5629152193712343,
+          "oracle_hof": 5.10502,
+          "diff_hof": -1.5421047806287653
+        },
+        {
+          "mol_id": "gdb_49",
+          "smiles": "CC(=NO)C",
+          "mopacrs_hof": -6.76600900923313,
+          "oracle_hof": -6.70211,
+          "diff_hof": -0.06389900923312997
+        },
+        {
+          "mol_id": "gdb_50",
+          "smiles": "c1cc[nH]c1",
+          "mopacrs_hof": 42.82678282775953,
+          "oracle_hof": 42.40006,
+          "diff_hof": 0.4267228277595265
+        }
+      ]
+    },
+    "PM6": {
+      "converged": 500,
+      "total": 500,
+      "convergence_pct": 100.0,
+      "wall_time_s": 8.120424804999857,
+      "throughput_mol_per_s": 61.57313342673196,
+      "mean_calc_time_ms": 13.716890193987638,
+      "oracle_parity_hof": {
+        "count": 50,
+        "mean_signed_error": -11.250000312136741,
+        "mae": 11.285809093984184,
+        "rmse": 19.654842206636868,
+        "p50": 5.187212367793691,
+        "p90": 40.22228190189421,
+        "p99": 61.02189006244575,
+        "max_abs_error": 77.463042144287
+      },
+      "oracle_parity_etot": {
+        "count": 50,
+        "mean_signed_error": -0.3942890748820349,
+        "mae": 0.39526812914003984,
+        "rmse": 0.6240926263859141,
+        "p50": 0.22493738646721795,
+        "p90": 1.2238332023205203,
+        "p99": 1.8604014826650466,
+        "max_abs_error": 2.3183775087030654
+      },
+      "vs_b3lyp_gap": {
+        "count": 500,
+        "mean_signed_error": 3.7874292262875495,
+        "mae": 3.7892721694988643,
+        "rmse": 3.835163365045276,
+        "p50": 3.8139416027094524,
+        "p90": 4.514747512156475,
+        "p99": 4.990310943640969,
+        "max_abs_error": 5.98448127581408
+      },
+      "vs_b3lyp_dipole": {
+        "count": 500,
+        "mean_signed_error": 0.3569310117198996,
+        "mae": 0.4499958122804696,
+        "rmse": 0.5444951717214203,
+        "p50": 0.4343529370977126,
+        "p90": 0.8699107214685474,
+        "p99": 1.2458324416984445,
+        "max_abs_error": 1.999376187210796
+      },
+      "outliers": [
+        {
+          "mol_id": "gdb_1",
+          "smiles": "C",
+          "mopacrs_hof": -11.758603622176338,
+          "oracle_hof": -12.21362,
+          "diff_hof": 0.45501637782366267
+        },
+        {
+          "mol_id": "gdb_2",
+          "smiles": "N",
+          "mopacrs_hof": -3.043446491606346,
+          "oracle_hof": -2.86398,
+          "diff_hof": -0.17946649160634598
+        },
+        {
+          "mol_id": "gdb_3",
+          "smiles": "O",
+          "mopacrs_hof": -54.52301509970562,
+          "oracle_hof": -54.13342,
+          "diff_hof": -0.3895950997056161
+        },
+        {
+          "mol_id": "gdb_4",
+          "smiles": "C#C",
+          "mopacrs_hof": 21.57143620417355,
+          "oracle_hof": 57.25046,
+          "diff_hof": -35.679023795826446
+        },
+        {
+          "mol_id": "gdb_5",
+          "smiles": "C#N",
+          "mopacrs_hof": 32.885388418744355,
+          "oracle_hof": 33.29751,
+          "diff_hof": -0.41212158125564713
+        },
+        {
+          "mol_id": "gdb_6",
+          "smiles": "C=O",
+          "mopacrs_hof": -20.877481538511574,
+          "oracle_hof": -20.50352,
+          "diff_hof": -0.37396153851157266
+        },
+        {
+          "mol_id": "gdb_7",
+          "smiles": "CC",
+          "mopacrs_hof": -18.539657410438167,
+          "oracle_hof": -15.77963,
+          "diff_hof": -2.760027410438168
+        },
+        {
+          "mol_id": "gdb_8",
+          "smiles": "CO",
+          "mopacrs_hof": -47.81262790633866,
+          "oracle_hof": -47.6108,
+          "diff_hof": -0.20182790633866432
+        },
+        {
+          "mol_id": "gdb_9",
+          "smiles": "CC#C",
+          "mopacrs_hof": 6.222544469907575,
+          "oracle_hof": 45.92617,
+          "diff_hof": -39.703625530092424
+        },
+        {
+          "mol_id": "gdb_10",
+          "smiles": "CC#N",
+          "mopacrs_hof": 15.812808196889478,
+          "oracle_hof": 20.78363,
+          "diff_hof": -4.970821803110521
+        },
+        {
+          "mol_id": "gdb_11",
+          "smiles": "CC=O",
+          "mopacrs_hof": -41.357045672710456,
+          "oracle_hof": -37.74646,
+          "diff_hof": -3.6105856727104566
+        },
+        {
+          "mol_id": "gdb_12",
+          "smiles": "C(=O)N",
+          "mopacrs_hof": -39.35561938621993,
+          "oracle_hof": -38.95283,
+          "diff_hof": -0.4027893862199292
+        },
+        {
+          "mol_id": "gdb_13",
+          "smiles": "CCC",
+          "mopacrs_hof": -26.261022932476862,
+          "oracle_hof": -20.85742,
+          "diff_hof": -5.403602932476861
+        },
+        {
+          "mol_id": "gdb_14",
+          "smiles": "CCO",
+          "mopacrs_hof": -57.16193826217375,
+          "oracle_hof": -53.92162,
+          "diff_hof": -3.2403182621737514
+        },
+        {
+          "mol_id": "gdb_16",
+          "smiles": "C1CC1",
+          "mopacrs_hof": 1.2610590804498543,
+          "oracle_hof": 11.96819,
+          "diff_hof": -10.707130919550146
+        },
+        {
+          "mol_id": "gdb_17",
+          "smiles": "C1CO1",
+          "mopacrs_hof": -12.675020657745904,
+          "oracle_hof": -8.17201,
+          "diff_hof": -4.503010657745904
+        },
+        {
+          "mol_id": "gdb_18",
+          "smiles": "CC(=O)C",
+          "mopacrs_hof": -58.06901801190179,
+          "oracle_hof": -53.92133,
+          "diff_hof": -4.147688011901792
+        },
+        {
+          "mol_id": "gdb_19",
+          "smiles": "CC(=O)N",
+          "mopacrs_hof": -57.29890101030628,
+          "oracle_hof": -53.75938,
+          "diff_hof": -3.539521010306281
+        },
+        {
+          "mol_id": "gdb_20",
+          "smiles": "C(=O)(N)N",
+          "mopacrs_hof": -46.692652855270126,
+          "oracle_hof": -46.01879,
+          "diff_hof": -0.6738628552701229
+        },
+        {
+          "mol_id": "gdb_21",
+          "smiles": "CC(C)C",
+          "mopacrs_hof": -34.789055785054416,
+          "oracle_hof": -27.30796,
+          "diff_hof": -7.481095785054414
+        },
+        {
+          "mol_id": "gdb_22",
+          "smiles": "CC(C)O",
+          "mopacrs_hof": -69.68339900076751,
+          "oracle_hof": -63.83618,
+          "diff_hof": -5.8472190007675096
+        },
+        {
+          "mol_id": "gdb_23",
+          "smiles": "C#CC#C",
+          "mopacrs_hof": 33.90750785571299,
+          "oracle_hof": 111.37055,
+          "diff_hof": -77.463042144287
+        },
+        {
+          "mol_id": "gdb_24",
+          "smiles": "C#CC#N",
+          "mopacrs_hof": 47.91171177411752,
+          "oracle_hof": 91.07564,
+          "diff_hof": -43.163928225882486
+        },
+        {
+          "mol_id": "gdb_25",
+          "smiles": "C(#N)C#N",
+          "mopacrs_hof": 66.70654675797113,
+          "oracle_hof": 74.46514,
+          "diff_hof": -7.75859324202888
+        },
+        {
+          "mol_id": "gdb_26",
+          "smiles": "C#CC=O",
+          "mopacrs_hof": -7.974227598720518,
+          "oracle_hof": 32.25185,
+          "diff_hof": -40.226077598720515
+        },
+        {
+          "mol_id": "gdb_27",
+          "smiles": "C(=O)C#N",
+          "mopacrs_hof": 7.522507993513841,
+          "oracle_hof": 12.34725,
+          "diff_hof": -4.82474200648616
+        },
+        {
+          "mol_id": "gdb_28",
+          "smiles": "C(=O)C=O",
+          "mopacrs_hof": -49.651842336349546,
+          "oracle_hof": -45.47566,
+          "diff_hof": -4.176182336349548
+        },
+        {
+          "mol_id": "gdb_29",
+          "smiles": "CC#CC",
+          "mopacrs_hof": -8.17492054869274,
+          "oracle_hof": 35.73475,
+          "diff_hof": -43.90967054869274
+        },
+        {
+          "mol_id": "gdb_30",
+          "smiles": "CCC#C",
+          "mopacrs_hof": -0.45150986976636887,
+          "oracle_hof": 41.85351,
+          "diff_hof": -42.30501986976637
+        },
+        {
+          "mol_id": "gdb_31",
+          "smiles": "CCC#N",
+          "mopacrs_hof": 9.433363887574501,
+          "oracle_hof": 16.49939,
+          "diff_hof": -7.066026112425497
+        },
+        {
+          "mol_id": "gdb_32",
+          "smiles": "C(C#N)N",
+          "mopacrs_hof": 28.25917226943841,
+          "oracle_hof": 33.22507,
+          "diff_hof": -4.9658977305615934
+        },
+        {
+          "mol_id": "gdb_33",
+          "smiles": "C#CCO",
+          "mopacrs_hof": -26.504880157802404,
+          "oracle_hof": 13.71698,
+          "diff_hof": -40.2218601578024
+        },
+        {
+          "mol_id": "gdb_34",
+          "smiles": "C(C#N)O",
+          "mopacrs_hof": -13.907237526848121,
+          "oracle_hof": -9.21344,
+          "diff_hof": -4.693797526848121
+        },
+        {
+          "mol_id": "gdb_35",
+          "smiles": "CCC=O",
+          "mopacrs_hof": -47.47547222687854,
+          "oracle_hof": -41.39424,
+          "diff_hof": -6.081232226878534
+        },
+        {
+          "mol_id": "gdb_36",
+          "smiles": "CNC=O",
+          "mopacrs_hof": -38.19314683163759,
+          "oracle_hof": -38.63335,
+          "diff_hof": 0.4402031683624088
+        },
+        {
+          "mol_id": "gdb_37",
+          "smiles": "COC=O",
+          "mopacrs_hof": -75.22168525393602,
+          "oracle_hof": -74.52476,
+          "diff_hof": -0.6969252539360156
+        },
+        {
+          "mol_id": "gdb_38",
+          "smiles": "C(C=O)O",
+          "mopacrs_hof": -76.78127314085941,
+          "oracle_hof": -72.96546,
+          "diff_hof": -3.8158131408594187
+        },
+        {
+          "mol_id": "gdb_39",
+          "smiles": "CCCC",
+          "mopacrs_hof": -33.899795947322445,
+          "oracle_hof": -25.76824,
+          "diff_hof": -8.131555947322447
+        },
+        {
+          "mol_id": "gdb_40",
+          "smiles": "CCCO",
+          "mopacrs_hof": -64.50649026842268,
+          "oracle_hof": -58.83933,
+          "diff_hof": -5.667160268422684
+        },
+        {
+          "mol_id": "gdb_41",
+          "smiles": "CCOC",
+          "mopacrs_hof": -53.014698930064355,
+          "oracle_hof": -50.10728,
+          "diff_hof": -2.9074189300643525
+        },
+        {
+          "mol_id": "gdb_42",
+          "smiles": "C(CO)O",
+          "mopacrs_hof": -96.98891518898449,
+          "oracle_hof": -93.86378,
+          "diff_hof": -3.125135188984487
+        },
+        {
+          "mol_id": "gdb_43",
+          "smiles": "CC1CC1",
+          "mopacrs_hof": -7.5524227460487054,
+          "oracle_hof": 4.87514,
+          "diff_hof": -12.427562746048705
+        },
+        {
+          "mol_id": "gdb_44",
+          "smiles": "CC1CO1",
+          "mopacrs_hof": -25.242587510688168,
+          "oracle_hof": -17.42003,
+          "diff_hof": -7.822557510688167
+        },
+        {
+          "mol_id": "gdb_45",
+          "smiles": "CN1CC1",
+          "mopacrs_hof": 23.77373982957556,
+          "oracle_hof": 29.30609,
+          "diff_hof": -5.53235017042444
+        },
+        {
+          "mol_id": "gdb_46",
+          "smiles": "C1CC1O",
+          "mopacrs_hof": -37.983773591164436,
+          "oracle_hof": -29.14229,
+          "diff_hof": -8.841483591164437
+        },
+        {
+          "mol_id": "gdb_47",
+          "smiles": "C1CCC1",
+          "mopacrs_hof": -9.432278035156742,
+          "oracle_hof": 0.53025,
+          "diff_hof": -9.962528035156742
+        },
+        {
+          "mol_id": "gdb_48",
+          "smiles": "C1COC1",
+          "mopacrs_hof": -33.25816399719338,
+          "oracle_hof": -27.70612,
+          "diff_hof": -5.55204399719338
+        },
+        {
+          "mol_id": "gdb_49",
+          "smiles": "CC(=NO)C",
+          "mopacrs_hof": -23.477263188366805,
+          "oracle_hof": -16.65208,
+          "diff_hof": -6.825183188366804
+        },
+        {
+          "mol_id": "gdb_50",
+          "smiles": "c1cc[nH]c1",
+          "mopacrs_hof": 6.757503829752977,
+          "oracle_hof": 27.7431,
+          "diff_hof": -20.98559617024702
+        }
+      ]
+    }
+  }
+}

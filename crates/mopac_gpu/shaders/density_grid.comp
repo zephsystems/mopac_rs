@@ -1,0 +1,149 @@
+#version 450
+layout(local_size_x = 64, local_size_y = 1, local_size_z = 1) in;
+
+// Physical constants in atomic units (Bohr)
+const float CUTOFF_R2 = 144.0; // 12.0 Bohr squared
+const uint MAX_ACTIVE_ATOMS = 64; // Max atoms within 12 Bohr cutoff for a single voxel
+
+struct AtomData {
+    float x;
+    float y;
+    float z;
+    float zs;
+    float zp;
+    float norm_s;
+    float norm_p;
+    uint z_num;
+    uint offset;
+    uint basis_type; // 0 = S (1 orb), 1 = SP (4 orbs), 2 = SPD (9 orbs)
+};
+
+struct ActiveAtom {
+    uint offset;
+    uint count;
+    float vals[4];
+};
+
+layout(push_constant) uniform PushConstants {
+    uint nx;
+    uint ny;
+    uint nz;
+    uint natoms;
+    uint norbs;
+    float origin_x;
+    float origin_y;
+    float origin_z;
+    float step_bohr;
+} pc;
+
+layout(std430, binding = 0) readonly buffer AtomsBuffer {
+    AtomData atoms[];
+};
+
+layout(std430, binding = 1) readonly buffer DensityMatrixBuffer {
+    float density_matrix[];
+};
+
+layout(std430, binding = 2) writeonly buffer OutputGridBuffer {
+    float grid_values[];
+};
+
+void main() {
+    uint g_idx = gl_GlobalInvocationID.x;
+    uint total_voxels = pc.nx * pc.ny * pc.nz;
+    if (g_idx >= total_voxels) {
+        return;
+    }
+
+    // Deconstruct 1D index into (ix, iy, iz)
+    uint slice_size = pc.ny * pc.nz;
+    uint ix = g_idx / slice_size;
+    uint rem = g_idx % slice_size;
+    uint iy = rem / pc.nz;
+    uint iz = rem % pc.nz;
+
+    float px = pc.origin_x + float(ix) * pc.step_bohr;
+    float py = pc.origin_y + float(iy) * pc.step_bohr;
+    float pz = pc.origin_z + float(iz) * pc.step_bohr;
+
+    ActiveAtom active_atoms[MAX_ACTIVE_ATOMS];
+    uint n_active = 0;
+
+    for (uint a = 0; a < pc.natoms; ++a) {
+        float dx = px - atoms[a].x;
+        float dy = py - atoms[a].y;
+        float dz = pz - atoms[a].z;
+        float r2 = dx * dx + dy * dy + dz * dz;
+
+        if (r2 <= CUTOFF_R2 && n_active < MAX_ACTIVE_ATOMS) {
+            float r = sqrt(r2);
+            uint z = atoms[a].z_num;
+            uint off = atoms[a].offset;
+            float zs = atoms[a].zs;
+            float zp = atoms[a].zp;
+            float norm_s = atoms[a].norm_s;
+            float norm_p = atoms[a].norm_p;
+
+            active_atoms[n_active].offset = off;
+
+            if (z == 1u) {
+                // H: 1s orbital
+                active_atoms[n_active].count = 1u;
+                active_atoms[n_active].vals[0] = norm_s * exp(-zs * r);
+                active_atoms[n_active].vals[1] = 0.0;
+                active_atoms[n_active].vals[2] = 0.0;
+                active_atoms[n_active].vals[3] = 0.0;
+            } else if (z <= 10u) {
+                // Row 2: 2s, 2px, 2py, 2pz
+                float exp_s = exp(-zs * r);
+                float exp_p = exp(-zp * r);
+                active_atoms[n_active].count = 4u;
+                active_atoms[n_active].vals[0] = norm_s * r * exp_s;
+                active_atoms[n_active].vals[1] = norm_p * dx * exp_p;
+                active_atoms[n_active].vals[2] = norm_p * dy * exp_p;
+                active_atoms[n_active].vals[3] = norm_p * dz * exp_p;
+            } else {
+                // Row 3: 3s, 3px, 3py, 3pz
+                float exp_s = exp(-zs * r);
+                float exp_p = exp(-zp * r);
+                active_atoms[n_active].count = 4u;
+                active_atoms[n_active].vals[0] = norm_s * r2 * exp_s;
+                active_atoms[n_active].vals[1] = norm_p * dx * r * exp_p;
+                active_atoms[n_active].vals[2] = norm_p * dy * r * exp_p;
+                active_atoms[n_active].vals[3] = norm_p * dz * r * exp_p;
+            }
+            n_active++;
+        }
+    }
+
+    float rho = 0.0;
+
+    for (uint i = 0; i < n_active; ++i) {
+        uint off_i = active_atoms[i].offset;
+        uint count_i = active_atoms[i].count;
+
+        for (uint j = 0; j < n_active; ++j) {
+            uint off_j = active_atoms[j].offset;
+            uint count_j = active_atoms[j].count;
+
+            for (uint ki = 0; ki < count_i; ++ki) {
+                float v_mu = active_atoms[i].vals[ki];
+                if (abs(v_mu) > 1e-7) {
+                    uint mu = off_i + ki;
+                    uint row_offset = mu * pc.norbs;
+
+                    for (uint kj = 0; kj < count_j; ++kj) {
+                        float v_nu = active_atoms[j].vals[kj];
+                        if (abs(v_nu) > 1e-7) {
+                            uint nu = off_j + kj;
+                            float p_elem = density_matrix[row_offset + nu];
+                            rho += p_elem * v_mu * v_nu;
+                        }
+                    }
+                }
+            }
+        }
+    }
+
+    grid_values[g_idx] = rho;
+}

@@ -27,6 +27,7 @@ pub struct GpuCoulombCalculator {
     pipeline_layout: vk::PipelineLayout,
     descriptor_set_layout: vk::DescriptorSetLayout,
     shader_module: vk::ShaderModule,
+    default_workspace: std::sync::Mutex<Option<GpuWorkspace>>,
 }
 
 impl GpuCoulombCalculator {
@@ -90,6 +91,7 @@ impl GpuCoulombCalculator {
             pipeline_layout,
             descriptor_set_layout,
             shader_module,
+            default_workspace: std::sync::Mutex::new(None),
         })
     }
 
@@ -261,6 +263,9 @@ impl GpuCoulombCalculator {
         model: &dyn ParameterModel,
     ) -> Result<AlignedMatrix<f64>, VulkanError> {
         let n = batch.natoms;
+        if n == 0 {
+            return Ok(AlignedMatrix::zeroed(0, 0));
+        }
         let mut atoms = Vec::with_capacity(n);
         for i in 0..n {
             let z = batch.atomic_numbers[i];
@@ -274,6 +279,24 @@ impl GpuCoulombCalculator {
                 gss: param.gss,
             });
         }
+
+        // Fast path: use pre-allocated zero-allocation GPU workspace
+        if let Ok(mut ws_guard) = self.default_workspace.lock() {
+            let need_realloc = match *ws_guard {
+                Some(ref ws) => ws.max_atoms < n,
+                None => true,
+            };
+            if need_realloc {
+                let alloc_size = (n * 2).max(256);
+                *ws_guard = Some(self.allocate_workspace(alloc_size)?);
+            }
+            if let Some(ref mut ws) = *ws_guard {
+                let mut out = AlignedMatrix::zeroed(n, n);
+                self.compute_pairwise_in_workspace(&atoms, ws, &mut out)?;
+                return Ok(out);
+            }
+        }
+
         self.compute_pairwise_coulomb(&atoms)
     }
 
@@ -514,3 +537,7 @@ impl Drop for GpuCoulombCalculator {
         }
     }
 }
+
+unsafe impl Send for GpuCoulombCalculator {}
+unsafe impl Sync for GpuCoulombCalculator {}
+

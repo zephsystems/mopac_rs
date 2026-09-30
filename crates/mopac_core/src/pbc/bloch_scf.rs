@@ -6,7 +6,6 @@
 
 use crate::fock::{build_fock, build_fock_nddo};
 use crate::hamiltonian::build_hcore;
-use crate::integrals::core_repulsion::compute_pair_core_repulsion;
 use crate::parameters::ParameterModel;
 use crate::pbc::unit_cell::{KPoint, UnitCell};
 use crate::properties::heat::compute_heat_of_formation;
@@ -250,7 +249,7 @@ pub fn run_pbc_scf(
                 let dz = ra[2] - rb[2];
                 let r_ab = (dx * dx + dy * dy + dz * dz).sqrt();
 
-                let e_pair = compute_pair_core_repulsion(r_ab, &pa, &pb);
+                let e_pair = model.pair_core_repulsion(r_ab, &pa, &pb);
                 e_nuc_ev += 0.5 * e_pair;
             }
         }

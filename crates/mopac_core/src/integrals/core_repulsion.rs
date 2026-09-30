@@ -17,6 +17,7 @@ pub fn compute_pair_core_repulsion(
     r_angstrom: f64,
     elem_a: &SemiEmpiricalElementParams,
     elem_b: &SemiEmpiricalElementParams,
+    is_am1: bool,
 ) -> f64 {
     if r_angstrom < 1e-10 {
         return 0.0;
@@ -47,7 +48,8 @@ pub fn compute_pair_core_repulsion(
     // Gaussian core corrections
     let mut gaussian_sum = 0.0;
 
-    let is_am1_b_pair = (elem_a.z == 5 || elem_b.z == 5)
+    let is_am1_b_pair = is_am1
+        && (elem_a.z == 5 || elem_b.z == 5)
         && matches!(
             if elem_a.z == 5 { elem_b.z } else { elem_a.z },
             1 | 6 | 9 | 17 | 35 | 53

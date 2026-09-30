@@ -9,6 +9,7 @@
 pub mod context;
 pub mod coulomb;
 pub mod coulomb_fp32;
+pub mod cube;
 
 pub use context::{VulkanContext, VulkanDeviceInfo, VulkanError};
 pub use coulomb::{AtomGpu, GpuCoulombCalculator, GpuWorkspace};
@@ -16,3 +17,4 @@ pub use coulomb_fp32::{
     AtomGpuFP32, BatchMoleculeDescriptor, GpuBatchVramManager, GpuCoulombCalculatorFP32,
     GpuWorkspaceFP32,
 };
+pub use cube::{AtomDataGpu, GpuCubeEvaluator};

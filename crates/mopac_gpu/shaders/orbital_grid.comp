@@ -1,0 +1,115 @@
+#version 450
+layout(local_size_x = 64, local_size_y = 1, local_size_z = 1) in;
+
+// Physical constants in atomic units (Bohr)
+const float PI = 3.14159265358979323846;
+const float CUTOFF_R2 = 144.0; // 12.0 Bohr squared
+
+struct AtomData {
+    float x;
+    float y;
+    float z;
+    float zs;
+    float zp;
+    float norm_s;
+    float norm_p;
+    uint z_num;
+    uint offset;
+    uint basis_type; // 0 = S (1 orb), 1 = SP (4 orbs), 2 = SPD (9 orbs)
+};
+
+layout(push_constant) uniform PushConstants {
+    uint nx;
+    uint ny;
+    uint nz;
+    uint natoms;
+    uint norbs;
+    float origin_x;
+    float origin_y;
+    float origin_z;
+    float step_bohr;
+} pc;
+
+layout(std430, binding = 0) readonly buffer AtomsBuffer {
+    AtomData atoms[];
+};
+
+layout(std430, binding = 1) readonly buffer MoCoeffsBuffer {
+    float mo_coeffs[];
+};
+
+layout(std430, binding = 2) writeonly buffer OutputGridBuffer {
+    float grid_values[];
+};
+
+void main() {
+    uint g_idx = gl_GlobalInvocationID.x;
+    uint total_voxels = pc.nx * pc.ny * pc.nz;
+    if (g_idx >= total_voxels) {
+        return;
+    }
+
+    // Deconstruct 1D index into (ix, iy, iz)
+    uint slice_size = pc.ny * pc.nz;
+    uint ix = g_idx / slice_size;
+    uint rem = g_idx % slice_size;
+    uint iy = rem / pc.nz;
+    uint iz = rem % pc.nz;
+
+    float px = pc.origin_x + float(ix) * pc.step_bohr;
+    float py = pc.origin_y + float(iy) * pc.step_bohr;
+    float pz = pc.origin_z + float(iz) * pc.step_bohr;
+
+    float psi = 0.0;
+
+    for (uint a = 0; a < pc.natoms; ++a) {
+        float dx = px - atoms[a].x;
+        float dy = py - atoms[a].y;
+        float dz = pz - atoms[a].z;
+        float r2 = dx * dx + dy * dy + dz * dz;
+
+        if (r2 <= CUTOFF_R2) {
+            float r = sqrt(r2);
+            uint z = atoms[a].z_num;
+            uint off = atoms[a].offset;
+            float zs = atoms[a].zs;
+            float zp = atoms[a].zp;
+            float norm_s = atoms[a].norm_s;
+            float norm_p = atoms[a].norm_p;
+
+            if (z == 1u) {
+                // H: 1s orbital
+                float val_s = norm_s * exp(-zs * r);
+                psi += mo_coeffs[off] * val_s;
+            } else if (z <= 10u) {
+                // Row 2: 2s, 2px, 2py, 2pz
+                float exp_s = exp(-zs * r);
+                float exp_p = exp(-zp * r);
+                float val_s = norm_s * r * exp_s;
+                float val_px = norm_p * dx * exp_p;
+                float val_py = norm_p * dy * exp_p;
+                float val_pz = norm_p * dz * exp_p;
+
+                psi += mo_coeffs[off] * val_s;
+                psi += mo_coeffs[off + 1u] * val_px;
+                psi += mo_coeffs[off + 2u] * val_py;
+                psi += mo_coeffs[off + 3u] * val_pz;
+            } else {
+                // Row 3: 3s, 3px, 3py, 3pz
+                float exp_s = exp(-zs * r);
+                float exp_p = exp(-zp * r);
+                float val_s = norm_s * r2 * exp_s;
+                float val_px = norm_p * dx * r * exp_p;
+                float val_py = norm_p * dy * r * exp_p;
+                float val_pz = norm_p * dz * r * exp_p;
+
+                psi += mo_coeffs[off] * val_s;
+                psi += mo_coeffs[off + 1u] * val_px;
+                psi += mo_coeffs[off + 2u] * val_py;
+                psi += mo_coeffs[off + 3u] * val_pz;
+            }
+        }
+    }
+
+    grid_values[g_idx] = psi;
+}

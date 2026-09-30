@@ -28,3 +28,18 @@ __pycache__/
 *.pyc
 .env
 .venv/
+
+# Large benchmark datasets
+benchmarks/datasets/
+
+# Generated benchmark and visualization outputs
+benchmarks/data/*_mopac*.pdb
+benchmarks/data/*_mopac*.pdbqt
+benchmarks/data/*.cube
+benchmarks/chemotheque/*audit_results.json
+
+# Test & linter caches
+.pytest_cache/
+.mypy_cache/
+.ruff_cache/
+

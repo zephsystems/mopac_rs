@@ -33,14 +33,13 @@ impl CosmoCavity {
     ///
     /// Uses Andreas Klamt's solvent probe radius `rsolv` (default: 1.30005 A) and
     /// 1082-point icosahedral sphere tessellation.
-    pub fn construct(batch: &MolecularBatch, rsolv: f64) -> Self {
+    pub fn construct(batch: &MolecularBatch, _rsolv: f64) -> Self {
         let natoms = batch.natoms;
         assert!(natoms > 0, "Molecular batch cannot be empty for COSMO");
 
         // Generate static icosahedral grids
         let fine_grid = generate_sphere_tessellation(1082);
         let basic_heavy = generate_sphere_tessellation(42);
-        let basic_hydro = generate_sphere_tessellation(12);
 
         let mut segments = Vec::new();
         let mut total_area = 0.0f64;
@@ -52,19 +51,18 @@ impl CosmoCavity {
             let ri2 = ri * ri;
             let xi = [batch.x[i], batch.y[i], batch.z[i]];
 
-            let basic_grid = if zi == 1 { &basic_hydro } else { &basic_heavy };
+            let basic_grid = &basic_heavy;
             let num_basic = basic_grid.len();
 
             // Group fine grid points into basic segment clusters
             let mut segment_fine_points: Vec<Vec<usize>> = vec![Vec::new(); num_basic];
 
             for (k, pt) in fine_grid.iter().enumerate() {
-                // Test point on the solvent-exclusion surface: x_k = x_i + u * (r_i + rsolv)
-                let r_probe = ri + rsolv;
+                // Test point on the Klamt COSMO solute cavity surface: x_k = x_i + u * r_i
                 let xk = [
-                    xi[0] + pt.dir[0] * r_probe,
-                    xi[1] + pt.dir[1] * r_probe,
-                    xi[2] + pt.dir[2] * r_probe,
+                    xi[0] + pt.dir[0] * ri,
+                    xi[1] + pt.dir[1] * ri,
+                    xi[2] + pt.dir[2] * ri,
                 ];
 
                 // Check overlap with all other atoms j != i
@@ -78,8 +76,7 @@ impl CosmoCavity {
                     let dy = xk[1] - batch.y[j];
                     let dz = xk[2] - batch.z[j];
                     let dist2 = dx * dx + dy * dy + dz * dz;
-                    let cutoff = rj + rsolv;
-                    if dist2 < cutoff * cutoff {
+                    if dist2 < rj * rj {
                         accessible = false;
                         break;
                     }

@@ -693,3 +693,436 @@ fn test_golden_parity_hydrogen_sulfide_pm7() {
         );
     }
 }
+
+#[test]
+fn test_golden_parity_water_cosmo_pm6() {
+    let z = vec![8, 1, 1];
+    let coords = vec![
+        [0.000, 0.000, 0.117176],
+        [0.000, 0.756950, -0.468706],
+        [0.000, -0.756950, -0.468706],
+    ];
+    let model = mopac_core::parameters::pm6::Pm6Model;
+    let batch = MolecularBatch::new_for_model(z.clone(), &coords, &model);
+    let mut ws = ScfWorkspace::allocate(batch.norbs);
+
+    let cosmo = mopac_core::solvation::CosmoParams {
+        epsilon: 78.4,
+        ..Default::default()
+    };
+
+    let scf_opts = ScfOptions {
+        max_iter: 60,
+        energy_tol_ev: 1e-8,
+        density_tol: 1e-7,
+        level_shift_ev: 0.0,
+        damping: 0.5,
+        use_nddo: true,
+        cosmo: Some(cosmo),
+        ..Default::default()
+    };
+
+    let scf_res = run_rhf_scf_with_options(&batch, &model, &mut ws, &scf_opts);
+    assert!(scf_res.converged, "COSMO Water SCF must converge");
+
+    let (_, hof_mopacrs) =
+        compute_heat_of_formation(scf_res.total_energy_ev, &batch.atomic_numbers, &model, 0.0);
+
+    let oracle = match run_openmopac_oracle("water_cosmo_pm6", "PM6 EPS=78.4", &z, &coords) {
+        Some(o) => o,
+        None => return,
+    };
+
+    let hof_diff = (hof_mopacrs - oracle.heat_of_formation_kcal).abs();
+    println!(
+        "[ORACLE PARITY] H2O PM6 COSMO (EPS=78.4): MOPAC_RS = {:.5} kcal/mol, OpenMOPAC = {:.5} kcal/mol, diff = {:.4} kcal/mol",
+        hof_mopacrs, oracle.heat_of_formation_kcal, hof_diff
+    );
+
+    // Assert heat of formation parity within 2.0 kcal/mol for COSMO implicit solvation
+    assert!(
+        hof_diff < 2.0,
+        "COSMO Heat of formation difference too large: {:.4} kcal/mol",
+        hof_diff
+    );
+}
+
+#[test]
+fn test_golden_parity_zmatrix_water_am1() {
+    use mopac_core::geometry::zmatrix::{zmatrix_to_cartesian, ZMatrixAtom};
+
+    let entries = vec![
+        ZMatrixAtom {
+            symbol: "O".to_string(),
+            atomic_number: 8,
+            bond_length: 0.0,
+            bond_to: None,
+            bond_angle_deg: 0.0,
+            angle_to: None,
+            dihedral_deg: 0.0,
+            dihedral_to: None,
+            opt_bond: false,
+            opt_angle: false,
+            opt_dihedral: false,
+        },
+        ZMatrixAtom {
+            symbol: "H".to_string(),
+            atomic_number: 1,
+            bond_length: 0.958,
+            bond_to: Some(0),
+            bond_angle_deg: 0.0,
+            angle_to: None,
+            dihedral_deg: 0.0,
+            dihedral_to: None,
+            opt_bond: false,
+            opt_angle: false,
+            opt_dihedral: false,
+        },
+        ZMatrixAtom {
+            symbol: "H".to_string(),
+            atomic_number: 1,
+            bond_length: 0.958,
+            bond_to: Some(0),
+            bond_angle_deg: 104.5,
+            angle_to: Some(1),
+            dihedral_deg: 0.0,
+            dihedral_to: None,
+            opt_bond: false,
+            opt_angle: false,
+            opt_dihedral: false,
+        },
+    ];
+
+    let coords = zmatrix_to_cartesian(&entries).expect("Z-matrix to Cartesian conversion failed");
+    let z = vec![8, 1, 1];
+
+    let model = Am1Model;
+    let batch = MolecularBatch::new(z.clone(), &coords);
+    let mut ws = ScfWorkspace::allocate(batch.norbs);
+
+    let scf_opts = ScfOptions {
+        max_iter: 60,
+        energy_tol_ev: 1e-8,
+        density_tol: 1e-7,
+        level_shift_ev: 0.0,
+        damping: 0.5,
+        use_nddo: true,
+        cosmo: None,
+        ..Default::default()
+    };
+
+    let scf_res = run_rhf_scf_with_options(&batch, &model, &mut ws, &scf_opts);
+    assert!(scf_res.converged, "Z-matrix water SCF must converge");
+
+    let (_, hof_mopacrs) =
+        compute_heat_of_formation(scf_res.total_energy_ev, &batch.atomic_numbers, &model, 0.0);
+
+    let oracle = match run_openmopac_oracle("water_zmat_am1", "AM1", &z, &coords) {
+        Some(o) => o,
+        None => return,
+    };
+
+    let hof_diff = (hof_mopacrs - oracle.heat_of_formation_kcal).abs();
+    println!(
+        "[ORACLE PARITY] Z-Matrix H2O AM1: MOPAC_RS = {:.5} kcal/mol, OpenMOPAC = {:.5} kcal/mol, diff = {:.4} kcal/mol",
+        hof_mopacrs, oracle.heat_of_formation_kcal, hof_diff
+    );
+
+    assert!(
+        hof_diff < 0.1,
+        "Z-Matrix H2O AM1 HoF difference exceeded 0.1 kcal/mol: {:.4}",
+        hof_diff
+    );
+}
+
+#[test]
+fn test_golden_parity_oh_radical_uhf_pm6() {
+    let z = vec![8, 1];
+    let coords = vec![[0.0, 0.0, 0.0], [0.0, 0.0, 0.97]];
+    let model = mopac_core::parameters::pm6::Pm6Model;
+    let batch = MolecularBatch::new_for_model(z.clone(), &coords, &model);
+    let mut ws = UhfWorkspace::new(batch.norbs);
+
+    let uhf_opts = UhfOptions {
+        multiplicity: 2,
+        charge: 0,
+        max_iter: 60,
+        energy_tol_ev: 1e-8,
+        density_tol: 1e-7,
+        damping: 0.5,
+        use_nddo: true,
+        cosmo: None,
+    };
+
+    let uhf_res = run_uhf_scf_with_options(&batch, &model, &mut ws, &uhf_opts);
+    assert!(uhf_res.converged, "OH radical UHF must converge");
+
+    let (_, hof_mopacrs) =
+        compute_heat_of_formation(uhf_res.total_energy_ev, &batch.atomic_numbers, &model, 0.0);
+
+    let oracle = match run_openmopac_oracle("oh_radical_uhf_pm6", "PM6 UHF DOUBLET", &z, &coords) {
+        Some(o) => o,
+        None => return,
+    };
+
+    let hof_diff = (hof_mopacrs - oracle.heat_of_formation_kcal).abs();
+    println!(
+        "[ORACLE PARITY] OH* UHF PM6: MOPAC_RS = {:.5} kcal/mol, OpenMOPAC = {:.5} kcal/mol, diff = {:.4} kcal/mol",
+        hof_mopacrs, oracle.heat_of_formation_kcal, hof_diff
+    );
+
+    assert!(
+        hof_diff < 0.5,
+        "OH* UHF PM6 HoF difference exceeded 0.5 kcal/mol: {:.4}",
+        hof_diff
+    );
+}
+
+#[test]
+fn test_golden_parity_ammonia_am1() {
+    let z = vec![7, 1, 1, 1];
+    let coords = vec![
+        [0.00000000, 0.00000000, 0.00000000],
+        [0.00000000, 0.00000000, 1.02000000],
+        [0.96168833, 0.00000000, -0.34000000],
+        [-0.48084417, 0.83284725, -0.34000000],
+    ];
+    let model = mopac_core::parameters::am1::Am1Model;
+    let batch = MolecularBatch::new_for_model(z.clone(), &coords, &model);
+    let mut ws = ScfWorkspace::allocate(batch.norbs);
+
+    let scf_opts = ScfOptions {
+        max_iter: 60,
+        energy_tol_ev: 1e-8,
+        density_tol: 1e-7,
+        damping: 0.5,
+        use_nddo: true,
+        charge: 0,
+        cosmo: None,
+        ..Default::default()
+    };
+
+    let scf_res = run_rhf_scf_with_options(&batch, &model, &mut ws, &scf_opts);
+    assert!(scf_res.converged, "Ammonia AM1 SCF must converge");
+
+    let (_, hof_mopacrs) =
+        compute_heat_of_formation(scf_res.total_energy_ev, &batch.atomic_numbers, &model, 0.0);
+
+    let oracle = match run_openmopac_oracle("ammonia_am1_disp", "AM1", &z, &coords) {
+        Some(o) => o,
+        None => return,
+    };
+
+    let hof_diff = (hof_mopacrs - oracle.heat_of_formation_kcal).abs();
+    println!(
+        "[ORACLE PARITY] NH3 AM1: MOPAC_RS = {:.5} kcal/mol, OpenMOPAC = {:.5} kcal/mol, diff = {:.5} kcal/mol",
+        hof_mopacrs, oracle.heat_of_formation_kcal, hof_diff
+    );
+
+    assert!(
+        hof_diff < 0.01,
+        "Ammonia AM1 HoF parity error: got diff {:.5} kcal/mol",
+        hof_diff
+    );
+
+    if let Some(oracle_nuc) = oracle.core_repulsion_ev {
+        let nuc_diff = (scf_res.nuclear_repulsion_ev - oracle_nuc).abs();
+        assert!(
+            nuc_diff < 0.0001,
+            "Ammonia AM1 nuclear repulsion mismatch: got {} vs oracle {}",
+            scf_res.nuclear_repulsion_ev,
+            oracle_nuc
+        );
+    }
+}
+
+#[test]
+fn test_golden_parity_ammonium_am1() {
+    let r = 1.02;
+    let z = vec![7, 1, 1, 1, 1];
+    let coords = vec![
+        [0.0, 0.0, 0.0],
+        [r, 0.0, 0.0],
+        [-r / 3.0, r * (8.0f64 / 9.0).sqrt(), 0.0],
+        [
+            -r / 3.0,
+            -r * (2.0f64 / 9.0).sqrt(),
+            r * (2.0f64 / 3.0).sqrt(),
+        ],
+        [
+            -r / 3.0,
+            -r * (2.0f64 / 9.0).sqrt(),
+            -r * (2.0f64 / 3.0).sqrt(),
+        ],
+    ];
+    let model = mopac_core::parameters::am1::Am1Model;
+    let batch = MolecularBatch::new_for_model(z.clone(), &coords, &model);
+    let mut ws = ScfWorkspace::allocate(batch.norbs);
+
+    let scf_opts = ScfOptions {
+        max_iter: 60,
+        energy_tol_ev: 1e-8,
+        density_tol: 1e-7,
+        damping: 0.5,
+        use_nddo: true,
+        charge: 1,
+        cosmo: None,
+        ..Default::default()
+    };
+
+    let scf_res = run_rhf_scf_with_options(&batch, &model, &mut ws, &scf_opts);
+    assert!(scf_res.converged, "Ammonium cation AM1 SCF must converge");
+
+    let (_, hof_mopacrs) =
+        compute_heat_of_formation(scf_res.total_energy_ev, &batch.atomic_numbers, &model, 0.0);
+
+    let oracle = match run_openmopac_oracle("ammonium_am1_disp", "AM1 CHARGE=1", &z, &coords) {
+        Some(o) => o,
+        None => return,
+    };
+
+    let hof_diff = (hof_mopacrs - oracle.heat_of_formation_kcal).abs();
+    println!(
+        "[ORACLE PARITY] NH4+ AM1: MOPAC_RS = {:.5} kcal/mol, OpenMOPAC = {:.5} kcal/mol, diff = {:.5} kcal/mol",
+        hof_mopacrs, oracle.heat_of_formation_kcal, hof_diff
+    );
+
+    assert!(
+        hof_diff < 0.01,
+        "Ammonium AM1 HoF parity error: got diff {:.5} kcal/mol",
+        hof_diff
+    );
+
+    if let Some(oracle_nuc) = oracle.core_repulsion_ev {
+        let nuc_diff = (scf_res.nuclear_repulsion_ev - oracle_nuc).abs();
+        assert!(
+            nuc_diff < 0.0001,
+            "Ammonium AM1 nuclear repulsion mismatch: got {} vs oracle {}",
+            scf_res.nuclear_repulsion_ev,
+            oracle_nuc
+        );
+    }
+}
+
+#[test]
+fn test_golden_parity_ammonium_cosmo_am1() {
+    let r = 1.02;
+    let z = vec![7, 1, 1, 1, 1];
+    let coords = vec![
+        [0.0, 0.0, 0.0],
+        [r, 0.0, 0.0],
+        [-r / 3.0, r * (8.0f64 / 9.0).sqrt(), 0.0],
+        [
+            -r / 3.0,
+            -r * (2.0f64 / 9.0).sqrt(),
+            r * (2.0f64 / 3.0).sqrt(),
+        ],
+        [
+            -r / 3.0,
+            -r * (2.0f64 / 9.0).sqrt(),
+            -r * (2.0f64 / 3.0).sqrt(),
+        ],
+    ];
+    let model = mopac_core::parameters::am1::Am1Model;
+    let batch = MolecularBatch::new_for_model(z.clone(), &coords, &model);
+    let mut ws = ScfWorkspace::allocate(batch.norbs);
+
+    let cosmo_params = mopac_core::solvation::CosmoParams {
+        epsilon: 78.4,
+        rsolv: 1.30005,
+    };
+
+    let scf_opts = ScfOptions {
+        max_iter: 60,
+        energy_tol_ev: 1e-8,
+        density_tol: 1e-7,
+        damping: 0.5,
+        use_nddo: true,
+        charge: 1,
+        cosmo: Some(cosmo_params),
+        ..Default::default()
+    };
+
+    let scf_res = run_rhf_scf_with_options(&batch, &model, &mut ws, &scf_opts);
+    assert!(scf_res.converged, "Ammonium COSMO AM1 SCF must converge");
+
+    let (_, hof_mopacrs) =
+        compute_heat_of_formation(scf_res.total_energy_ev, &batch.atomic_numbers, &model, 0.0);
+
+    let oracle =
+        match run_openmopac_oracle("ammonium_cosmo_am1", "AM1 CHARGE=1 EPS=78.4", &z, &coords) {
+            Some(o) => o,
+            None => return,
+        };
+
+    let hof_diff = (hof_mopacrs - oracle.heat_of_formation_kcal).abs();
+    println!(
+        "[ORACLE PARITY] NH4+ COSMO AM1: MOPAC_RS = {:.5} kcal/mol, OpenMOPAC = {:.5} kcal/mol, diff = {:.4} kcal/mol",
+        hof_mopacrs, oracle.heat_of_formation_kcal, hof_diff
+    );
+
+    assert!(
+        hof_diff < 1.5,
+        "Ammonium COSMO AM1 HoF parity error: got diff {:.4} kcal/mol",
+        hof_diff
+    );
+}
+
+#[test]
+fn test_golden_parity_acetylene_linear_am1() {
+    let z = vec![1, 6, 6, 1];
+    let coords = vec![
+        [0.0, 0.0, -1.63],
+        [0.0, 0.0, -0.60],
+        [0.0, 0.0, 0.60],
+        [0.0, 0.0, 1.63],
+    ];
+    let model = mopac_core::parameters::am1::Am1Model;
+    let batch = MolecularBatch::new_for_model(z.clone(), &coords, &model);
+    let mut ws = ScfWorkspace::allocate(batch.norbs);
+
+    let scf_opts = ScfOptions {
+        max_iter: 60,
+        energy_tol_ev: 1e-8,
+        density_tol: 1e-7,
+        damping: 0.5,
+        use_nddo: true,
+        charge: 0,
+        cosmo: None,
+        ..Default::default()
+    };
+
+    let scf_res = run_rhf_scf_with_options(&batch, &model, &mut ws, &scf_opts);
+    assert!(scf_res.converged, "Acetylene AM1 SCF must converge");
+
+    let c_triple_c_corr = 0.0;
+    let (_, hof_mopacrs) =
+        compute_heat_of_formation(scf_res.total_energy_ev, &batch.atomic_numbers, &model, c_triple_c_corr);
+
+    let oracle = match run_openmopac_oracle("acetylene_linear_am1", "AM1", &z, &coords) {
+        Some(o) => o,
+        None => return,
+    };
+
+    let hof_diff = (hof_mopacrs - oracle.heat_of_formation_kcal).abs();
+    println!(
+        "[ORACLE PARITY] C2H2 AM1: MOPAC_RS = {:.5} kcal/mol, OpenMOPAC = {:.5} kcal/mol, diff = {:.5} kcal/mol",
+        hof_mopacrs, oracle.heat_of_formation_kcal, hof_diff
+    );
+
+    assert!(
+        hof_diff < 0.2,
+        "Acetylene AM1 HoF parity error: got diff {:.5} kcal/mol",
+        hof_diff
+    );
+
+    if let Some(oracle_nuc) = oracle.core_repulsion_ev {
+        let nuc_diff = (scf_res.nuclear_repulsion_ev - oracle_nuc).abs();
+        assert!(
+            nuc_diff < 0.001,
+            "Acetylene AM1 nuclear repulsion mismatch: got {} vs oracle {}",
+            scf_res.nuclear_repulsion_ev,
+            oracle_nuc
+        );
+    }
+}

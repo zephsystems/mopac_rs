@@ -88,7 +88,8 @@ pub trait ParameterModel: Send + Sync {
         elem_a: &SemiEmpiricalElementParams,
         elem_b: &SemiEmpiricalElementParams,
     ) -> f64 {
-        crate::integrals::core_repulsion::compute_pair_core_repulsion(r_angstrom, elem_a, elem_b)
+        let is_am1 = self.name() == "AM1";
+        crate::integrals::core_repulsion::compute_pair_core_repulsion(r_angstrom, elem_a, elem_b, is_am1)
     }
 
     /// Whether to apply PM7 feathering (smooth long-range transition to point-charge electrostatics).

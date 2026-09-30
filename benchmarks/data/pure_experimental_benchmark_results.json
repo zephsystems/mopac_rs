@@ -1,0 +1,101 @@
+{
+  "metadata": {
+    "dataset": "Stewart Canonical Experimental Heat of Formation Database",
+    "primary_sources": [
+      "NIST Chemistry WebBook (SRD 69)",
+      "Cox & Pilcher (1970)",
+      "Pedley et al. (1986)"
+    ],
+    "sample_size": 500,
+    "date": "2026-09-29 15:11:39",
+    "openmopac_oracle": "mopac"
+  },
+  "methods": {
+    "PM7": {
+      "converged": 500,
+      "total": 500,
+      "convergence_pct": 100.0,
+      "throughput_mol_s": 1.9788309297598714,
+      "mean_calc_time_ms": 404.6997291300213,
+      "mopac_rs_vs_experiment": {
+        "count": 500,
+        "mean_signed_error": 1.0355343914936879,
+        "mae": 4.531631513465511,
+        "rmse": 16.232460070629386,
+        "p50": 2.45034005042615,
+        "p90": 7.7832301101245625,
+        "p99": 26.451364682139022,
+        "max_abs_error": 250.2045411864884
+      },
+      "openmopac_vs_experiment": {
+        "count": 500,
+        "mean_signed_error": 0.006883180000000152,
+        "mae": 3.6055599799999998,
+        "rmse": 5.523699871924633,
+        "p50": 2.36754,
+        "p90": 7.756633999999997,
+        "p99": 20.098046999999973,
+        "max_abs_error": 32.99026
+      },
+      "inter_engine_parity": {
+        "count": 500,
+        "mean_signed_error": 1.0286512114936877,
+        "mae": 1.0334710986296665,
+        "rmse": 15.508499698528176,
+        "p50": 0.0010498342257134752,
+        "p90": 0.008136875729740468,
+        "p99": 2.1353908587005606,
+        "max_abs_error": 249.7713211864884
+      },
+      "head_to_head": {
+        "mopac_rs_closer": 16,
+        "openmopac_closer": 23,
+        "tied": 461,
+        "total": 500
+      }
+    },
+    "AM1": {
+      "converged": 494,
+      "total": 500,
+      "convergence_pct": 98.8,
+      "throughput_mol_s": 1.5991905394261425,
+      "mean_calc_time_ms": 557.0937036012958,
+      "mopac_rs_vs_experiment": {
+        "count": 494,
+        "mean_signed_error": 4.147732308670819,
+        "mae": 10.250519963610206,
+        "rmse": 17.925007825503894,
+        "p50": 6.724704078206378,
+        "p90": 21.984422064032795,
+        "p99": 57.326575062841286,
+        "max_abs_error": 232.1350470780111
+      },
+      "openmopac_vs_experiment": {
+        "count": 494,
+        "mean_signed_error": 3.6669362550607287,
+        "mae": 9.794962327935224,
+        "rmse": 14.572820949858272,
+        "p50": 6.702920000000001,
+        "p90": 21.916868000000008,
+        "p99": 55.11955269999998,
+        "max_abs_error": 120.40722
+      },
+      "inter_engine_parity": {
+        "count": 494,
+        "mean_signed_error": 0.48079605361009087,
+        "mae": 0.48612411119188026,
+        "rmse": 10.71637568173641,
+        "p50": 0.00044791120808973517,
+        "p90": 0.003934650559332197,
+        "p99": 0.03670306296674357,
+        "max_abs_error": 238.1820770780111
+      },
+      "head_to_head": {
+        "mopac_rs_closer": 7,
+        "openmopac_closer": 6,
+        "tied": 481,
+        "total": 494
+      }
+    }
+  }
+}

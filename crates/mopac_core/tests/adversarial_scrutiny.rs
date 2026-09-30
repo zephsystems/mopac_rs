@@ -373,3 +373,262 @@ fn test_adversarial_open_shell_triplet_oxygen_o2() {
         s2_err
     );
 }
+
+/// Domain 7: Antiaromatic Singlet/Triplet Degeneracy in Square Cyclobutadiene ($D_{4h}$).
+///
+/// In square D4h cyclobutadiene, non-bonding pi orbitals are exactly degenerate.
+/// By Hund's rule, the triplet state (^3A_2g) is stable and achieves exact parity
+/// against OpenMOPAC reference (113.07710 kcal/mol) with <S^2> ~ 2.0.
+#[test]
+fn test_adversarial_cyclobutadiene_d4h_triplet_parity() {
+    let model = Am1Model;
+    let z = vec![6, 6, 6, 6, 1, 1, 1, 1];
+    let coords = vec![
+        [0.71500000, 0.71500000, 0.0],
+        [-0.71500000, 0.71500000, 0.0],
+        [-0.71500000, -0.71500000, 0.0],
+        [0.71500000, -0.71500000, 0.0],
+        [1.47870000, 1.47870000, 0.0],
+        [-1.47870000, 1.47870000, 0.0],
+        [-1.47870000, -1.47870000, 0.0],
+        [1.47870000, -1.47870000, 0.0],
+    ];
+    let batch = MolecularBatch::new(z.clone(), &coords);
+    let mut ws = UhfWorkspace::new(batch.norbs);
+    let opts = UhfOptions {
+        max_iter: 100,
+        energy_tol_ev: 1e-8,
+        density_tol: 1e-7,
+        damping: 0.5,
+        multiplicity: 3, // Triplet
+        use_nddo: true,
+        ..Default::default()
+    };
+
+    let res = run_uhf_scf_with_options(&batch, &model, &mut ws, &opts);
+    assert!(res.converged, "Square cyclobutadiene triplet must converge");
+
+    let (_, hof) = mopac_core::properties::heat::compute_heat_of_formation(
+        res.total_energy_ev,
+        &z,
+        &model,
+        0.0,
+    );
+
+    // OpenMOPAC v23.2.5 reference: HoF = 113.07710 kcal/mol, S^2 = 2.005405
+    let hof_diff = (hof - 113.07710).abs();
+    println!(
+        "[ADVERSARIAL CBD D4h] AM1 Triplet HoF = {:.5} kcal/mol (Oracle = 113.07710, diff = {:.6}), <S^2> = {:.6}",
+        hof, hof_diff, res.s_squared
+    );
+    assert!(
+        hof_diff < 0.005,
+        "Square cyclobutadiene triplet HoF deviated: diff = {:.6} kcal/mol",
+        hof_diff
+    );
+    assert!(
+        (res.s_squared - 2.0054).abs() < 0.01,
+        "Square cyclobutadiene triplet S^2 deviated: {}",
+        res.s_squared
+    );
+}
+
+/// Domain 8: Monatomic Ion Born Solvation Limit in COSMO ($F^-$).
+///
+/// Tests a single isolated monatomic ion in dielectric solvent without chemical bonds.
+/// Validates charge handling Q = -1 and electrostatic reaction field convergence.
+#[test]
+fn test_adversarial_monatomic_fluoride_cosmo_parity() {
+    let model = Am1Model;
+    let z = vec![9];
+    let coords = vec![[0.0, 0.0, 0.0]];
+    let batch = MolecularBatch::new(z.clone(), &coords);
+    let mut ws = ScfWorkspace::allocate(batch.norbs);
+
+    let cosmo = mopac_core::solvation::CosmoParams {
+        epsilon: 78.4,
+        ..Default::default()
+    };
+    let opts = ScfOptions {
+        max_iter: 60,
+        energy_tol_ev: 1e-8,
+        density_tol: 1e-7,
+        charge: -1,
+        use_nddo: true,
+        cosmo: Some(cosmo),
+        ..Default::default()
+    };
+
+    let res = run_rhf_scf_with_options(&batch, &model, &mut ws, &opts);
+    assert!(res.converged, "F- in COSMO must converge");
+
+    let (_, hof) = mopac_core::properties::heat::compute_heat_of_formation(
+        res.total_energy_ev,
+        &z,
+        &model,
+        0.0,
+    );
+
+    // OpenMOPAC v23.2.5 reference: HoF = -91.97901 kcal/mol
+    let hof_diff = (hof - -91.97901).abs();
+    println!(
+        "[ADVERSARIAL F- COSMO] HoF = {:.5} kcal/mol (Oracle = -91.97901, diff = {:.6}), Ediel = {:?}",
+        hof, hof_diff, res.dielectric_energy_ev
+    );
+    assert!(
+        hof_diff < 0.01,
+        "F- COSMO HoF deviated from oracle: diff = {:.6} kcal/mol",
+        hof_diff
+    );
+}
+
+/// Domain 9: Atomic High-Spin Ground States under Hund's Rule ($C(^3P)$ and $N(^4S)$).
+///
+/// Isolated open-shell atoms with exact spherical degeneracy.
+/// C(^3P) triplet: 4 valence electrons (3 alpha, 1 beta), S=1, <S^2>=2.0.
+/// N(^4S) quartet: 5 valence electrons (4 alpha, 1 beta), S=3/2, <S^2>=3.75.
+#[test]
+fn test_adversarial_atomic_high_spin_hunds_rule() {
+    let model = Am1Model;
+
+    // 1. Carbon Triplet C(^3P)
+    {
+        let z = vec![6];
+        let coords = vec![[0.0, 0.0, 0.0]];
+        let batch = MolecularBatch::new(z.clone(), &coords);
+        let mut ws = UhfWorkspace::new(batch.norbs);
+        let opts = UhfOptions {
+            max_iter: 60,
+            energy_tol_ev: 1e-9,
+            density_tol: 1e-8,
+            multiplicity: 3, // Triplet
+            use_nddo: true,
+            ..Default::default()
+        };
+        let res = run_uhf_scf_with_options(&batch, &model, &mut ws, &opts);
+        assert!(res.converged);
+        let (_, hof) = mopac_core::properties::heat::compute_heat_of_formation(
+            res.total_energy_ev,
+            &z,
+            &model,
+            0.0,
+        );
+        // OpenMOPAC reference: HoF = 170.89000 kcal/mol, S^2 = 2.000000
+        let diff = (hof - 170.89000).abs();
+        assert!(
+            diff < 1e-6,
+            "C(^3P) HoF deviated: diff = {:.8} kcal/mol",
+            diff
+        );
+        assert!(
+            (res.s_squared - 2.0).abs() < 1e-6,
+            "C(^3P) S^2 deviated: {}",
+            res.s_squared
+        );
+    }
+
+    // 2. Nitrogen Quartet N(^4S)
+    {
+        let z = vec![7];
+        let coords = vec![[0.0, 0.0, 0.0]];
+        let batch = MolecularBatch::new(z.clone(), &coords);
+        let mut ws = UhfWorkspace::new(batch.norbs);
+        let opts = UhfOptions {
+            max_iter: 60,
+            energy_tol_ev: 1e-9,
+            density_tol: 1e-8,
+            multiplicity: 4, // Quartet
+            use_nddo: true,
+            ..Default::default()
+        };
+        let res = run_uhf_scf_with_options(&batch, &model, &mut ws, &opts);
+        assert!(res.converged);
+        let (_, hof) = mopac_core::properties::heat::compute_heat_of_formation(
+            res.total_energy_ev,
+            &z,
+            &model,
+            0.0,
+        );
+        // OpenMOPAC reference: HoF = 113.00000 kcal/mol, S^2 = 3.750000
+        let diff = (hof - 113.00000).abs();
+        assert!(
+            diff < 1e-6,
+            "N(^4S) HoF deviated: diff = {:.8} kcal/mol",
+            diff
+        );
+        assert!(
+            (res.s_squared - 3.75).abs() < 1e-6,
+            "N(^4S) S^2 deviated: {}",
+            res.s_squared
+        );
+    }
+}
+
+/// Domain 10: Chiral Enantiomeric Invariance Under Parity Inversion ($\mathcal{P}$).
+///
+/// Hydrogen peroxide with dihedral angles phi = +60 deg and phi = -60 deg.
+/// Parity inversion (r -> -r) is an exact symmetry of the molecular Hamiltonian.
+/// The energy must be identical to full machine precision (< 1e-12 eV).
+#[test]
+fn test_adversarial_chiral_enantiomeric_parity_invariance() {
+    let model = Am1Model;
+    let r_oo = 1.47f64;
+    let r_oh = 0.95f64;
+    let theta = 100.0f64.to_radians();
+    let phi = 60.0f64.to_radians();
+
+    let z = vec![8, 8, 1, 1];
+
+    let coords_p = vec![
+        [0.0, 0.0, 0.0],
+        [0.0, 0.0, r_oo],
+        [r_oh * theta.sin(), 0.0, r_oh * theta.cos()],
+        [
+            r_oh * theta.sin() * phi.cos(),
+            r_oh * theta.sin() * phi.sin(),
+            r_oo - r_oh * theta.cos(),
+        ],
+    ];
+
+    let coords_m = vec![
+        [0.0, 0.0, 0.0],
+        [0.0, 0.0, r_oo],
+        [r_oh * theta.sin(), 0.0, r_oh * theta.cos()],
+        [
+            r_oh * theta.sin() * (-phi).cos(),
+            r_oh * theta.sin() * (-phi).sin(),
+            r_oo - r_oh * theta.cos(),
+        ],
+    ];
+
+    let batch_p = MolecularBatch::new(z.clone(), &coords_p);
+    let batch_m = MolecularBatch::new(z, &coords_m);
+
+    let mut ws_p = ScfWorkspace::allocate(batch_p.norbs);
+    let mut ws_m = ScfWorkspace::allocate(batch_m.norbs);
+
+    let opts = ScfOptions {
+        max_iter: 60,
+        energy_tol_ev: 1e-10,
+        density_tol: 1e-9,
+        use_nddo: true,
+        ..Default::default()
+    };
+
+    let res_p = run_rhf_scf_with_options(&batch_p, &model, &mut ws_p, &opts);
+    let res_m = run_rhf_scf_with_options(&batch_m, &model, &mut ws_m, &opts);
+
+    assert!(res_p.converged);
+    assert!(res_m.converged);
+
+    let diff = (res_p.total_energy_ev - res_m.total_energy_ev).abs();
+    println!(
+        "[ADVERSARIAL CHIRAL] E(+60 deg) = {:.10} eV, E(-60 deg) = {:.10} eV, diff = {:e} eV",
+        res_p.total_energy_ev, res_m.total_energy_ev, diff
+    );
+    assert!(
+        diff < 1e-12,
+        "Chiral enantiomeric invariance violated: diff = {:e} eV",
+        diff
+    );
+}

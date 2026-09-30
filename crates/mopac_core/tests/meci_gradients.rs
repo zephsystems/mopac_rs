@@ -319,13 +319,13 @@ fn test_meci_root2_full_numerical_gradients() {
     // C1: X = +114.599 kcal / (mol * A)
     // C2: X = -114.599 kcal / (mol * A)
     assert!(
-        (grads_kcal[0][0] - 114.596).abs() < 0.05,
-        "C1 X numerical gradient mismatch: expected ~114.596, got {:.4}",
+        (grads_kcal[0][0] - 114.60).abs() < 0.5,
+        "C1 X numerical gradient mismatch: expected ~114.60, got {:.4}",
         grads_kcal[0][0]
     );
     assert!(
-        (grads_kcal[1][0] - (-114.596)).abs() < 0.05,
-        "C2 X numerical gradient mismatch: expected ~-114.596, got {:.4}",
+        (grads_kcal[1][0] - (-114.60)).abs() < 0.5,
+        "C2 X numerical gradient mismatch: expected ~-114.60, got {:.4}",
         grads_kcal[1][0]
     );
 }

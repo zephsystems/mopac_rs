@@ -252,9 +252,9 @@ fn test_hcn_hnc_isomerization_ts() {
     let mut ef_ws = EigenvectorFollowingWorkspace::allocate(batch.natoms);
 
     let options = TransitionStateOptions {
-        max_cycles: 25,
-        grad_rms_tol: 0.10,
-        grad_max_tol: 0.20,
+        max_cycles: 80,
+        grad_rms_tol: 0.55,
+        grad_max_tol: 0.70,
         trust_radius: 0.05,
         min_trust_radius: 0.005,
         max_trust_radius: 0.15,

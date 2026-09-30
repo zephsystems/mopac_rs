@@ -199,3 +199,7 @@ impl Drop for VulkanContext {
         }
     }
 }
+
+unsafe impl Send for VulkanContext {}
+unsafe impl Sync for VulkanContext {}
+

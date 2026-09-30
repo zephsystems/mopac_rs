@@ -166,7 +166,10 @@ fn test_esp_charges_formaldehyde() {
 #[test]
 fn test_esp_charges_cation_ammonium() {
     let model = Pm6Model;
-    let scf_opts = ScfOptions::default();
+    let scf_opts = ScfOptions {
+        charge: 1,
+        ..Default::default()
+    };
 
     // Ammonium cation NH4+ (net charge +1.0)
     let atomic_numbers = vec![7, 1, 1, 1, 1]; // N, H, H, H, H

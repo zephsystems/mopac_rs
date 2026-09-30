@@ -37,8 +37,9 @@ use mopac_core::parameters::{
 };
 use mopac_core::pbc::{run_pbc_scf, PbcOptions, PbcWorkspace, UnitCell};
 use mopac_core::properties::{
-    compute_dipole_moment, compute_esp_charges, compute_heat_of_formation,
-    compute_mulliken_population, compute_polarizability, EspOptions, PolarizabilityOptions,
+    compute_c_triple_bond_c_correction, compute_dipole_moment, compute_esp_charges,
+    compute_heat_of_formation, compute_mulliken_population, compute_polarizability, EspOptions,
+    PolarizabilityOptions,
 };
 use mopac_core::reactions::{
     run_dynamic_reaction_coordinate, run_saddle, trace_intrinsic_reaction_coordinate, DrcEnsemble,
@@ -745,6 +746,19 @@ impl SaddlePyResult {
     }
 }
 
+fn get_cached_gpu_coulomb_calc() -> Option<std::sync::Arc<std::sync::Mutex<mopac_gpu::GpuCoulombCalculator>>> {
+    static CACHE: std::sync::OnceLock<
+        Option<std::sync::Arc<std::sync::Mutex<mopac_gpu::GpuCoulombCalculator>>>,
+    > = std::sync::OnceLock::new();
+    CACHE
+        .get_or_init(|| {
+            let ctx = mopac_gpu::VulkanContext::new().ok()?;
+            let calc = mopac_gpu::GpuCoulombCalculator::new(std::sync::Arc::new(ctx)).ok()?;
+            Some(std::sync::Arc::new(std::sync::Mutex::new(calc)))
+        })
+        .clone()
+}
+
 /// Internal engine execution for single-point calculation.
 fn run_calculation_internal(
     atomic_numbers: &[u8],
@@ -759,6 +773,10 @@ fn run_calculation_internal(
     density_tol: f64,
     level_shift_ev: f64,
     damping: f64,
+    use_gpu: bool,
+    uhf: Option<bool>,
+    multiplicity: Option<usize>,
+    charge: Option<i32>,
 ) -> PyResult<CalculationResult> {
     let natoms = atomic_numbers.len();
     if natoms == 0 {
@@ -786,22 +804,159 @@ fn run_calculation_internal(
         }
     }
 
-    let nelec = total_valence_elecs.round() as usize;
-    if !nelec.is_multiple_of(2) {
-        return Err(PyValueError::new_err(format!(
-            "Open-shell radical detected ({} valence electrons). Closed-shell RHF requires an even number of valence electrons (requires UHF/ROHF).",
-            nelec
-        )));
-    }
+    let chg = charge.unwrap_or(0);
+    let nelec_signed = total_valence_elecs.round() as i64 - chg as i64;
+    let is_open_shell = (nelec_signed % 2) != 0;
+    let run_as_uhf = uhf.unwrap_or(false) || is_open_shell;
 
     let mut batch =
         MolecularBatch::new_for_model(atomic_numbers.to_vec(), coordinates, model.as_ref());
-    let mut scf_ws = ScfWorkspace::allocate(batch.norbs);
 
     let cosmo = cosmo_eps.map(|eps| CosmoParams {
         epsilon: eps,
         ..Default::default()
     });
+
+    if run_as_uhf {
+        let mult = multiplicity.unwrap_or(if is_open_shell { 2 } else { 1 });
+        let uhf_opts = mopac_core::scf::uhf_loop::UhfOptions {
+            multiplicity: mult,
+            charge: chg,
+            max_iter,
+            energy_tol_ev,
+            density_tol,
+            damping,
+            use_nddo,
+            cosmo,
+        };
+        let mut uhf_ws = mopac_core::scf::uhf_loop::UhfWorkspace::new(batch.norbs);
+        let uhf_res = mopac_core::scf::uhf_loop::run_uhf_scf_with_options(
+            &batch,
+            model.as_ref(),
+            &mut uhf_ws,
+            &uhf_opts,
+        );
+
+        let mut grad_ws = GradientWorkspace::allocate(batch.norbs);
+        let mut grads_ev = vec![[0.0f64; 3]; natoms];
+        mopac_core::gradients::nuclear_gradients::compute_cartesian_gradients_uhf(
+            &mut batch,
+            model.as_ref(),
+            &uhf_ws.density_a,
+            &uhf_ws.density_b,
+            &mut grad_ws,
+            &mut grads_ev,
+            use_nddo,
+        );
+
+        let mut grads_kcal = vec![[0.0f64; 3]; natoms];
+        for i in 0..natoms {
+            for c in 0..3 {
+                grads_kcal[i][c] = grads_ev[i][c] * EV_TO_KCAL_MOL;
+            }
+        }
+
+        let effective_disp = match dispersion {
+            Some(d) if d.eq_ignore_ascii_case("NONE") || d.eq_ignore_ascii_case("OFF") => None,
+            Some(d) => Some(d),
+            None => {
+                if method.eq_ignore_ascii_case("PM7") {
+                    Some("PM7")
+                } else {
+                    None
+                }
+            }
+        };
+
+        let mut non_cov_kcal = 0.0;
+        if let Some(dm_name) = effective_disp {
+            let dm = match dm_name.to_uppercase().as_str() {
+                "PM6-DH+" | "DH+" | "PM6_DH+" => DispersionModel::Pm6DhPlus,
+                "PM7" => DispersionModel::Pm7,
+                "D3" | "D3BJ" | "D3-BJ" | "PM6-D3" | "AM1-D3" => DispersionModel::D3Bj,
+                other => {
+                    return Err(PyValueError::new_err(format!(
+                        "Unknown dispersion model '{}'. Supported: 'PM6-DH+', 'PM7', 'D3-BJ'",
+                        other
+                    )))
+                }
+            };
+            let mut disp_grads = vec![[0.0f64; 3]; natoms];
+            let e_disp = compute_dispersion_energy_and_gradients(&batch, dm, &mut disp_grads);
+            non_cov_kcal += e_disp;
+            for i in 0..natoms {
+                for c in 0..3 {
+                    grads_kcal[i][c] += disp_grads[i][c];
+                    grads_ev[i][c] += disp_grads[i][c] / EV_TO_KCAL_MOL;
+                }
+            }
+        }
+
+        if method.eq_ignore_ascii_case("PM7") || method.eq_ignore_ascii_case("PM6") {
+            non_cov_kcal += compute_c_triple_bond_c_correction(&batch);
+        }
+
+        if h_bonds {
+            let h4_params = H4Parameters::default();
+            let e_h4 = compute_h4_energy(&batch, &h4_params);
+            non_cov_kcal += e_h4;
+
+            let (e_hh, hh_grads) = compute_hh_repulsion_energy_and_gradients(&batch);
+            non_cov_kcal += e_hh;
+
+            for i in 0..natoms {
+                for c in 0..3 {
+                    grads_kcal[i][c] += hh_grads[i][c];
+                    grads_ev[i][c] += hh_grads[i][c] / EV_TO_KCAL_MOL;
+                }
+            }
+        }
+
+        let (binding_energy_ev, heat_of_formation_kcal) = compute_heat_of_formation(
+            uhf_res.total_energy_ev,
+            atomic_numbers,
+            model.as_ref(),
+            non_cov_kcal,
+        );
+
+        let dipole_res = compute_dipole_moment(&batch, model.as_ref(), &uhf_ws.density_tot);
+        let n_alpha = uhf_res.n_alpha;
+        let mulliken_res =
+            compute_mulliken_population(&batch, model.as_ref(), &uhf_ws.eigenvectors_a, n_alpha);
+
+        let homo = uhf_res.homo_a_energy_ev;
+        let lumo = uhf_res.lumo_a_energy_ev;
+
+        return Ok(CalculationResult {
+            total_energy_ev: uhf_res.total_energy_ev + (non_cov_kcal / EV_TO_KCAL_MOL),
+            electronic_energy_ev: uhf_res.electronic_energy_ev,
+            nuclear_repulsion_ev: uhf_res.nuclear_repulsion_ev,
+            binding_energy_ev,
+            heat_of_formation_kcal,
+            gradients_ev_angstrom: grads_ev,
+            gradients_kcal_mol_angstrom: grads_kcal,
+            dipole_debye: dipole_res.total,
+            atomic_charges: dipole_res.atomic_charges,
+            mulliken_charges: mulliken_res.net_charges,
+            converged: uhf_res.converged,
+            scf_iterations: uhf_res.iterations,
+            homo_energy_ev: homo,
+            lumo_energy_ev: lumo,
+            homo_lumo_gap_ev: lumo - homo,
+        });
+    }
+
+    let mut scf_ws = ScfWorkspace::allocate(batch.norbs);
+
+    if use_gpu {
+        if let Some(gpu_calc_arc) = get_cached_gpu_coulomb_calc() {
+            if let Ok(gpu_calc) = gpu_calc_arc.lock() {
+                if let Ok(gamma_matrix) = gpu_calc.compute_batch(&batch, model.as_ref()) {
+                    scf_ws.gamma = Some(gamma_matrix);
+                }
+            }
+        }
+    }
 
     let opts = ScfOptions {
         max_iter,
@@ -811,12 +966,13 @@ fn run_calculation_internal(
         damping,
         use_nddo,
         cosmo,
+        charge: chg,
         ..Default::default()
     };
 
     let mut scf_res = run_rhf_scf_with_options(&batch, model.as_ref(), &mut scf_ws, &opts);
     if !scf_res.converged {
-        scf_res = mopac_core::scf::scf_loop::run_rhf_scf_adaptive_with_nddo_and_cosmo(
+        scf_res = mopac_core::scf::scf_loop::run_rhf_scf_adaptive_with_nddo_cosmo_and_charge(
             &batch,
             model.as_ref(),
             &mut scf_ws,
@@ -825,6 +981,7 @@ fn run_calculation_internal(
             density_tol,
             use_nddo,
             cosmo,
+            chg,
         );
     }
 
@@ -847,9 +1004,21 @@ fn run_calculation_internal(
         }
     }
 
+    let effective_disp = match dispersion {
+        Some(d) if d.eq_ignore_ascii_case("NONE") || d.eq_ignore_ascii_case("OFF") => None,
+        Some(d) => Some(d),
+        None => {
+            if method.eq_ignore_ascii_case("PM7") {
+                Some("PM7")
+            } else {
+                None
+            }
+        }
+    };
+
     // Non-covalent corrections
     let mut non_cov_kcal = 0.0;
-    if let Some(dm_name) = dispersion {
+    if let Some(dm_name) = effective_disp {
         let dm = match dm_name.to_uppercase().as_str() {
             "PM6-DH+" | "DH+" | "PM6_DH+" => DispersionModel::Pm6DhPlus,
             "PM7" => DispersionModel::Pm7,
@@ -870,6 +1039,10 @@ fn run_calculation_internal(
                 grads_ev[i][c] += disp_grads[i][c] / EV_TO_KCAL_MOL;
             }
         }
+    }
+
+    if method.eq_ignore_ascii_case("PM7") || method.eq_ignore_ascii_case("PM6") {
+        non_cov_kcal += compute_c_triple_bond_c_correction(&batch);
     }
 
     if h_bonds {
@@ -931,18 +1104,6 @@ fn run_calculation_internal(
 }
 
 /// Compute single-point semi-empirical quantum chemical properties and analytical gradients.
-///
-/// Parameters:
-/// - `atomic_numbers`: list of integer atomic numbers (e.g. `[6, 1, 1, 1, 35]`)
-/// - `coordinates`: list of 3D coordinates in Ångströms (e.g. `[[0.0, 0.0, 0.0], ...]`)
-/// - `method`: Semi-empirical Hamiltonian ("PM6", "AM1", "RM1", "PM3", "MNDO"; default: "PM6")
-/// - `cosmo_eps`: Optional solvent dielectric constant for COSMO solvation (e.g. 78.4 for water)
-/// - `dispersion`: Optional empirical dispersion ("PM6-DH+", "PM7")
-/// - `h_bonds`: Enable H4 hydrogen bonding and H-H core repulsion corrections (default: false)
-/// - `use_nddo`: Enable full NDDO 22 multipoles and rotation (default: true)
-/// - `max_iter`: Maximum SCF iterations (default: 60)
-/// - `energy_tol_ev`: Energy convergence threshold in eV (default: 1e-7)
-/// - `density_tol`: Density matrix convergence threshold (default: 1e-6)
 #[pyfunction]
 #[pyo3(signature = (
     atomic_numbers,
@@ -956,7 +1117,11 @@ fn run_calculation_internal(
     energy_tol_ev = 1e-7,
     density_tol = 1e-6,
     level_shift_ev = 0.0,
-    damping = 0.5
+    damping = 0.5,
+    use_gpu = false,
+    uhf = None,
+    multiplicity = None,
+    charge = None
 ))]
 pub fn calculate(
     atomic_numbers: Vec<u8>,
@@ -971,6 +1136,10 @@ pub fn calculate(
     density_tol: Option<f64>,
     level_shift_ev: Option<f64>,
     damping: Option<f64>,
+    use_gpu: Option<bool>,
+    uhf: Option<bool>,
+    multiplicity: Option<usize>,
+    charge: Option<i32>,
 ) -> PyResult<CalculationResult> {
     run_calculation_internal(
         &atomic_numbers,
@@ -981,23 +1150,18 @@ pub fn calculate(
         h_bonds.unwrap_or(false),
         use_nddo.unwrap_or(true),
         max_iter.unwrap_or(60),
-        energy_tol_ev.unwrap_or(1e-7),
-        density_tol.unwrap_or(1e-6),
+        energy_tol_ev.unwrap_or(1e-5),
+        density_tol.unwrap_or(1e-4),
         level_shift_ev.unwrap_or(0.0),
         damping.unwrap_or(0.5),
+        use_gpu.unwrap_or(false),
+        uhf,
+        multiplicity,
+        charge,
     )
 }
 
 /// Optimize molecular geometry using quasi-Newton L-BFGS optimizer.
-///
-/// Parameters:
-/// - `atomic_numbers`: list of integer atomic numbers
-/// - `coordinates`: initial 3D coordinates in Ångströms
-/// - `method`: Semi-empirical Hamiltonian ("PM6", "AM1", "RM1", "PM3", "MNDO"; default: "PM6")
-/// - `max_cycles`: Maximum L-BFGS optimization cycles (default: 100)
-/// - `grad_rms_tol`: RMS gradient convergence threshold in kcal / (mol · Å) (default: 1.0)
-/// - `grad_max_tol`: Maximum gradient norm threshold in kcal / (mol · Å) (default: 2.0)
-/// - `use_nddo`: Enable full NDDO potential energy surface and gradients (default: false)
 #[pyfunction]
 #[pyo3(signature = (
     atomic_numbers,
@@ -1006,7 +1170,11 @@ pub fn calculate(
     max_cycles = 100,
     grad_rms_tol = 1.0,
     grad_max_tol = 2.0,
-    use_nddo = false
+    use_nddo = true,
+    cosmo_eps = None,
+    uhf = None,
+    multiplicity = None,
+    charge = None
 ))]
 pub fn optimize(
     atomic_numbers: Vec<u8>,
@@ -1016,6 +1184,10 @@ pub fn optimize(
     grad_rms_tol: Option<f64>,
     grad_max_tol: Option<f64>,
     use_nddo: Option<bool>,
+    cosmo_eps: Option<f64>,
+    uhf: Option<bool>,
+    multiplicity: Option<usize>,
+    charge: Option<i32>,
 ) -> PyResult<OptimizationPyResult> {
     let natoms = atomic_numbers.len();
     if natoms == 0 {
@@ -1041,25 +1213,93 @@ pub fn optimize(
     }
 
     let nelec = total_valence_elecs.round() as usize;
-    if !nelec.is_multiple_of(2) {
-        return Err(PyValueError::new_err(format!(
-            "Open-shell radical detected ({} valence electrons). Closed-shell RHF requires an even number of valence electrons (requires UHF/ROHF).",
-            nelec
-        )));
-    }
+    let is_open_shell = !nelec.is_multiple_of(2);
+    let run_as_uhf = uhf.unwrap_or(false) || is_open_shell;
 
     let mut batch =
         MolecularBatch::new_for_model(atomic_numbers.clone(), &coordinates, model.as_ref());
-    let mut scf_ws = ScfWorkspace::allocate(batch.norbs);
-    let mut grad_ws = GradientWorkspace::allocate(batch.norbs);
+
+    let cosmo = cosmo_eps.map(|eps| CosmoParams {
+        epsilon: eps,
+        ..Default::default()
+    });
+
+    let use_nddo = use_nddo.unwrap_or(true);
 
     let opt_opts = OptimizationOptions {
         max_cycles: max_cycles.unwrap_or(100),
         grad_rms_tol: grad_rms_tol.unwrap_or(1.0),
         grad_max_tol: grad_max_tol.unwrap_or(2.0),
-        use_nddo: use_nddo.unwrap_or(false),
+        use_nddo,
+        cosmo,
         ..Default::default()
     };
+
+    if run_as_uhf {
+        let mult = multiplicity.unwrap_or(if is_open_shell { 2 } else { 1 });
+        let chg = charge.unwrap_or(0);
+        let uhf_opts = mopac_core::scf::uhf_loop::UhfOptions {
+            multiplicity: mult,
+            charge: chg,
+            max_iter: 80,
+            energy_tol_ev: 1e-7,
+            density_tol: 1e-6,
+            damping: 0.5,
+            use_nddo,
+            cosmo,
+        };
+
+        let mut uhf_ws = mopac_core::scf::uhf_loop::UhfWorkspace::new(batch.norbs);
+        let mut grad_ws = GradientWorkspace::allocate(batch.norbs);
+
+        let opt_res = mopac_core::opt::lbfgs::optimize_geometry_lbfgs_uhf(
+            &mut batch,
+            model.as_ref(),
+            &mut uhf_ws,
+            &mut grad_ws,
+            &uhf_opts,
+            &opt_opts,
+        );
+
+        let mut final_coords = Vec::with_capacity(natoms);
+        for i in 0..natoms {
+            final_coords.push([batch.x[i], batch.y[i], batch.z[i]]);
+        }
+
+        let final_calc = run_calculation_internal(
+            &atomic_numbers,
+            &final_coords,
+            m_name,
+            cosmo_eps,
+            None,
+            false,
+            use_nddo,
+            60,
+            1e-7,
+            1e-6,
+            0.0,
+            0.5,
+            false,
+            Some(true),
+            Some(mult),
+            Some(chg),
+        )?;
+
+        return Ok(OptimizationPyResult {
+            converged: opt_res.converged,
+            cycles: opt_res.cycles,
+            initial_energy_ev: opt_res.initial_energy_ev,
+            final_energy_ev: opt_res.final_energy_ev,
+            final_heat_of_formation_kcal: final_calc.heat_of_formation_kcal,
+            final_grad_rms: opt_res.final_grad_rms,
+            final_grad_max: opt_res.final_grad_max,
+            coordinates: final_coords,
+            final_result: final_calc,
+        });
+    }
+
+    let mut scf_ws = ScfWorkspace::allocate(batch.norbs);
+    let mut grad_ws = GradientWorkspace::allocate(batch.norbs);
 
     let opt_res = optimize_geometry_lbfgs(
         &mut batch,
@@ -1078,15 +1318,19 @@ pub fn optimize(
         &atomic_numbers,
         &final_coords,
         m_name,
-        None,
+        cosmo_eps,
         None,
         false,
-        use_nddo.unwrap_or(false),
+        use_nddo,
         60,
         1e-7,
         1e-6,
         0.0,
         0.5,
+        false,
+        None,
+        None,
+        None,
     )?;
 
     Ok(OptimizationPyResult {
@@ -1124,7 +1368,7 @@ pub fn optimize(
     grad_max_tol = 0.2,
     trust_radius = 0.1,
     target_mode = None,
-    use_nddo = false,
+    use_nddo = true,
 ))]
 pub fn transition_state(
     atomic_numbers: Vec<u8>,
@@ -1168,6 +1412,8 @@ pub fn transition_state(
         )));
     }
 
+    let use_nddo = use_nddo.unwrap_or(true);
+
     let mut batch =
         MolecularBatch::new_for_model(atomic_numbers.clone(), &coordinates, model.as_ref());
     let mut scf_ws = ScfWorkspace::allocate(batch.norbs);
@@ -1185,7 +1431,7 @@ pub fn transition_state(
         mode_following: true,
         target_mode,
         opt_mask: None,
-        use_nddo: use_nddo.unwrap_or(false),
+        use_nddo,
         hessian_delta: 0.005,
         initial_hessian: None,
     };
@@ -1211,12 +1457,16 @@ pub fn transition_state(
         None,
         None,
         false,
-        use_nddo.unwrap_or(false),
+        use_nddo,
         60,
         1e-7,
         1e-6,
         0.0,
         0.5,
+        false,
+        None,
+        None,
+        None,
     )?;
 
     Ok(TransitionStatePyResult {
@@ -1245,7 +1495,7 @@ pub fn transition_state(
 /// - `rotational_symmetry_number`: Rotational symmetry number sigma (e.g. 2 for C2v water; default: 1.0)
 /// - `step_size_angstrom`: Finite difference displacement step size in Ångströms (default: 0.005 Å)
 /// - `project_external`: Project out 6 translational/rotational external motions via Eckart frame (default: true)
-/// - `use_nddo`: Enable full NDDO potential energy surface and second derivatives (default: false)
+/// - `use_nddo`: Enable full NDDO potential energy surface and second derivatives (default: true)
 #[pyfunction]
 #[pyo3(signature = (
     atomic_numbers,
@@ -1256,7 +1506,7 @@ pub fn transition_state(
     rotational_symmetry_number = 1.0,
     step_size_angstrom = 0.005,
     project_external = true,
-    use_nddo = false,
+    use_nddo = true,
     custom_masses = None,
     n_threads = None,
 ))]
@@ -1311,6 +1561,8 @@ pub fn frequencies(
         )));
     }
 
+    let use_nddo = use_nddo.unwrap_or(true);
+
     let mut batch = MolecularBatch::new_for_model(atomic_numbers, &coordinates, model.as_ref());
     let mut ws = ScfWorkspace::allocate(batch.norbs);
 
@@ -1318,14 +1570,14 @@ pub fn frequencies(
         max_iter: 100,
         energy_tol_ev: 1e-8,
         density_tol: 1e-7,
-        use_nddo: use_nddo.unwrap_or(false),
+        use_nddo,
         ..Default::default()
     };
 
     let hess_opts = HessianOptions {
         delta: step_size_angstrom.unwrap_or(1.0e-3),
         recompute_scf: true,
-        use_nddo: use_nddo.unwrap_or(false),
+        use_nddo,
         project_external: project_external.unwrap_or(true),
         temperature_k: temperature_k.unwrap_or(298.15),
         pressure_atm: pressure_atm.unwrap_or(1.0),
@@ -1456,14 +1708,16 @@ pub fn esp_charges(
                         &batch,
                         model.as_ref(),
                         &mut ws,
-                        60,
+                        120,
                         1e-5,
                         1e-4,
                         true,
                     );
                 }
-                if !scf_res.converged {
-                    return Err("Base SCF failed to converge for ESP calculation".to_string());
+                if !scf_res.converged && !ws.density.data.iter().any(|&x| x.abs() > 1e-6) {
+                    return Err(
+                        "Base SCF failed to produce valid density for ESP calculation".to_string(),
+                    );
                 }
 
                 compute_esp_charges(&batch, model.as_ref(), &ws.density, &opts)
@@ -1489,7 +1743,7 @@ pub fn esp_charges(
 /// - `step_size`: Path arc length step size in amu^(1/2) * Å (default: 0.1)
 /// - `max_points`: Maximum number of reaction path points per direction (default: 50)
 /// - `direction`: Path direction: "both", "forward", or "reverse" (default: "both")
-/// - `use_nddo`: Enable full NDDO potential energy surface (default: false)
+/// - `use_nddo`: Enable full NDDO potential energy surface (default: true)
 #[pyfunction]
 #[pyo3(signature = (
     atomic_numbers,
@@ -1549,7 +1803,7 @@ pub fn irc(
         grad_rms_tol: 0.05,
         energy_increase_tol: 0.02,
         direction: irc_dir,
-        use_nddo: use_nddo.unwrap_or(false),
+        use_nddo: use_nddo.unwrap_or(true),
         transition_vector: None,
     };
 
@@ -1595,7 +1849,7 @@ pub fn irc(
 /// - `temperature_k`: Target temperature in Kelvin for NVT ensemble (default: 298.15 K)
 /// - `berendsen_tau_fs`: Berendsen thermostat coupling constant in femtoseconds (default: 100.0 fs)
 /// - `recording_interval`: Stride interval for saving trajectory frames (default: 1)
-/// - `use_nddo`: Enable full NDDO potential energy surface (default: false)
+/// - `use_nddo`: Enable full NDDO potential energy surface (default: true)
 #[pyfunction]
 #[pyo3(signature = (
     atomic_numbers,
@@ -1667,7 +1921,7 @@ pub fn drc(
         berendsen_tau_fs: berendsen_tau_fs.unwrap_or(100.0),
         recording_interval: recording_interval.unwrap_or(1),
         initial_velocities: init_vel,
-        use_nddo: use_nddo.unwrap_or(false),
+        use_nddo: use_nddo.unwrap_or(true),
         scf_energy_tol: 1e-8,
         scf_density_tol: 1e-7,
     };
@@ -1803,6 +2057,10 @@ pub fn saddle(
         1e-6,
         0.0,
         0.5,
+        false,
+        None,
+        None,
+        None,
     )?;
 
     let py_traj: Vec<SaddlePointPy> = saddle_res
@@ -2166,6 +2424,8 @@ pub struct MopacCalculator {
     pub h_bonds: bool,
     #[pyo3(get, set)]
     pub max_iter: usize,
+    #[pyo3(get, set)]
+    pub use_gpu: bool,
 }
 
 #[pymethods]
@@ -2177,7 +2437,8 @@ impl MopacCalculator {
         cosmo_eps = None,
         dispersion = None,
         h_bonds = false,
-        max_iter = 60
+        max_iter = 60,
+        use_gpu = false
     ))]
     fn new(
         method: Option<&str>,
@@ -2186,6 +2447,7 @@ impl MopacCalculator {
         dispersion: Option<&str>,
         h_bonds: Option<bool>,
         max_iter: Option<usize>,
+        use_gpu: Option<bool>,
     ) -> Self {
         Self {
             method: method.unwrap_or("PM6").to_string(),
@@ -2194,14 +2456,17 @@ impl MopacCalculator {
             dispersion: dispersion.map(|s| s.to_string()),
             h_bonds: h_bonds.unwrap_or(false),
             max_iter: max_iter.unwrap_or(60),
+            use_gpu: use_gpu.unwrap_or(false),
         }
     }
 
     /// Calculate energy, gradients, dipole, and charges for a given molecule.
+    #[pyo3(signature = (atomic_numbers, coordinates, use_gpu = None))]
     fn calculate(
         &self,
         atomic_numbers: Vec<u8>,
         coordinates: Vec<[f64; 3]>,
+        use_gpu: Option<bool>,
     ) -> PyResult<CalculationResult> {
         run_calculation_internal(
             &atomic_numbers,
@@ -2216,6 +2481,10 @@ impl MopacCalculator {
             1e-6,
             0.0,
             0.5,
+            use_gpu.unwrap_or(self.use_gpu),
+            None,
+            None,
+            None,
         )
     }
 
@@ -2235,6 +2504,10 @@ impl MopacCalculator {
             Some(1.0),
             Some(2.0),
             Some(self.use_nddo),
+            self.cosmo_eps,
+            None,
+            None,
+            None,
         )
     }
 
@@ -2268,7 +2541,7 @@ impl MopacCalculator {
     }
 
     /// Generate a bundle of Gaussian Cube (.cube) volumetric files for density and molecular orbitals.
-    #[pyo3(signature = (atomic_numbers, coordinates, orbitals = None, include_density = true, padding_angstrom = 3.0, resolution_angstrom = 0.35, n_threads = None))]
+    #[pyo3(signature = (atomic_numbers, coordinates, orbitals = None, include_density = true, padding_angstrom = 3.0, resolution_angstrom = 0.35, n_threads = None, use_gpu = None))]
     fn generate_cubes_bundle(
         &self,
         py: Python<'_>,
@@ -2279,6 +2552,7 @@ impl MopacCalculator {
         padding_angstrom: Option<f64>,
         resolution_angstrom: Option<f64>,
         n_threads: Option<usize>,
+        use_gpu: Option<bool>,
     ) -> PyResult<std::collections::HashMap<String, String>> {
         generate_cubes_bundle(
             py,
@@ -2290,6 +2564,7 @@ impl MopacCalculator {
             padding_angstrom,
             resolution_angstrom,
             n_threads,
+            Some(use_gpu.unwrap_or(self.use_gpu)),
         )
     }
 
@@ -2309,7 +2584,8 @@ impl MopacCalculator {
         surface_opacity = 0.35,
         padding_angstrom = 3.0,
         resolution_angstrom = 0.35,
-        n_threads = None
+        n_threads = None,
+        use_gpu = None
     ))]
     fn export_molstar_bundle(
         &self,
@@ -2323,6 +2599,7 @@ impl MopacCalculator {
         padding_angstrom: Option<f64>,
         resolution_angstrom: Option<f64>,
         n_threads: Option<usize>,
+        use_gpu: Option<bool>,
     ) -> PyResult<std::collections::HashMap<String, String>> {
         let prefix = output_prefix.unwrap_or("molecule");
         let natoms = atomic_numbers.len();
@@ -2339,6 +2616,8 @@ impl MopacCalculator {
             coords_3d.push([c[0], c[1], c[2]]);
         }
 
+        let gpu = use_gpu.unwrap_or(self.use_gpu);
+
         let mut bundle = generate_cubes_bundle(
             py,
             atomic_numbers.clone(),
@@ -2349,9 +2628,10 @@ impl MopacCalculator {
             padding_angstrom,
             resolution_angstrom,
             n_threads,
+            Some(gpu),
         )?;
 
-        let calc_res = self.calculate(atomic_numbers.clone(), coords_3d.clone())?;
+        let calc_res = self.calculate(atomic_numbers.clone(), coords_3d.clone(), Some(gpu))?;
         let charges = calc_res.mulliken_charges;
 
         let pdb_str = mopac_core::export::export_molstar_pdb(
@@ -2387,7 +2667,7 @@ impl MopacCalculator {
     }
 
     /// Generate total electron density Gaussian Cube (.cube) string.
-    #[pyo3(signature = (atomic_numbers, coordinates, padding_angstrom = 3.0, resolution_angstrom = 0.35, n_threads = None))]
+    #[pyo3(signature = (atomic_numbers, coordinates, padding_angstrom = 3.0, resolution_angstrom = 0.35, n_threads = None, use_gpu = None))]
     fn generate_density_cube(
         &self,
         py: Python<'_>,
@@ -2396,6 +2676,7 @@ impl MopacCalculator {
         padding_angstrom: Option<f64>,
         resolution_angstrom: Option<f64>,
         n_threads: Option<usize>,
+        use_gpu: Option<bool>,
     ) -> PyResult<String> {
         generate_density_cube(
             py,
@@ -2405,11 +2686,12 @@ impl MopacCalculator {
             padding_angstrom.unwrap_or(3.0),
             resolution_angstrom.unwrap_or(0.35),
             n_threads,
+            Some(use_gpu.unwrap_or(self.use_gpu)),
         )
     }
 
     /// Generate specific molecular orbital Gaussian Cube (.cube) string.
-    #[pyo3(signature = (atomic_numbers, coordinates, orbital_index = None, padding_angstrom = 3.0, resolution_angstrom = 0.35, n_threads = None))]
+    #[pyo3(signature = (atomic_numbers, coordinates, orbital_index = None, padding_angstrom = 3.0, resolution_angstrom = 0.35, n_threads = None, use_gpu = None))]
     fn generate_orbital_cube(
         &self,
         py: Python<'_>,
@@ -2419,6 +2701,7 @@ impl MopacCalculator {
         padding_angstrom: Option<f64>,
         resolution_angstrom: Option<f64>,
         n_threads: Option<usize>,
+        use_gpu: Option<bool>,
     ) -> PyResult<String> {
         generate_orbital_cube(
             py,
@@ -2429,6 +2712,7 @@ impl MopacCalculator {
             padding_angstrom.unwrap_or(3.0),
             resolution_angstrom.unwrap_or(0.35),
             n_threads,
+            Some(use_gpu.unwrap_or(self.use_gpu)),
         )
     }
 
@@ -3259,7 +3543,7 @@ pub fn export_mvs_session(
 
 /// Generate a volumetric Gaussian Cube (.cube) string for a Molecular Orbital (HOMO, LUMO, etc.).
 #[pyfunction]
-#[pyo3(signature = (atomic_numbers, coordinates, method="PM6", orbital_index=None, padding_angstrom=3.5, resolution_angstrom=0.25, n_threads=None))]
+#[pyo3(signature = (atomic_numbers, coordinates, method="PM6", orbital_index=None, padding_angstrom=3.5, resolution_angstrom=0.25, n_threads=None, use_gpu=false))]
 pub fn generate_orbital_cube(
     py: Python<'_>,
     atomic_numbers: Vec<u8>,
@@ -3269,6 +3553,7 @@ pub fn generate_orbital_cube(
     padding_angstrom: f64,
     resolution_angstrom: f64,
     n_threads: Option<usize>,
+    use_gpu: Option<bool>,
 ) -> PyResult<String> {
     let natoms = atomic_numbers.len();
     if coordinates.len() != natoms {
@@ -3317,7 +3602,7 @@ pub fn generate_orbital_cube(
                 &batch,
                 model.as_ref(),
                 &mut ws,
-                60,
+                120,
                 1e-5,
                 1e-4,
                 true,
@@ -3333,6 +3618,25 @@ pub fn generate_orbital_cube(
             resolution_angstrom,
             n_threads: resolve_num_threads(n_threads),
         };
+
+        if use_gpu.unwrap_or(false) {
+            if let Ok(ctx) = mopac_gpu::VulkanContext::new() {
+                let ctx = std::sync::Arc::new(ctx);
+                if let Ok(gpu_cube) = mopac_gpu::GpuCubeEvaluator::new(ctx) {
+                    if let Ok(cube_str) = gpu_cube.generate_molecular_orbital_cube(
+                        &batch,
+                        model.as_ref(),
+                        mo_coeffs,
+                        target_idx,
+                        energy_ev,
+                        &config,
+                    ) {
+                        return Ok(cube_str);
+                    }
+                }
+            }
+        }
+
         Ok(mopac_core::export::cube::generate_molecular_orbital_cube(
             &batch,
             model.as_ref(),
@@ -3348,7 +3652,7 @@ pub fn generate_orbital_cube(
 
 /// Generate a volumetric Gaussian Cube (.cube) string for total electron density rho(r).
 #[pyfunction]
-#[pyo3(signature = (atomic_numbers, coordinates, method="PM6", padding_angstrom=3.5, resolution_angstrom=0.25, n_threads=None))]
+#[pyo3(signature = (atomic_numbers, coordinates, method="PM6", padding_angstrom=3.5, resolution_angstrom=0.25, n_threads=None, use_gpu=false))]
 pub fn generate_density_cube(
     py: Python<'_>,
     atomic_numbers: Vec<u8>,
@@ -3357,6 +3661,7 @@ pub fn generate_density_cube(
     padding_angstrom: f64,
     resolution_angstrom: f64,
     n_threads: Option<usize>,
+    use_gpu: Option<bool>,
 ) -> PyResult<String> {
     let natoms = atomic_numbers.len();
     if coordinates.len() != natoms {
@@ -3390,7 +3695,7 @@ pub fn generate_density_cube(
                 &batch,
                 model.as_ref(),
                 &mut ws,
-                60,
+                120,
                 1e-5,
                 1e-4,
                 true,
@@ -3404,6 +3709,20 @@ pub fn generate_density_cube(
             resolution_angstrom,
             n_threads: resolve_num_threads(n_threads),
         };
+
+        if use_gpu.unwrap_or(false) {
+            if let Ok(ctx) = mopac_gpu::VulkanContext::new() {
+                let ctx = std::sync::Arc::new(ctx);
+                if let Ok(gpu_cube) = mopac_gpu::GpuCubeEvaluator::new(ctx) {
+                    if let Ok(cube_str) =
+                        gpu_cube.generate_density_cube(&batch, model.as_ref(), &ws.density, &config)
+                    {
+                        return Ok(cube_str);
+                    }
+                }
+            }
+        }
+
         Ok(mopac_core::export::cube::generate_density_cube(
             &batch,
             model.as_ref(),
@@ -3484,7 +3803,8 @@ fn parse_orbital_label(label: &str, nocc: usize, norbs: usize) -> PyResult<usize
     include_density = true,
     padding_angstrom = 3.0,
     resolution_angstrom = 0.35,
-    n_threads = None
+    n_threads = None,
+    use_gpu = false
 ))]
 pub fn generate_cubes_bundle(
     py: Python<'_>,
@@ -3496,6 +3816,7 @@ pub fn generate_cubes_bundle(
     padding_angstrom: Option<f64>,
     resolution_angstrom: Option<f64>,
     n_threads: Option<usize>,
+    use_gpu: Option<bool>,
 ) -> PyResult<std::collections::HashMap<String, String>> {
     let natoms = atomic_numbers.len();
     if coordinates.len() != natoms {
@@ -3551,14 +3872,14 @@ pub fn generate_cubes_bundle(
                     &batch,
                     model.as_ref(),
                     &mut ws,
-                    60,
+                    120,
                     1e-5,
                     1e-4,
                     true,
                 );
             }
-            if !scf_res.converged {
-                return Err("SCF failed to converge for Cubes bundle generation");
+            if !scf_res.converged && !ws.density.data.iter().any(|&x| x.abs() > 1e-6) {
+                return Err("SCF failed to produce valid density for Cubes bundle generation");
             }
 
             let config = mopac_core::export::cube::CubeGridConfig {
@@ -3567,15 +3888,35 @@ pub fn generate_cubes_bundle(
                 n_threads: threads,
             };
 
+            let gpu_eval = if use_gpu.unwrap_or(false) {
+                mopac_gpu::VulkanContext::new()
+                    .ok()
+                    .and_then(|ctx| mopac_gpu::GpuCubeEvaluator::new(std::sync::Arc::new(ctx)).ok())
+            } else {
+                None
+            };
+
             let mut bundle = std::collections::HashMap::new();
 
             if do_density {
-                let density_cube = mopac_core::export::cube::generate_density_cube(
-                    &batch,
-                    model.as_ref(),
-                    &ws.density,
-                    &config,
-                );
+                let density_cube = if let Some(ref eval) = gpu_eval {
+                    eval.generate_density_cube(&batch, model.as_ref(), &ws.density, &config)
+                        .unwrap_or_else(|_| {
+                            mopac_core::export::cube::generate_density_cube(
+                                &batch,
+                                model.as_ref(),
+                                &ws.density,
+                                &config,
+                            )
+                        })
+                } else {
+                    mopac_core::export::cube::generate_density_cube(
+                        &batch,
+                        model.as_ref(),
+                        &ws.density,
+                        &config,
+                    )
+                };
                 bundle.insert("density".to_string(), density_cube);
             }
 
@@ -3583,14 +3924,35 @@ pub fn generate_cubes_bundle(
                 let idx_0 = idx - 1;
                 let energy_ev = ws.eigenvalues[idx_0];
                 let mo_coeffs = ws.eigenvectors.row(idx_0);
-                let orb_cube = mopac_core::export::cube::generate_molecular_orbital_cube(
-                    &batch,
-                    model.as_ref(),
-                    mo_coeffs,
-                    idx,
-                    energy_ev,
-                    &config,
-                );
+                let orb_cube = if let Some(ref eval) = gpu_eval {
+                    eval.generate_molecular_orbital_cube(
+                        &batch,
+                        model.as_ref(),
+                        mo_coeffs,
+                        idx,
+                        energy_ev,
+                        &config,
+                    )
+                    .unwrap_or_else(|_| {
+                        mopac_core::export::cube::generate_molecular_orbital_cube(
+                            &batch,
+                            model.as_ref(),
+                            mo_coeffs,
+                            idx,
+                            energy_ev,
+                            &config,
+                        )
+                    })
+                } else {
+                    mopac_core::export::cube::generate_molecular_orbital_cube(
+                        &batch,
+                        model.as_ref(),
+                        mo_coeffs,
+                        idx,
+                        energy_ev,
+                        &config,
+                    )
+                };
                 bundle.insert(label, orb_cube);
             }
 
@@ -3659,14 +4021,14 @@ pub fn bond_orders(
         &batch,
         model.as_ref(),
         &mut ws,
-        60,
+        120,
         1e-5,
         1e-4,
         true,
     );
-    if !scf_res.converged {
+    if !scf_res.converged && !ws.density.data.iter().any(|&x| x.abs() > 1e-6) {
         return Err(PyValueError::new_err(
-            "SCF failed to converge for bond order calculation",
+            "SCF failed to produce valid density for bond order calculation",
         ));
     }
     let bo = mopac_core::properties::bonds::compute_bond_orders(&batch, &ws.density);

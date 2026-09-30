@@ -617,9 +617,9 @@ pub fn compute_diatomic_overlap_matrix_9x9(
         return;
     }
 
-    // Fast path: main group elements 1..=17 without d-orbitals
-    let use_diat2_a = (1..=17).contains(&za) && za != 2 && za != 10 && norb_a <= 4;
-    let use_diat2_b = (1..=17).contains(&zb) && zb != 2 && zb != 10 && norb_b <= 4;
+    // Fast path: main group elements 1..=9 without d-orbitals (Row 1 and Row 2)
+    let use_diat2_a = (1..=9).contains(&za) && za != 2 && norb_a <= 4;
+    let use_diat2_b = (1..=9).contains(&zb) && zb != 2 && norb_b <= 4;
 
     if use_diat2_a && use_diat2_b {
         let mut s4 = [[0.0f64; 4]; 4];

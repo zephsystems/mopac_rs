@@ -192,6 +192,18 @@ impl DiisWorkspace {
         density: &AlignedMatrix<f64>,
         tmp_mult: &mut AlignedMatrix<f64>,
     ) -> DiisStepResult {
+        self.push_and_extrapolate_opt(fock, density, tmp_mult, true)
+    }
+
+    /// Add current Fock and Density matrices to DIIS history, compute commutator $[F, P]$,
+    /// and conditionally extrapolate the Fock matrix if `enable_extrapolation` is true and $m \ge 3$.
+    pub fn push_and_extrapolate_opt(
+        &mut self,
+        fock: &mut AlignedMatrix<f64>,
+        density: &AlignedMatrix<f64>,
+        tmp_mult: &mut AlignedMatrix<f64>,
+        enable_extrapolation: bool,
+    ) -> DiisStepResult {
         let norbs = self.norbs;
 
         // 1. Compute M = F * P into tmp_mult.
@@ -268,8 +280,8 @@ impl DiisWorkspace {
             self.b_mat[j][new_idx] = dot;
         }
 
-        // 6. If fewer than 2 vectors, extrapolation is not possible yet
-        if m < 2 {
+        // 6. If fewer than 2 vectors or extrapolation disabled (early damping phase), return monitoring error
+        if !enable_extrapolation || m < 2 {
             return DiisStepResult {
                 extrapolated: false,
                 subspace_size: m,

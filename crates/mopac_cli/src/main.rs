@@ -13,11 +13,13 @@ use mopac_core::corrections::{
     compute_dispersion_energy, compute_h4_energy, compute_hh_repulsion_energy_and_gradients,
     DispersionModel, H4Parameters,
 };
+use mopac_core::geometry::zmatrix::{zmatrix_to_cartesian, ZMatrixAtom};
 use mopac_core::gradients::GradientWorkspace;
 use mopac_core::mozyme::{run_mozyme_scf, MozymeOptions};
 use mopac_core::opt::{
-    optimize_geometry_lbfgs, optimize_transition_state, EigenvectorFollowingWorkspace,
-    HessianUpdateScheme, OptimizationOptions, TransitionStateOptions,
+    optimize_geometry_lbfgs, optimize_geometry_lbfgs_uhf, optimize_transition_state,
+    EigenvectorFollowingWorkspace, HessianUpdateScheme, OptimizationOptions,
+    TransitionStateOptions,
 };
 use mopac_core::parameters::am1::Am1Model;
 use mopac_core::parameters::mndo::MndoModel;
@@ -36,10 +38,12 @@ use mopac_core::reactions::{
     DrcWorkspace, InitialVelocities, IrcDirection, IrcOptions, IrcWorkspace,
 };
 use mopac_core::scf::scf_loop::{
-    run_rhf_scf_adaptive_with_nddo, run_rhf_scf_adaptive_with_nddo_and_cosmo, ScfOptions, ScfResult,
+    run_rhf_scf_adaptive_with_nddo, run_rhf_scf_adaptive_with_nddo_cosmo_and_charge, ScfOptions,
+    ScfResult,
 };
+use mopac_core::scf::uhf_loop::{run_uhf_scf_with_options, UhfOptions, UhfWorkspace};
 use mopac_core::solvation::{CosmoCavity, CosmoParams};
-use mopac_core::types::{MolecularBatch, ScfWorkspace};
+use mopac_core::types::{AlignedMatrix, MolecularBatch, ScfWorkspace};
 use mopac_core::vibrations::{compute_hessian_and_frequencies, HessianOptions};
 use mopac_gpu::coulomb_fp32::GpuCoulombCalculatorFP32;
 use mopac_gpu::{GpuCoulombCalculator, VulkanContext};
@@ -52,7 +56,7 @@ use std::time::Instant;
 #[derive(Parser, Debug)]
 #[command(
     name = "mopac",
-    version = "0.1.1",
+    version = "0.1.2",
     about = "MOPAC_RS: Modern Data-Oriented Semi-Empirical Quantum Chemistry Engine"
 )]
 struct Cli {
@@ -67,9 +71,13 @@ struct Cli {
     #[arg(long)]
     method: Option<String>,
 
-    /// Enable full NDDO diatomic 22-multipole integrals & 3D rotation frame
+    /// Enable full NDDO diatomic 22-multipole integrals & 3D rotation frame (enabled by default)
     #[arg(long)]
     nddo: bool,
+
+    /// Force simplified monopole approximation (neglecting diatomic multipoles)
+    #[arg(long)]
+    monopole: bool,
 
     /// Enable geometry optimization (L-BFGS)
     #[arg(long)]
@@ -110,6 +118,30 @@ struct Cli {
     /// Simulate UV-Vis electronic absorption spectrum
     #[arg(long = "uv-vis")]
     uv_vis: bool,
+
+    /// Enable Unrestricted Hartree-Fock (UHF) for open-shell systems / radicals
+    #[arg(long)]
+    uhf: bool,
+
+    /// Force doublet spin state (multiplicity = 2)
+    #[arg(long)]
+    doublet: bool,
+
+    /// Force triplet spin state (multiplicity = 3)
+    #[arg(long)]
+    triplet: bool,
+
+    /// Force quartet spin state (multiplicity = 4)
+    #[arg(long)]
+    quartet: bool,
+
+    /// Total molecular charge (e.g. --charge 1 or --charge -1)
+    #[arg(long)]
+    charge: Option<i32>,
+
+    /// Spin multiplicity 2S+1 (e.g. --mult 2 or --multiplicity 3)
+    #[arg(long, alias = "mult")]
+    multiplicity: Option<usize>,
 
     /// Enable Vulkan GPU compute acceleration
     #[arg(long)]
@@ -202,8 +234,12 @@ struct ParsedInput {
     is_gpu_requested: bool,
     is_fp32_requested: bool,
     is_mozyme_requested: bool,
+    is_uhf_requested: bool,
+    multiplicity: Option<usize>,
+    charge: Option<i32>,
     method: Option<String>,
     is_nddo_requested: bool,
+    is_monopole_requested: bool,
     #[allow(dead_code)]
     is_dipole_requested: bool,
     is_bonds_requested: bool,
@@ -238,7 +274,16 @@ fn parse_grid_dim(s: &str) -> Option<[usize; 3]> {
 }
 
 fn symbol_to_atomic_number(sym: &str) -> Option<u8> {
-    match sym.to_uppercase().as_str() {
+    let s = sym.trim();
+    if let Ok(num) = s.parse::<u8>() {
+        if (1..=118).contains(&num) {
+            return Some(num);
+        } else if num == 0 || num == 99 {
+            return Some(0);
+        }
+    }
+    match s.to_uppercase().as_str() {
+        "X" | "XX" | "99" | "0" => Some(0),
         "H" => Some(1),
         "HE" => Some(2),
         "LI" => Some(3),
@@ -259,45 +304,124 @@ fn symbol_to_atomic_number(sym: &str) -> Option<u8> {
         "AR" => Some(18),
         "K" => Some(19),
         "CA" => Some(20),
+        "SC" => Some(21),
+        "TI" => Some(22),
+        "V" => Some(23),
+        "CR" => Some(24),
+        "MN" => Some(25),
         "FE" => Some(26),
+        "CO" => Some(27),
         "NI" => Some(28),
         "CU" => Some(29),
         "ZN" => Some(30),
+        "GA" => Some(31),
+        "GE" => Some(32),
+        "AS" => Some(33),
+        "SE" => Some(34),
         "BR" => Some(35),
+        "KR" => Some(36),
+        "RB" => Some(37),
+        "SR" => Some(38),
+        "Y" => Some(39),
+        "ZR" => Some(40),
+        "NB" => Some(41),
+        "MO" => Some(42),
+        "TC" => Some(43),
+        "RU" => Some(44),
+        "RH" => Some(45),
+        "PD" => Some(46),
+        "AG" => Some(47),
+        "CD" => Some(48),
+        "IN" => Some(49),
+        "SN" => Some(50),
+        "SB" => Some(51),
+        "TE" => Some(52),
         "I" => Some(53),
-        _ => sym.parse::<u8>().ok(),
+        "XE" => Some(54),
+        "CS" => Some(55),
+        "BA" => Some(56),
+        "LA" => Some(57),
+        "CE" => Some(58),
+        "PR" => Some(59),
+        "ND" => Some(60),
+        "PM" => Some(61),
+        "SM" => Some(62),
+        "EU" => Some(63),
+        "GD" => Some(64),
+        "TB" => Some(65),
+        "DY" => Some(66),
+        "HO" => Some(67),
+        "ER" => Some(68),
+        "TM" => Some(69),
+        "YB" => Some(70),
+        "LU" => Some(71),
+        "HF" => Some(72),
+        "TA" => Some(73),
+        "W" => Some(74),
+        "RE" => Some(75),
+        "OS" => Some(76),
+        "IR" => Some(77),
+        "PT" => Some(78),
+        "AU" => Some(79),
+        "HG" => Some(80),
+        "TL" => Some(81),
+        "PB" => Some(82),
+        "BI" => Some(83),
+        "PO" => Some(84),
+        "AT" => Some(85),
+        "RN" => Some(86),
+        "FR" => Some(87),
+        "RA" => Some(88),
+        "AC" => Some(89),
+        "TH" => Some(90),
+        "PA" => Some(91),
+        "U" => Some(92),
+        "NP" => Some(93),
+        "PU" => Some(94),
+        "AM" => Some(95),
+        "CM" => Some(96),
+        "BK" => Some(97),
+        "CF" => Some(98),
+        "ES" => Some(99),
+        "FM" => Some(100),
+        "MD" => Some(101),
+        "NO" => Some(102),
+        "LR" => Some(103),
+        "RF" => Some(104),
+        "DB" => Some(105),
+        "SG" => Some(106),
+        "BH" => Some(107),
+        "HS" => Some(108),
+        "MT" => Some(109),
+        "DS" => Some(110),
+        "RG" => Some(111),
+        "CN" => Some(112),
+        "NH" => Some(113),
+        "FL" => Some(114),
+        "MC" => Some(115),
+        "LV" => Some(116),
+        "TS" => Some(117),
+        "OG" => Some(118),
+        _ => None,
     }
 }
 
+const ELEMENT_SYMBOLS: [&str; 119] = [
+    "X", "H", "He", "Li", "Be", "B", "C", "N", "O", "F", "Ne", "Na", "Mg", "Al", "Si", "P", "S",
+    "Cl", "Ar", "K", "Ca", "Sc", "Ti", "V", "Cr", "Mn", "Fe", "Co", "Ni", "Cu", "Zn", "Ga", "Ge",
+    "As", "Se", "Br", "Kr", "Rb", "Sr", "Y", "Zr", "Nb", "Mo", "Tc", "Ru", "Rh", "Pd", "Ag", "Cd",
+    "In", "Sn", "Sb", "Te", "I", "Xe", "Cs", "Ba", "La", "Ce", "Pr", "Nd", "Pm", "Sm", "Eu", "Gd",
+    "Tb", "Dy", "Ho", "Er", "Tm", "Yb", "Lu", "Hf", "Ta", "W", "Re", "Os", "Ir", "Pt", "Au", "Hg",
+    "Tl", "Pb", "Bi", "Po", "At", "Rn", "Fr", "Ra", "Ac", "Th", "Pa", "U", "Np", "Pu", "Am", "Cm",
+    "Bk", "Cf", "Es", "Fm", "Md", "No", "Lr", "Rf", "Db", "Sg", "Bh", "Hs", "Mt", "Ds", "Rg", "Cn",
+    "Nh", "Fl", "Mc", "Lv", "Ts", "Og",
+];
+
 fn atomic_number_to_symbol(z: u8) -> &'static str {
-    match z {
-        1 => "H",
-        2 => "He",
-        3 => "Li",
-        4 => "Be",
-        5 => "B",
-        6 => "C",
-        7 => "N",
-        8 => "O",
-        9 => "F",
-        10 => "Ne",
-        11 => "Na",
-        12 => "Mg",
-        13 => "Al",
-        14 => "Si",
-        15 => "P",
-        16 => "S",
-        17 => "Cl",
-        18 => "Ar",
-        19 => "K",
-        20 => "Ca",
-        26 => "Fe",
-        28 => "Ni",
-        29 => "Cu",
-        30 => "Zn",
-        35 => "Br",
-        53 => "I",
-        _ => "X",
+    if (z as usize) < ELEMENT_SYMBOLS.len() {
+        ELEMENT_SYMBOLS[z as usize]
+    } else {
+        "X"
     }
 }
 
@@ -337,8 +461,12 @@ fn parse_mopac_input(content: &str) -> io::Result<ParsedInput> {
     let mut is_fp32 = false;
     let mut is_mozyme = false;
     let mut is_1scf = false;
+    let mut is_uhf = false;
+    let mut multiplicity = None;
+    let mut charge = None;
     let mut method = None;
     let mut is_nddo_requested = false;
+    let mut is_monopole_requested = false;
     let mut is_dipole_requested = false;
     let mut is_bonds_requested = false;
     let mut is_mullik_requested = false;
@@ -358,6 +486,37 @@ fn parse_mopac_input(content: &str) -> io::Result<ParsedInput> {
         let u = kw.to_uppercase();
         if u == "MOZYME" || u == "MOZYM" {
             is_mozyme = true;
+        } else if u == "UHF" {
+            is_uhf = true;
+        } else if u == "DOUBLET" {
+            is_uhf = true;
+            multiplicity = Some(2);
+        } else if u == "TRIPLET" {
+            is_uhf = true;
+            multiplicity = Some(3);
+        } else if u == "QUARTET" {
+            is_uhf = true;
+            multiplicity = Some(4);
+        } else if u == "QUINTET" {
+            is_uhf = true;
+            multiplicity = Some(5);
+        } else if u == "SEXTET" {
+            is_uhf = true;
+            multiplicity = Some(6);
+        } else if let Some(stripped) = u.strip_prefix("CHARGE=") {
+            if let Ok(c) = stripped.parse::<i32>() {
+                charge = Some(c);
+            }
+        } else if let Some(stripped) = u.strip_prefix("MULT=") {
+            if let Ok(m) = stripped.parse::<usize>() {
+                is_uhf = true;
+                multiplicity = Some(m);
+            }
+        } else if let Some(stripped) = u.strip_prefix("MS=") {
+            if let Ok(m) = stripped.parse::<usize>() {
+                is_uhf = true;
+                multiplicity = Some(m);
+            }
         } else if u == "TS" {
             is_ts_requested = true;
         } else if u == "IRC" || u.starts_with("IRC=") {
@@ -387,9 +546,15 @@ fn parse_mopac_input(content: &str) -> io::Result<ParsedInput> {
             dispersion = Some(DispersionModel::Pm6DhPlus);
             use_h4 = true;
             use_hh = true;
-        } else if u == "PM6-DH+" || u == "PM6-DH2" || u == "DH+" || u == "DISP" {
-            method = Some("PM6".to_string());
+        } else if u == "PM6-DH+" || u == "PM6-DH2" || u == "DH+" {
+            if method.is_none() {
+                method = Some("PM6".to_string());
+            }
             dispersion = Some(DispersionModel::Pm6DhPlus);
+        } else if u == "DISP" {
+            if dispersion.is_none() {
+                dispersion = Some(DispersionModel::Pm6DhPlus);
+            }
         } else if u == "PM7" {
             method = Some("PM7".to_string());
             dispersion = Some(DispersionModel::Pm7);
@@ -407,6 +572,8 @@ fn parse_mopac_input(content: &str) -> io::Result<ParsedInput> {
             method = Some("MNDO".to_string());
         } else if u == "NDDO" {
             is_nddo_requested = true;
+        } else if u == "MONOPOLE" {
+            is_monopole_requested = true;
         } else if u.starts_with("C.I.=") || u.starts_with("CI=") {
             let val = if u.starts_with("C.I.=") {
                 u.strip_prefix("C.I.=").unwrap_or("")
@@ -440,61 +607,208 @@ fn parse_mopac_input(content: &str) -> io::Result<ParsedInput> {
         }
     }
 
-    let mut atoms = Vec::new();
+    let mut raw_atom_lines = Vec::new();
     let mut translation_vectors = Vec::new();
     for line in lines.iter().skip(3) {
         let line = line.trim();
         if line.is_empty() {
             continue;
         }
-
         let tokens: Vec<&str> = line.split_whitespace().collect();
         if tokens.is_empty() {
             continue;
         }
-
-        let sym = tokens[0];
-
-        let mut x = 0.0;
-        let mut y = 0.0;
-        let mut z_c = 0.0;
-        let mut opt_x = true;
-        let mut opt_y = true;
-        let mut opt_z = true;
-
-        if tokens.len() >= 7 {
-            x = tokens[1].parse().unwrap_or(0.0);
-            opt_x = tokens[2] == "1";
-            y = tokens[3].parse().unwrap_or(0.0);
-            opt_y = tokens[4] == "1";
-            z_c = tokens[5].parse().unwrap_or(0.0);
-            opt_z = tokens[6] == "1";
-        } else if tokens.len() >= 4 {
-            x = tokens[1].parse().unwrap_or(0.0);
-            y = tokens[2].parse().unwrap_or(0.0);
-            z_c = tokens[3].parse().unwrap_or(0.0);
-        }
-
-        if sym.eq_ignore_ascii_case("Tv") {
-            translation_vectors.push([x, y, z_c]);
+        if tokens[0].eq_ignore_ascii_case("Tv") {
+            let x = tokens.get(1).and_then(|s| s.parse().ok()).unwrap_or(0.0);
+            let y = tokens.get(3).and_then(|s| s.parse().ok()).unwrap_or(0.0);
+            let z = tokens.get(5).and_then(|s| s.parse().ok()).unwrap_or(0.0);
+            translation_vectors.push([x, y, z]);
             continue;
         }
+        raw_atom_lines.push(tokens);
+    }
 
-        let z = match symbol_to_atomic_number(sym) {
-            Some(num) => num,
-            None => continue,
-        };
+    // Determine if input is Z-matrix or Cartesian
+    // XYZ keyword explicitly mandates Cartesian format
+    let has_xyz_kw = keywords.iter().any(|k| k.eq_ignore_ascii_case("XYZ"));
+    let is_zmat = if has_xyz_kw {
+        false
+    } else if raw_atom_lines.len() >= 3 {
+        let l1 = raw_atom_lines[0].len();
+        let l2 = raw_atom_lines[1].len();
+        (l1 == 1 || l1 == 2) && (l2 == 2 || l2 == 3 || l2 == 4)
+    } else {
+        false
+    };
 
-        atoms.push(ParsedAtom {
-            symbol: sym.to_string(),
-            z,
-            x,
-            y,
-            z_coord: z_c,
-            opt_x,
-            opt_y,
-            opt_z,
-        });
+    let mut atoms = Vec::new();
+    if is_zmat {
+        let mut zmat_entries = Vec::with_capacity(raw_atom_lines.len());
+        for (idx, tokens) in raw_atom_lines.iter().enumerate() {
+            let sym = tokens[0];
+            let z = symbol_to_atomic_number(sym).unwrap_or(0);
+            let mut r = 0.0;
+            let mut j = None;
+            let mut theta = 0.0;
+            let mut k = None;
+            let mut phi = 0.0;
+            let mut l = None;
+            let mut opt_r = true;
+            let mut opt_t = true;
+            let mut opt_p = true;
+
+            if idx == 1 {
+                r = tokens.get(1).and_then(|s| s.parse().ok()).unwrap_or(0.0);
+                opt_r = tokens.get(2).map(|&s| s == "1").unwrap_or(true);
+                j = tokens
+                    .get(3)
+                    .and_then(|s| s.parse::<usize>().ok())
+                    .map(|n| n.saturating_sub(1))
+                    .or(Some(0));
+            } else if idx == 2 {
+                r = tokens.get(1).and_then(|s| s.parse().ok()).unwrap_or(0.0);
+                opt_r = tokens.get(2).map(|&s| s == "1").unwrap_or(true);
+                theta = tokens.get(3).and_then(|s| s.parse().ok()).unwrap_or(0.0);
+                opt_t = tokens.get(4).map(|&s| s == "1").unwrap_or(true);
+                if tokens.len() >= 9 {
+                    phi = tokens.get(5).and_then(|s| s.parse().ok()).unwrap_or(0.0);
+                    opt_p = tokens.get(6).map(|&s| s == "1").unwrap_or(true);
+                    j = tokens
+                        .get(7)
+                        .and_then(|s| s.parse::<usize>().ok())
+                        .map(|n| n.saturating_sub(1))
+                        .or(Some(1));
+                    k = tokens
+                        .get(8)
+                        .and_then(|s| s.parse::<usize>().ok())
+                        .map(|n| n.saturating_sub(1))
+                        .or(Some(0));
+                } else {
+                    j = tokens
+                        .get(5)
+                        .and_then(|s| s.parse::<usize>().ok())
+                        .map(|n| n.saturating_sub(1))
+                        .or(Some(1));
+                    k = tokens
+                        .get(6)
+                        .and_then(|s| s.parse::<usize>().ok())
+                        .map(|n| n.saturating_sub(1))
+                        .or(Some(0));
+                }
+            } else if idx >= 3 {
+                if tokens.len() >= 10 {
+                    r = tokens.get(1).and_then(|s| s.parse().ok()).unwrap_or(0.0);
+                    opt_r = tokens.get(2).map(|&s| s == "1").unwrap_or(true);
+                    theta = tokens.get(3).and_then(|s| s.parse().ok()).unwrap_or(0.0);
+                    opt_t = tokens.get(4).map(|&s| s == "1").unwrap_or(true);
+                    phi = tokens.get(5).and_then(|s| s.parse().ok()).unwrap_or(0.0);
+                    opt_p = tokens.get(6).map(|&s| s == "1").unwrap_or(true);
+                    j = tokens
+                        .get(7)
+                        .and_then(|s| s.parse::<usize>().ok())
+                        .map(|n| n.saturating_sub(1));
+                    k = tokens
+                        .get(8)
+                        .and_then(|s| s.parse::<usize>().ok())
+                        .map(|n| n.saturating_sub(1));
+                    l = tokens
+                        .get(9)
+                        .and_then(|s| s.parse::<usize>().ok())
+                        .map(|n| n.saturating_sub(1));
+                } else if tokens.len() >= 7 {
+                    r = tokens.get(1).and_then(|s| s.parse().ok()).unwrap_or(0.0);
+                    theta = tokens.get(2).and_then(|s| s.parse().ok()).unwrap_or(0.0);
+                    phi = tokens.get(3).and_then(|s| s.parse().ok()).unwrap_or(0.0);
+                    j = tokens
+                        .get(4)
+                        .and_then(|s| s.parse::<usize>().ok())
+                        .map(|n| n.saturating_sub(1));
+                    k = tokens
+                        .get(5)
+                        .and_then(|s| s.parse::<usize>().ok())
+                        .map(|n| n.saturating_sub(1));
+                    l = tokens
+                        .get(6)
+                        .and_then(|s| s.parse::<usize>().ok())
+                        .map(|n| n.saturating_sub(1));
+                }
+            }
+
+            zmat_entries.push(ZMatrixAtom {
+                symbol: sym.to_string(),
+                atomic_number: z,
+                bond_length: r,
+                bond_to: j,
+                bond_angle_deg: theta,
+                angle_to: k,
+                dihedral_deg: phi,
+                dihedral_to: l,
+                opt_bond: opt_r,
+                opt_angle: opt_t,
+                opt_dihedral: opt_p,
+            });
+        }
+
+        if let Ok(coords) = zmatrix_to_cartesian(&zmat_entries) {
+            for (i, entry) in zmat_entries.iter().enumerate() {
+                // Filter out dummy atoms (Z == 0, "XX", "X")
+                if entry.atomic_number == 0
+                    || entry.symbol.eq_ignore_ascii_case("XX")
+                    || entry.symbol.eq_ignore_ascii_case("X")
+                {
+                    continue;
+                }
+                atoms.push(ParsedAtom {
+                    symbol: entry.symbol.clone(),
+                    z: entry.atomic_number,
+                    x: coords[i][0],
+                    y: coords[i][1],
+                    z_coord: coords[i][2],
+                    opt_x: entry.opt_bond,
+                    opt_y: entry.opt_angle,
+                    opt_z: entry.opt_dihedral,
+                });
+            }
+        }
+    } else {
+        for tokens in raw_atom_lines {
+            let sym = tokens[0];
+            let mut x = 0.0;
+            let mut y = 0.0;
+            let mut z_c = 0.0;
+            let mut opt_x = true;
+            let mut opt_y = true;
+            let mut opt_z = true;
+
+            if tokens.len() >= 7 {
+                x = tokens[1].parse().unwrap_or(0.0);
+                opt_x = tokens[2] == "1";
+                y = tokens[3].parse().unwrap_or(0.0);
+                opt_y = tokens[4] == "1";
+                z_c = tokens[5].parse().unwrap_or(0.0);
+                opt_z = tokens[6] == "1";
+            } else if tokens.len() >= 4 {
+                x = tokens[1].parse().unwrap_or(0.0);
+                y = tokens[2].parse().unwrap_or(0.0);
+                z_c = tokens[3].parse().unwrap_or(0.0);
+            }
+
+            let z = match symbol_to_atomic_number(sym) {
+                Some(num) => num,
+                None => continue,
+            };
+
+            atoms.push(ParsedAtom {
+                symbol: sym.to_string(),
+                z,
+                x,
+                y,
+                z_coord: z_c,
+                opt_x,
+                opt_y,
+                opt_z,
+            });
+        }
     }
 
     if !is_1scf && !is_opt_requested {
@@ -521,8 +835,12 @@ fn parse_mopac_input(content: &str) -> io::Result<ParsedInput> {
         is_gpu_requested: is_gpu,
         is_fp32_requested: is_fp32,
         is_mozyme_requested: is_mozyme,
+        is_uhf_requested: is_uhf,
+        multiplicity,
+        charge,
         method,
         is_nddo_requested,
+        is_monopole_requested,
         is_dipole_requested,
         is_bonds_requested,
         is_mullik_requested,
@@ -672,7 +990,9 @@ fn main() -> Result<(), Box<dyn std::error::Error>> {
         _ => Box::new(Am1Model),
     };
 
-    let use_nddo = cli.nddo || parsed.is_nddo_requested;
+    let use_nddo =
+        (!cli.monopole && !parsed.is_monopole_requested) || cli.nddo || parsed.is_nddo_requested;
+    let charge = cli.charge.or(parsed.charge).unwrap_or(0);
 
     println!("===============================================================================");
     println!("                          MOPAC_RS CANONICAL QUANTUM ENGINE                     ");
@@ -1096,15 +1416,21 @@ fn main() -> Result<(), Box<dyn std::error::Error>> {
         );
         if use_fp32 {
             let gpu_calc = GpuCoulombCalculatorFP32::new(Arc::clone(&ctx))?;
-            let _gpu_matrix = gpu_calc.compute_batch(&batch, model.as_ref())?;
+            let gpu_matrix = gpu_calc.compute_batch(&batch, model.as_ref())?;
+            let mut gamma_f64 = AlignedMatrix::zeroed(gpu_matrix.rows, gpu_matrix.cols);
+            for i in 0..gpu_matrix.data.len() {
+                gamma_f64.data[i] = gpu_matrix.data[i] as f64;
+            }
+            ws.gamma = Some(gamma_f64);
             println!(
-                " [Vulkan GPU] Evaluated pairwise Coulomb matrix using FP32 hardware pipeline."
+                " [Vulkan GPU] Evaluated pairwise Coulomb matrix using FP32 hardware pipeline & dispatched to SCF solver."
             );
         } else {
             let gpu_calc = GpuCoulombCalculator::new(Arc::clone(&ctx))?;
-            let _gpu_matrix = gpu_calc.compute_batch(&batch, model.as_ref())?;
+            let gpu_matrix = gpu_calc.compute_batch(&batch, model.as_ref())?;
+            ws.gamma = Some(gpu_matrix);
             println!(
-                " [Vulkan GPU] Evaluated pairwise Coulomb matrix using native Float64 pipeline."
+                " [Vulkan GPU] Evaluated pairwise Coulomb matrix using native Float64 pipeline & dispatched to SCF solver."
             );
         }
     }
@@ -1290,6 +1616,17 @@ fn main() -> Result<(), Box<dyn std::error::Error>> {
             opt_mask.push(a.opt_z);
         }
 
+        let cosmo_params = cli.eps.or(parsed.eps).map(|epsilon| CosmoParams {
+            epsilon,
+            rsolv: 1.30005,
+        });
+        if let Some(cp) = cosmo_params {
+            println!(
+                " [COSMO] Solvation active in optimization: EPS = {:.2}, RSOLV = {:.5} A",
+                cp.epsilon, cp.rsolv
+            );
+        }
+
         let opts = OptimizationOptions {
             max_cycles: 100,
             grad_rms_tol: 0.5,
@@ -1299,54 +1636,227 @@ fn main() -> Result<(), Box<dyn std::error::Error>> {
             history_capacity: 6,
             use_nddo,
             opt_mask: Some(opt_mask),
-            cosmo: None,
+            cosmo: cosmo_params,
         };
 
         let mut grad_ws = GradientWorkspace::allocate(batch.norbs);
-        let opt_res =
-            optimize_geometry_lbfgs(&mut batch, model.as_ref(), &mut ws, &mut grad_ws, &opts);
 
-        println!(
-            " [Optimizer] Optimization finished in {} cycles (Converged: {})",
-            opt_res.cycles, opt_res.converged
-        );
-        println!(
-            "   Initial Energy: {:12.6} eV | Final Energy: {:12.6} eV",
-            opt_res.initial_energy_ev, opt_res.final_energy_ev
-        );
-        println!(
-            "   Initial RMS G : {:12.4} kcal/(mol*A) | Final RMS G: {:12.4} kcal/(mol*A)",
-            opt_res.initial_grad_rms, opt_res.final_grad_rms
-        );
-        let niter = opt_res.final_scf.iterations;
-        (opt_res.final_scf, niter)
+        let charge = cli.charge.or(parsed.charge).unwrap_or(0);
+        let mut total_val_elecs = -(charge as f64);
+        for &z in &batch.atomic_numbers {
+            if let Some(p) = model.get_element(z) {
+                total_val_elecs += p.core_charge;
+            }
+        }
+        let nelec = total_val_elecs.round().max(0.0) as usize;
+        let is_open_shell = !nelec.is_multiple_of(2);
+        let is_uhf = cli.uhf
+            || cli.doublet
+            || cli.triplet
+            || cli.quartet
+            || cli.multiplicity.is_some()
+            || parsed.is_uhf_requested
+            || is_open_shell;
+
+        if is_uhf {
+            let mult = cli
+                .multiplicity
+                .or(if cli.doublet {
+                    Some(2)
+                } else if cli.triplet {
+                    Some(3)
+                } else if cli.quartet {
+                    Some(4)
+                } else {
+                    None
+                })
+                .or(parsed.multiplicity)
+                .unwrap_or(if is_open_shell { 2 } else { 1 });
+
+            println!(
+                " [UHF] Open-Shell Unrestricted Hartree-Fock active (Multiplicity = {}, Charge = {})",
+                mult, charge
+            );
+            let uhf_opts = UhfOptions {
+                multiplicity: mult,
+                charge,
+                max_iter: 80,
+                energy_tol_ev: 1e-7,
+                density_tol: 1e-6,
+                damping: 0.5,
+                use_nddo,
+                cosmo: cosmo_params,
+            };
+
+            let mut uhf_ws = UhfWorkspace::new(batch.norbs);
+            let opt_res = optimize_geometry_lbfgs_uhf(
+                &mut batch,
+                model.as_ref(),
+                &mut uhf_ws,
+                &mut grad_ws,
+                &uhf_opts,
+                &opts,
+            );
+
+            println!(
+                " [Optimizer UHF] Finished in {} cycles (Converged: {})",
+                opt_res.cycles, opt_res.converged
+            );
+            println!(
+                "   Initial Energy: {:12.6} eV | Final Energy: {:12.6} eV",
+                opt_res.initial_energy_ev, opt_res.final_energy_ev
+            );
+            println!(
+                "   Initial RMS G : {:12.4} kcal/(mol*A) | Final RMS G: {:12.4} kcal/(mol*A)",
+                opt_res.initial_grad_rms, opt_res.final_grad_rms
+            );
+            println!(
+                "   <S^2> Total Spin Expectation: {:10.6} (Ideal S*(S+1) = {:.4})",
+                opt_res.final_uhf.s_squared,
+                ((mult as f64 - 1.0) / 2.0) * ((mult as f64 - 1.0) / 2.0 + 1.0)
+            );
+
+            ws.density.copy_from(&uhf_ws.density_tot);
+            ws.eigenvectors.copy_from(&uhf_ws.eigenvectors_a);
+
+            let dummy_scf = ScfResult {
+                converged: opt_res.converged,
+                iterations: opt_res.final_uhf.iterations,
+                total_energy_ev: opt_res.final_uhf.total_energy_ev,
+                electronic_energy_ev: opt_res.final_uhf.electronic_energy_ev,
+                nuclear_repulsion_ev: opt_res.final_uhf.nuclear_repulsion_ev,
+                homo_energy_ev: opt_res.final_uhf.homo_a_energy_ev,
+                lumo_energy_ev: opt_res.final_uhf.lumo_a_energy_ev,
+                dielectric_energy_ev: opt_res.final_uhf.dielectric_energy_ev,
+            };
+            (dummy_scf, opt_res.final_uhf.iterations)
+        } else {
+            let opt_res =
+                optimize_geometry_lbfgs(&mut batch, model.as_ref(), &mut ws, &mut grad_ws, &opts);
+
+            println!(
+                " [Optimizer] Optimization finished in {} cycles (Converged: {})",
+                opt_res.cycles, opt_res.converged
+            );
+            println!(
+                "   Initial Energy: {:12.6} eV | Final Energy: {:12.6} eV",
+                opt_res.initial_energy_ev, opt_res.final_energy_ev
+            );
+            println!(
+                "   Initial RMS G : {:12.4} kcal/(mol*A) | Final RMS G: {:12.4} kcal/(mol*A)",
+                opt_res.initial_grad_rms, opt_res.final_grad_rms
+            );
+            let niter = opt_res.final_scf.iterations;
+            (opt_res.final_scf, niter)
+        }
     } else {
-        println!(
-            " [SCF] Running Roothaan-Hall Self-Consistent Field (NDDO: {})...",
-            use_nddo
-        );
         let cosmo_params = cli.eps.or(parsed.eps).map(|epsilon| CosmoParams {
             epsilon,
             rsolv: 1.30005,
         });
-        if let Some(cp) = cosmo_params {
-            println!(
-                " [COSMO] Implicit solvation active: EPS = {:.2}, RSOLV = {:.5} A",
-                cp.epsilon, cp.rsolv
-            );
+
+        let charge = cli.charge.or(parsed.charge).unwrap_or(0);
+        let mut total_val_elecs = -(charge as f64);
+        for &z in &batch.atomic_numbers {
+            if let Some(p) = model.get_element(z) {
+                total_val_elecs += p.core_charge;
+            }
         }
-        let res = run_rhf_scf_adaptive_with_nddo_and_cosmo(
-            &batch,
-            model.as_ref(),
-            &mut ws,
-            60,
-            1e-7,
-            1e-6,
-            use_nddo,
-            cosmo_params,
-        );
-        let niter = res.iterations;
-        (res, niter)
+        let nelec = total_val_elecs.round().max(0.0) as usize;
+        let is_open_shell = !nelec.is_multiple_of(2);
+        let is_uhf = cli.uhf
+            || cli.doublet
+            || cli.triplet
+            || cli.quartet
+            || cli.multiplicity.is_some()
+            || parsed.is_uhf_requested
+            || is_open_shell;
+
+        if is_uhf {
+            let mult = cli
+                .multiplicity
+                .or(if cli.doublet {
+                    Some(2)
+                } else if cli.triplet {
+                    Some(3)
+                } else if cli.quartet {
+                    Some(4)
+                } else {
+                    None
+                })
+                .or(parsed.multiplicity)
+                .unwrap_or(if is_open_shell { 2 } else { 1 });
+
+            println!(
+                " [UHF] Running Unrestricted Hartree-Fock Open-Shell SCF (NDDO: {}, Mult: {}, Charge: {})...",
+                use_nddo, mult, charge
+            );
+            if let Some(cp) = cosmo_params {
+                println!(
+                    " [COSMO] Implicit solvation active: EPS = {:.2}, RSOLV = {:.5} A",
+                    cp.epsilon, cp.rsolv
+                );
+            }
+
+            let uhf_opts = UhfOptions {
+                multiplicity: mult,
+                charge,
+                max_iter: 80,
+                energy_tol_ev: 1e-7,
+                density_tol: 1e-6,
+                damping: 0.5,
+                use_nddo,
+                cosmo: cosmo_params,
+            };
+
+            let mut uhf_ws = UhfWorkspace::new(batch.norbs);
+            let uhf_res = run_uhf_scf_with_options(&batch, model.as_ref(), &mut uhf_ws, &uhf_opts);
+            println!(
+                " [UHF] Done in {} iterations. <S^2> = {:.6} (Ideal S*(S+1) = {:.4})",
+                uhf_res.iterations,
+                uhf_res.s_squared,
+                ((mult as f64 - 1.0) / 2.0) * ((mult as f64 - 1.0) / 2.0 + 1.0)
+            );
+
+            ws.density.copy_from(&uhf_ws.density_tot);
+            ws.eigenvectors.copy_from(&uhf_ws.eigenvectors_a);
+
+            let dummy_scf = ScfResult {
+                converged: uhf_res.converged,
+                iterations: uhf_res.iterations,
+                total_energy_ev: uhf_res.total_energy_ev,
+                electronic_energy_ev: uhf_res.electronic_energy_ev,
+                nuclear_repulsion_ev: uhf_res.nuclear_repulsion_ev,
+                homo_energy_ev: uhf_res.homo_a_energy_ev,
+                lumo_energy_ev: uhf_res.lumo_a_energy_ev,
+                dielectric_energy_ev: uhf_res.dielectric_energy_ev,
+            };
+            (dummy_scf, uhf_res.iterations)
+        } else {
+            println!(
+                " [SCF] Running Roothaan-Hall Self-Consistent Field (NDDO: {}, Charge: {})...",
+                use_nddo, charge
+            );
+            if let Some(cp) = cosmo_params {
+                println!(
+                    " [COSMO] Implicit solvation active: EPS = {:.2}, RSOLV = {:.5} A",
+                    cp.epsilon, cp.rsolv
+                );
+            }
+            let res = run_rhf_scf_adaptive_with_nddo_cosmo_and_charge(
+                &batch,
+                model.as_ref(),
+                &mut ws,
+                60,
+                1e-7,
+                1e-6,
+                use_nddo,
+                cosmo_params,
+                charge,
+            );
+            let niter = res.iterations;
+            (res, niter)
+        }
     };
 
     let cosmo_params = cli.eps.or(parsed.eps).map(|epsilon| CosmoParams {
@@ -1418,7 +1928,7 @@ fn main() -> Result<(), Box<dyn std::error::Error>> {
         };
 
         // Compute active MO indices (mirrors internal logic of run_meci)
-        let mut total_valence_elecs = 0.0f64;
+        let mut total_valence_elecs = -(charge as f64);
         for &z in &batch.atomic_numbers {
             if let Some(p) = model.get_element(z) {
                 total_valence_elecs += p.core_charge;
@@ -1642,11 +2152,12 @@ fn main() -> Result<(), Box<dyn std::error::Error>> {
         }
     }
 
-    let n_electrons: usize = batch
+    let total_core: i32 = batch
         .atomic_numbers
         .iter()
-        .map(|&z| model.get_element(z).unwrap().core_charge as usize)
+        .map(|&z| model.get_element(z).unwrap().core_charge as i32)
         .sum();
+    let n_electrons: usize = (total_core - charge).max(0) as usize;
     let num_occupied = n_electrons / 2;
 
     let is_mullik = cli.mullik || parsed.is_mullik_requested;

@@ -361,6 +361,8 @@ pub struct ScfWorkspace {
     pub diis: crate::scf::diis::DiisWorkspace,
     /// Precomputed NDDO diatomic multipole pair integrals
     pub diatomic_pairs: Vec<crate::integrals::multipoles::DiatomicPairIntegrals>,
+    /// Optional precomputed two-center Coulomb repulsion matrix Gamma (from GPU or SIMD)
+    pub gamma: Option<AlignedMatrix<f64>>,
 }
 
 impl ScfWorkspace {
@@ -381,6 +383,7 @@ impl ScfWorkspace {
                 crate::scf::diis::DEFAULT_MAX_DIIS,
             ),
             diatomic_pairs: Vec::new(),
+            gamma: None,
         }
     }
 

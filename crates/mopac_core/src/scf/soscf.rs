@@ -283,7 +283,19 @@ pub fn run_rhf_soscf(
 
     for iter in 1..=max_iter {
         iters_done = iter;
-        build_fock(batch, model, &ws.h_core, &ws.density, &mut ws.fock);
+        if let Some(ref gamma) = ws.gamma {
+            crate::fock::build_fock_with_gamma(
+                batch,
+                model,
+                &ws.h_core,
+                &ws.density,
+                gamma,
+                &mut ws.fock,
+            );
+        } else {
+            build_fock(batch, model, &ws.h_core, &ws.density, &mut ws.fock);
+        }
+
         let e_elec = compute_electronic_energy(&ws.density, &ws.h_core, &ws.fock);
         let e_total = e_elec + enuc;
 

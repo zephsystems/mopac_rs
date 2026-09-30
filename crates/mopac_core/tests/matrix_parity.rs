@@ -176,3 +176,144 @@ fn test_core_hamiltonian_and_overlap_methane_pm6() {
         }
     }
 }
+
+#[test]
+fn test_core_hamiltonian_ch3cl_am1() {
+    let z = vec![6, 17, 1, 1, 1];
+    let coords = vec![
+        [0.0, 0.0, 0.0],
+        [0.0, 0.0, 1.78],
+        [1.03, 0.0, -0.36],
+        [-0.51, 0.89, -0.36],
+        [-0.51, -0.89, -0.36],
+    ];
+    let batch = MolecularBatch::new(z, &coords);
+    let model = Am1Model;
+    let norbs = batch.norbs;
+
+    let mut ws = ScfWorkspace::allocate(norbs);
+    ws.diatomic_pairs = mopac_core::integrals::multipoles::precompute_diatomic_pairs(&batch, &model);
+    mopac_core::hamiltonian::hcore::build_hcore_nddo(&batch, &model, &ws.diatomic_pairs, &mut ws.h_core);
+
+    println!("[CH3Cl AM1 H_CORE NDDO]");
+    for i in 0..norbs {
+        for j in 0..=i {
+            print!("{:12.6} ", ws.h_core.get(i, j));
+        }
+        println!();
+    }
+
+    let mut opts = ScfOptions::default();
+    opts.use_nddo = true;
+    let scf_res = run_rhf_scf_with_options(&batch, &model, &mut ws, &opts);
+    println!("[CH3Cl AM1 SCF] converged: {}, E_tot = {:.6} eV, E_nuc = {:.6} eV, E_elec = {:.6} eV",
+        scf_res.converged, scf_res.total_energy_ev, scf_res.nuclear_repulsion_ev, scf_res.electronic_energy_ev);
+    
+    let (_, hof) = mopac_core::properties::heat::compute_heat_of_formation(
+        scf_res.total_energy_ev,
+        &batch.atomic_numbers,
+        &model,
+        0.0,
+    );
+    println!("[CH3Cl AM1 Hf] = {:.5} kcal/mol (OpenMOPAC = -17.64012 kcal/mol)", hof);
+    assert!((hof - (-17.64012)).abs() < 0.05, "Hf difference too large: {} vs -17.64012", hof);
+}
+
+#[test]
+fn test_core_hamiltonian_ch3cl_pm6() {
+    let z = vec![6, 17, 1, 1, 1];
+    let coords = vec![
+        [0.0, 0.0, 0.0],
+        [0.0, 0.0, 1.78],
+        [1.03, 0.0, -0.36],
+        [-0.51, 0.89, -0.36],
+        [-0.51, -0.89, -0.36],
+    ];
+    let model = Pm6Model;
+    let batch = MolecularBatch::new_for_model(z, &coords, &model);
+    let norbs = batch.norbs;
+
+    let mut ws = ScfWorkspace::allocate(norbs);
+    let mut opts = ScfOptions::default();
+    opts.use_nddo = true;
+    let scf_res = run_rhf_scf_with_options(&batch, &model, &mut ws, &opts);
+    println!("[CH3Cl PM6 SCF] converged: {}, E_tot = {:.6} eV, E_nuc = {:.6} eV, E_elec = {:.6} eV",
+        scf_res.converged, scf_res.total_energy_ev, scf_res.nuclear_repulsion_ev, scf_res.electronic_energy_ev);
+    
+    let (_, hof) = mopac_core::properties::heat::compute_heat_of_formation(
+        scf_res.total_energy_ev,
+        &batch.atomic_numbers,
+        &model,
+        0.0,
+    );
+    println!("[CH3Cl PM6 Hf] = {:.5} kcal/mol", hof);
+}
+
+#[test]
+fn test_core_hamiltonian_cc61_pm3() {
+    let z = vec![6, 1, 1, 35, 35];
+    let coords = vec![
+        [0.0, 0.0, 0.945128],
+        [-0.902579, 0.0, 1.547601],
+        [0.902579, 0.0, 1.547601],
+        [0.0, 1.629635, -0.125228],
+        [0.0, -1.629635, -0.125228],
+    ];
+    let model = mopac_core::parameters::pm3::Pm3Model;
+    let batch = MolecularBatch::new_for_model(z, &coords, &model);
+    let norbs = batch.norbs;
+
+    let mut ws = ScfWorkspace::allocate(norbs);
+    ws.diatomic_pairs = mopac_core::integrals::multipoles::precompute_diatomic_pairs(&batch, &model);
+    mopac_core::hamiltonian::hcore::build_hcore_nddo(&batch, &model, &ws.diatomic_pairs, &mut ws.h_core);
+
+    println!("[cc-61 PM3 H_CORE NDDO diag]");
+    for i in 0..norbs {
+        print!("{:12.6} ", ws.h_core.get(i, i));
+    }
+    println!();
+    
+    println!("Row 6 Col 0 (C 2s, Br1 4s): {} (OM: -1.160351)", ws.h_core.get(6, 0));
+    println!("Row 6 Col 3 (C 2pz, Br1 4s): {} (OM: 0.624075)", ws.h_core.get(6, 3));
+    println!("Row 6 Col 4 (H1 1s, Br1 4s): {} (OM: -0.444908)", ws.h_core.get(6, 4));
+
+    let mut opts = ScfOptions::default();
+    opts.use_nddo = true;
+    opts.reuse_density = true;
+
+    use mopac_core::parameters::ParameterModel;
+
+    // Fill ws.density with atomic orbital populations pdiag
+    ws.density.data.fill(0.0);
+    for i in 0..batch.natoms {
+        let z_i = batch.atomic_numbers[i];
+        let p_i = model.get_element(z_i).unwrap();
+        let off = batch.orbital_offsets[i];
+        let norb = batch.basis_types[i].num_orbitals();
+        if norb == 1 {
+            ws.density.set(off, off, p_i.core_charge);
+        } else if norb == 4 {
+            let pop = p_i.core_charge * 0.25;
+            for o in 0..4 {
+                ws.density.set(off + o, off + o, pop);
+            }
+        } else if norb == 9 {
+            let pop = p_i.core_charge * 0.25;
+            for o in 0..4 {
+                ws.density.set(off + o, off + o, pop);
+            }
+            // d orbitals remain 0.0
+        }
+    }
+
+    let res = run_rhf_scf_with_options(&batch, &model, &mut ws, &opts);
+    println!("SCF res with atomic guess: conv={}, iter={}, E_tot={}, E_elec={}",
+        res.converged, res.iterations, res.total_energy_ev, res.electronic_energy_ev);
+    let (_, hof) = mopac_core::properties::heat::compute_heat_of_formation(
+        res.total_energy_ev,
+        &batch.atomic_numbers,
+        &model,
+        0.0,
+    );
+    println!("[cc-61 PM3 Hf with atomic guess] = {:.5} kcal/mol (OpenMOPAC = 12.16934 kcal/mol)", hof);
+}

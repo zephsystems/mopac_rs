@@ -104,6 +104,83 @@ pub fn build_fock(
     }
 }
 
+/// Build the Fock matrix $F = H^{\text{core}} + G(P)$ using a precomputed two-center Coulomb repulsion matrix $\Gamma_{AB}$.
+///
+/// Enables hardware acceleration via GPU (Vulkan Compute) or pre-allocated SIMD buffers
+/// to eliminate redundant square-root and Dewar-Klopman evaluations across SCF cycles.
+pub fn build_fock_with_gamma(
+    batch: &MolecularBatch,
+    model: &dyn ParameterModel,
+    h_core: &AlignedMatrix<f64>,
+    density: &AlignedMatrix<f64>,
+    gamma: &AlignedMatrix<f64>,
+    fock: &mut AlignedMatrix<f64>,
+) {
+    assert_eq!(fock.rows, batch.norbs);
+    assert_eq!(fock.cols, batch.norbs);
+    assert_eq!(gamma.rows, batch.natoms);
+    assert_eq!(gamma.cols, batch.natoms);
+
+    // 1. Copy H_core into Fock matrix
+    fock.data.copy_from_slice(&h_core.data);
+
+    // Precompute total electronic population on each atom: q_A = sum_{mu in A} P_{mu mu}
+    let mut stack_populations = [0.0f64; 256];
+    let mut heap_populations;
+    let atom_populations: &mut [f64] = if batch.natoms <= 256 {
+        &mut stack_populations[..batch.natoms]
+    } else {
+        heap_populations = vec![0.0; batch.natoms];
+        &mut heap_populations[..]
+    };
+    for (i, pop) in atom_populations.iter_mut().enumerate().take(batch.natoms) {
+        let orb_start = batch.orbital_offsets[i];
+        let num_orbs = batch.basis_types[i].num_orbitals();
+        let mut q = 0.0;
+        for o in 0..num_orbs {
+            q += density.get(orb_start + o, orb_start + o);
+        }
+        *pop = q;
+    }
+
+    // 2. One-center two-electron interactions
+    add_one_center_fock_terms(batch, model, density, fock);
+
+    // 3. Two-center two-electron interactions using precomputed Gamma matrix
+    for i in 0..batch.natoms {
+        let orb_a_start = batch.orbital_offsets[i];
+        let num_a = batch.basis_types[i].num_orbitals();
+
+        for (j, &q_b) in atom_populations.iter().enumerate().take(batch.natoms) {
+            if i == j {
+                continue;
+            }
+            let orb_b_start = batch.orbital_offsets[j];
+            let num_b = batch.basis_types[j].num_orbitals();
+
+            let gamma_ab = gamma.get(i, j);
+
+            // Two-center Coulomb
+            for oa in 0..num_a {
+                let idx_a = orb_a_start + oa;
+                let cur = fock.get(idx_a, idx_a);
+                fock.set(idx_a, idx_a, cur + q_b * gamma_ab);
+            }
+
+            // Two-center Exchange
+            for oa in 0..num_a {
+                let idx_a = orb_a_start + oa;
+                for ob in 0..num_b {
+                    let idx_b = orb_b_start + ob;
+                    let p_ab = density.get(idx_a, idx_b);
+                    let cur = fock.get(idx_a, idx_b);
+                    fock.set(idx_a, idx_b, cur - 0.5 * p_ab * gamma_ab);
+                }
+            }
+        }
+    }
+}
+
 /// Accumulate one-center two-electron Coulomb and Exchange terms matching OpenMOPAC `fock1.F90`:
 ///
 /// $$F_{ij} += \sum_{k, l \in A} \left[ P_{kl} (ij|kl) - \frac{1}{2} P_{kl} (ik|jl) \right]$$
