@@ -44,7 +44,11 @@ jobs:
           prerelease: false
 
       - name: Publish to Crates.io
-        if: ${{ secrets.CRATES_IO_TOKEN != '' }}
         env:
           CARGO_REGISTRY_TOKEN: ${{ secrets.CRATES_IO_TOKEN }}
-        run: ./scripts/publish_crates.sh
+        run: |
+          if [ -n "$CARGO_REGISTRY_TOKEN" ]; then
+            ./scripts/publish_crates.sh
+          else
+            echo "CARGO_REGISTRY_TOKEN is not configured; skipping crates.io publishing."
+          fi

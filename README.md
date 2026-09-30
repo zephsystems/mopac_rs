@@ -7,7 +7,7 @@
 [![Crates.io: mopac_core](https://img.shields.io/crates/v/mopac_core.svg)](https://crates.io/crates/mopac_core)
 [![Docs.rs](https://docs.rs/mopac_core/badge.svg)](https://docs.rs/mopac_core)
 [![DOI](https://zenodo.org/badge/DOI/10.5281/zenodo.22731253.svg)](https://doi.org/10.5281/zenodo.22731253)
-[![CI Status](https://github.com/zephsystems/mopac_rs/actions/workflows/ci.yml/badge.svg)](https://github.com/zephsystems/mopac_rs/actions/workflows/ci.yml)
+[![CI Status](https://github.com/zephsystems/mopac_rs/actions/workflows/ci.yml/badge.svg?branch=main)](https://github.com/zephsystems/mopac_rs/actions/workflows/ci.yml)
 [![Language: Rust](https://img.shields.io/badge/Language-Rust%201.85%2B-orange.svg)]()
 [![SIMD: AVX2 / AVX-512](https://img.shields.io/badge/Acceleration-AVX2%20%7C%20AVX--512-red.svg)]()
 [![GPU: Vulkan Compute](https://img.shields.io/badge/Compute-Vulkan%20%7C%20GDDR6%20VRAM-green.svg)]()
