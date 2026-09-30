@@ -540,4 +540,3 @@ impl Drop for GpuCoulombCalculator {
 
 unsafe impl Send for GpuCoulombCalculator {}
 unsafe impl Sync for GpuCoulombCalculator {}
-

@@ -1096,8 +1096,12 @@ fn test_golden_parity_acetylene_linear_am1() {
     assert!(scf_res.converged, "Acetylene AM1 SCF must converge");
 
     let c_triple_c_corr = 0.0;
-    let (_, hof_mopacrs) =
-        compute_heat_of_formation(scf_res.total_energy_ev, &batch.atomic_numbers, &model, c_triple_c_corr);
+    let (_, hof_mopacrs) = compute_heat_of_formation(
+        scf_res.total_energy_ev,
+        &batch.atomic_numbers,
+        &model,
+        c_triple_c_corr,
+    );
 
     let oracle = match run_openmopac_oracle("acetylene_linear_am1", "AM1", &z, &coords) {
         Some(o) => o,

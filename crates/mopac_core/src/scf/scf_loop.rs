@@ -209,7 +209,10 @@ pub fn run_rhf_scf_with_options(
     let has_warm_density =
         options.reuse_density && ws.density.data.iter().any(|&x| x.abs() > 1e-12);
     if !has_warm_density {
-        let has_heavy_element = batch.atomic_numbers.iter().any(|&z| z >= 9 && z != 10 && z != 18);
+        let has_heavy_element = batch
+            .atomic_numbers
+            .iter()
+            .any(|&z| z >= 9 && z != 10 && z != 18);
         if has_heavy_element {
             // Authentic OpenMOPAC initial guess (moldat.F90 lines 730-790, iter.F90 lines 182-188):
             // Initialize density matrix with atomic orbital populations pdiag to avoid unphysical

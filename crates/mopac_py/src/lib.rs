@@ -746,7 +746,8 @@ impl SaddlePyResult {
     }
 }
 
-fn get_cached_gpu_coulomb_calc() -> Option<std::sync::Arc<std::sync::Mutex<mopac_gpu::GpuCoulombCalculator>>> {
+fn get_cached_gpu_coulomb_calc(
+) -> Option<std::sync::Arc<std::sync::Mutex<mopac_gpu::GpuCoulombCalculator>>> {
     static CACHE: std::sync::OnceLock<
         Option<std::sync::Arc<std::sync::Mutex<mopac_gpu::GpuCoulombCalculator>>>,
     > = std::sync::OnceLock::new();
