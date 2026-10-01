@@ -15,7 +15,7 @@ name = "mopac"
 path = "src/main.rs"
 
 [dependencies]
-mopac_core = { path = "../mopac_core", version = "0.1.2" }
-mopac_gpu = { path = "../mopac_gpu", version = "0.1.2" }
+mopac_core = { path = "../mopac_core", version = "0.1.3" }
+mopac_gpu = { path = "../mopac_gpu", version = "0.1.3" }
 clap = { version = "4.5", features = ["derive"] }
 rayon = "1.10"

@@ -5,6 +5,7 @@
 [![License: Apache 2.0](https://img.shields.io/badge/License-Apache_2.0-blue.svg)](https://opensource.org/licenses/Apache-2.0)
 [![Crates.io: mopac](https://img.shields.io/crates/v/mopac.svg?label=mopac)](https://crates.io/crates/mopac)
 [![Crates.io: mopac_core](https://img.shields.io/crates/v/mopac_core.svg)](https://crates.io/crates/mopac_core)
+[![PyPI: mopac-py](https://img.shields.io/pypi/v/mopac-py.svg)](https://pypi.org/project/mopac-py/)
 [![Docs.rs](https://docs.rs/mopac_core/badge.svg)](https://docs.rs/mopac_core)
 [![DOI](https://zenodo.org/badge/DOI/10.5281/zenodo.22731253.svg)](https://doi.org/10.5281/zenodo.22731253)
 [![CI Status](https://github.com/zephsystems/mopac_rs/actions/workflows/ci.yml/badge.svg?branch=main)](https://github.com/zephsystems/mopac_rs/actions/workflows/ci.yml)
@@ -323,6 +324,8 @@ Detailed mathematical derivations, Fortran audits, and GPU specifications:
 - [**Strict Testing & Verification Policy**](explanations/03_STRICT_TESTING_AND_VERIFICATION_POLICY.md)
 - [**Translation Devlog & Physical Constants Audit**](explanations/04_TRANSLATION_DEVLOG_AND_PHYSICAL_CONSTANTS_AUDIT.md)
 - [**Vulkan GPU Acceleration & Level Shifting**](explanations/05_VULKAN_GPU_ACCELERATION_AND_LEVEL_SHIFTING.md)
+- [**Volumetric Interoperability (Mol*, PDB B-Factors & Gaussian Cubes)**](explanations/06_VOLUMETRIC_INTEROP_CUBE_PDB_MOLSTAR_AUDIT.md)
+- [**Hardware Acceleration & Performance Audit (AVX2 vs Vulkan)**](explanations/07_MOPAC_RS_HARDWARE_ACCELERATION_AND_PERFORMANCE_AUDIT.md)
 
 ---
 
@@ -336,7 +339,7 @@ If you use `mopac_rs` in your academic research, benchmarks, or software, please
   title = {{MOPAC\_RS: Modern High-Performance Semi-Empirical Quantum Chemistry Engine in Rust}},
   year = {2026},
   publisher = {Zenodo},
-  version = {0.1.2},
+  version = {0.1.3},
   doi = {10.5281/zenodo.22731253},
   url = {https://github.com/zephsystems/mopac_rs}
 }

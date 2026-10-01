@@ -4,6 +4,24 @@ All notable changes to `mopac_rs` and `mopac-py` will be documented in this file
 
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
+## [0.1.3] - 2026-10-01
+
+### Added
+- **NIST CCCBDB SRD 101 Experimental Validation**:
+  - Full thermochemistry and geometry verification suite evaluating 707 gas-phase molecules against laboratory measurements.
+  - Bit-exact CPU vs GPU Vulkan Float64 parity ($0.00\text{ kcal/mol}$ residual across all supported Hamiltonians).
+  - OpenMOPAC v23.2.5 reference oracle benchmark with sub-millihartree ($P_{50} < 0.001\text{ kcal/mol}$) parity.
+
+### Changed
+- **Repository Tree Sanitization**:
+  - Pruned transient 3D Gaussian cube grids, test charges, and audit files from the Git index, reducing repository footprint by ~38% (from 6.34 MB to 3.96 MB).
+  - Hardened `.gitignore` to prevent tracking of volumetric grids and local cache artifacts.
+
+### Fixed
+- **CI/CD & GitHub Actions Stability**:
+  - Resolved schema validation failure in `release.yml` by isolating secrets context from `if:` conditionals.
+  - Enforced 100% `cargo fmt` adherence and fixed Clippy linter warnings (`field_reassign_with_default`, `if_same_then_else`).
+  - Added `skip-existing: true` in `release-pypi.yml` for idempotent distribution uploads.
 
 ## [0.1.2] - 2026-09-28
 
