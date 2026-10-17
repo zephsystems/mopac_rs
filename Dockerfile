@@ -16,7 +16,7 @@ RUN apt-get update && apt-get install -y --no-install-recommends \
 WORKDIR /build
 
 # Copy workspace source files
-COPY Cargo.toml Cargo.lock pyproject.toml README.md LICENSE ./
+COPY Cargo.toml pyproject.toml README.md LICENSE ./
 COPY crates ./crates
 
 # Build release CLI binary
