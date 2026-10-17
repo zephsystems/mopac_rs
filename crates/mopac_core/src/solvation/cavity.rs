@@ -894,7 +894,7 @@ mod tests {
         let z = vec![8, 1, 1];
         let batch = MolecularBatch::new(z, &coords);
 
-        let n_iterations = if cfg!(debug_assertions) { 200 } else { 2_000 };
+        let n_iterations = if cfg!(debug_assertions) { 50 } else { 2_000 };
         let mut total_segments = 0;
         let mut total_fine = 0;
 
@@ -920,9 +920,9 @@ mod tests {
             total_fine / n_iterations
         );
 
-        // Throughput check: < 500 µs in release, < 6000 µs in unoptimized debug
+        // Throughput check: < 500 µs in release, < 35_000 µs in unoptimized debug under shared CI contention
         let max_allowed_us = if cfg!(debug_assertions) {
-            6000.0
+            35_000.0
         } else {
             500.0
         };

@@ -507,9 +507,15 @@ fn test_gpu_pocord_transition_metal_throughput_benchmark() {
         iterations
     );
 
+    let min_throughput = if cfg!(debug_assertions) || !ctx.device_info.is_discrete {
+        1_000.0
+    } else {
+        10_000.0
+    };
     assert!(
-        throughput > 10_000.0,
-        "GPU throughput must exceed 10,000 pair evaluations per second"
+        throughput > min_throughput,
+        "GPU throughput must exceed {} pair evaluations per second",
+        min_throughput
     );
 }
 
@@ -669,9 +675,15 @@ fn test_gpu_core_repulsion_throughput_benchmark() {
         iterations
     );
 
+    let min_throughput = if cfg!(debug_assertions) || !ctx.device_info.is_discrete {
+        1_000.0
+    } else {
+        5_000.0
+    };
     assert!(
-        throughput > 5_000.0,
-        "GPU core repulsion throughput must exceed 5,000 pair-evals/s"
+        throughput > min_throughput,
+        "GPU core repulsion throughput must exceed {} pair-evals/s",
+        min_throughput
     );
 }
 

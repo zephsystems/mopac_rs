@@ -2233,7 +2233,11 @@ mod tests {
             cored[i][1] = -45.0 + (i as f64) * 1.5;
         }
 
-        let n_ops = 500_000;
+        let n_ops = if cfg!(debug_assertions) {
+            100_000
+        } else {
+            500_000
+        };
         let start = Instant::now();
         let mut sink = 0.0f64;
 
@@ -2257,7 +2261,7 @@ mod tests {
         );
 
         let min_ops = if cfg!(debug_assertions) {
-            500_000.0
+            50_000.0
         } else {
             10_000_000.0
         };

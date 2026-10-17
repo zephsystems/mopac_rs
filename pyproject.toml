@@ -54,3 +54,4 @@ Documentation = "https://github.com/zephsystems/mopac_rs#readme"
 manifest-path = "crates/mopac_py/Cargo.toml"
 module-name = "mopac_py"
 features = ["pyo3/extension-module"]
+include = [{ path = "LICENSE", format = "sdist" }]
