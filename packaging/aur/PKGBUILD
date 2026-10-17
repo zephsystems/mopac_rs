@@ -1,0 +1,28 @@
+# Maintainer: zeph.sys <zeph.systems@gmail.com>
+pkgname=mopac-rs-bin
+pkgver=0.1.4
+pkgrel=1
+pkgdesc="Modern High-Performance Semi-Empirical Quantum Chemistry Engine in Rust (Precompiled binary)"
+arch=('x86_64')
+url="https://github.com/zephsystems/mopac_rs"
+license=('Apache-2.0')
+depends=('vulkan-icd-loader' 'gcc-libs')
+optdepends=(
+    'vulkan-driver: Hardware GPU acceleration with Vulkan'
+    'python: Python 3 bindings (mopac-py)'
+    'python-numpy: NumPy integration for Python bindings'
+)
+provides=('mopac')
+conflicts=('mopac')
+source=("${pkgname}-${pkgver}.tar.gz::https://github.com/zephsystems/mopac_rs/releases/download/v${pkgver}/mopac-linux-x86_64.tar.gz"
+        "LICENSE-${pkgver}::https://raw.githubusercontent.com/zephsystems/mopac_rs/v${pkgver}/LICENSE"
+        "README-${pkgver}.md::https://raw.githubusercontent.com/zephsystems/mopac_rs/v${pkgver}/README.md")
+sha256sums=('a68c39c9ccf1032b207c3a15ac2634e3fdcbdb5a21857f85725ac4f91c38b841'
+            'a6cba85bc92e0cff7a450b1d873c0eaa2e9fc96bf472df0247a26bec77bf3ff9'
+            'd9fa24972c350f9ff490dd1d7812730549fbaf165f2aa46f5d8e41fe07cf9c40')
+
+package() {
+    install -Dm755 "${srcdir}/mopac" "${pkgdir}/usr/bin/mopac"
+    install -Dm644 "${srcdir}/LICENSE-${pkgver}" "${pkgdir}/usr/share/licenses/${pkgname}/LICENSE"
+    install -Dm644 "${srcdir}/README-${pkgver}.md" "${pkgdir}/usr/share/doc/${pkgname}/README.md"
+}

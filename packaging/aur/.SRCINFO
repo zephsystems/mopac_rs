@@ -1,0 +1,22 @@
+pkgbase = mopac-rs-bin
+	pkgdesc = Modern High-Performance Semi-Empirical Quantum Chemistry Engine in Rust (Precompiled binary)
+	pkgver = 0.1.4
+	pkgrel = 1
+	url = https://github.com/zephsystems/mopac_rs
+	arch = x86_64
+	license = Apache-2.0
+	depends = vulkan-icd-loader
+	depends = gcc-libs
+	optdepends = vulkan-driver: Hardware GPU acceleration with Vulkan
+	optdepends = python: Python 3 bindings (mopac-py)
+	optdepends = python-numpy: NumPy integration for Python bindings
+	provides = mopac
+	conflicts = mopac
+	source = mopac-rs-bin-0.1.4.tar.gz::https://github.com/zephsystems/mopac_rs/releases/download/v0.1.4/mopac-linux-x86_64.tar.gz
+	source = LICENSE-0.1.4::https://raw.githubusercontent.com/zephsystems/mopac_rs/v0.1.4/LICENSE
+	source = README-0.1.4.md::https://raw.githubusercontent.com/zephsystems/mopac_rs/v0.1.4/README.md
+	sha256sums = a68c39c9ccf1032b207c3a15ac2634e3fdcbdb5a21857f85725ac4f91c38b841
+	sha256sums = a6cba85bc92e0cff7a450b1d873c0eaa2e9fc96bf472df0247a26bec77bf3ff9
+	sha256sums = d9fa24972c350f9ff490dd1d7812730549fbaf165f2aa46f5d8e41fe07cf9c40
+
+pkgname = mopac-rs-bin

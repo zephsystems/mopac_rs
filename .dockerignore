@@ -1,0 +1,10 @@
+target/
+.git/
+.venv/
+__pycache__/
+*.pyc
+*.pyo
+benchmarks/chemotheque/
+benchmarks/cache/
+.github/
+packaging/
