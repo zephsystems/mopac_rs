@@ -1,7 +1,13 @@
 //! GPU-Accelerated Dewar-Klopman Two-Center Two-Electron Repulsion Engine.
 //!
 //! Licensed under the Apache License, Version 2.0 (the "License").
-//! Evaluates the NxN pairwise Coulomb repulsion matrix on Vulkan compute shader cores.
+//! Evaluates the $N \times N$ pairwise atomic monopole Dewar-Klopman Coulomb repulsion matrix $\Gamma$
+//! on Vulkan compute shader cores. Accelerates long-range Coulomb screening, monopole SCF approximations,
+//! and electrostatics for ultra-large molecular batches.
+//!
+//! *Note:* This pipeline calculates the isotropic monopole Coulomb interaction matrix $\Gamma_{AB}$.
+//! Full 2025-element anisotropic NDDO rotated diatomic multipoles are evaluated via CPU SIMD in
+//! `mopac_core::integrals::multipoles`.
 
 use crate::context::{VulkanContext, VulkanError};
 use ash::vk;
@@ -18,6 +24,30 @@ pub struct AtomGpu {
     pub y: f64,
     pub z: f64,
     pub gss: f64,
+}
+
+impl AtomGpu {
+    /// Calculate the effective Klopman-Ohno screening parameter $g_{ss}^{\text{eff}}$,
+    /// substituting transition-metal core radius ($pocord$) from OpenMOPAC `mndod.F90:53`.
+    #[inline(always)]
+    pub fn effective_gss(gss: f64, pocord: f64) -> f64 {
+        if pocord > 1.0e-5 {
+            EV_ANGSTROM_FACTOR
+                / (2.0 * pocord * mopac_core::constants::codata2018::BOHR_RADIUS_ANGSTROMS)
+        } else {
+            gss
+        }
+    }
+
+    /// Constructs an `AtomGpu` applying canonical $pocord$ modulation.
+    pub fn from_element_params(x: f64, y: f64, z: f64, gss: f64, pocord: f64) -> Self {
+        Self {
+            x,
+            y,
+            z,
+            gss: Self::effective_gss(gss, pocord),
+        }
+    }
 }
 
 /// Vulkan compute pipeline for parallel evaluation of two-center two-electron integrals.
@@ -272,12 +302,10 @@ impl GpuCoulombCalculator {
             let param = model
                 .get_element(z)
                 .expect("Unsupported atomic element in batch");
-            atoms.push(AtomGpu {
-                x: batch.x[i],
-                y: batch.y[i],
-                z: batch.z[i],
-                gss: param.gss,
-            });
+            let pocord = model.get_pocord(z);
+            atoms.push(AtomGpu::from_element_params(
+                batch.x[i], batch.y[i], batch.z[i], param.gss, pocord,
+            ));
         }
 
         // Fast path: use pre-allocated zero-allocation GPU workspace

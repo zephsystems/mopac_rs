@@ -1196,8 +1196,15 @@ pub fn precompute_diatomic_pairs(
                 );
 
                 if model.use_feathering() {
+                    let has_valence_d_a = crate::integrals::d_orbitals::get_iod(za) > 0;
+                    let has_valence_d_b = crate::integrals::d_orbitals::get_iod(zb) > 0;
                     crate::integrals::d_orbitals::apply_pm7_d_correction(
-                        norb_a, norb_b, has_d_a, has_d_b, &mut ww, &mut cored,
+                        norb_a,
+                        norb_b,
+                        has_valence_d_a,
+                        has_valence_d_b,
+                        &mut ww,
+                        &mut cored,
                     );
                 }
 

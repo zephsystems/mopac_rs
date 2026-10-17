@@ -7,11 +7,13 @@
 //! core-core interaction, and batch molecular dispatch on discrete and integrated GPUs.
 
 pub mod context;
+pub mod core_repulsion;
 pub mod coulomb;
 pub mod coulomb_fp32;
 pub mod cube;
 
 pub use context::{VulkanContext, VulkanDeviceInfo, VulkanError};
+pub use core_repulsion::{ElementGpuParams, GaussianParamGpu, GpuCoreRepulsionCalculator};
 pub use coulomb::{AtomGpu, GpuCoulombCalculator, GpuWorkspace};
 pub use coulomb_fp32::{
     AtomGpuFP32, BatchMoleculeDescriptor, GpuBatchVramManager, GpuCoulombCalculatorFP32,

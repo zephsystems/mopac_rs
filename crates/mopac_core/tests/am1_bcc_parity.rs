@@ -183,3 +183,48 @@ fn test_end_to_end_am1_scf_plus_am1_bcc() {
         "Hydrogen charge should become more positive"
     );
 }
+
+#[test]
+fn test_pyrrole_am1_bcc_five_membered_aromatic_shifts() {
+    // Pyrrole C4H5N: 5-membered aromatic planar ring
+    // Atom 0: N, Atoms 1..4: C, Atom 5: H(N), Atoms 6..9: H(C)
+    let atomic_numbers = vec![7, 6, 6, 6, 6, 1, 1, 1, 1, 1];
+    let coords = vec![
+        [0.0000, 1.0960, 0.0000],   // 0: N
+        [1.1290, 0.3340, 0.0000],   // 1: C
+        [0.7090, -0.9920, 0.0000],  // 2: C
+        [-0.7090, -0.9920, 0.0000], // 3: C
+        [-1.1290, 0.3340, 0.0000],  // 4: C
+        [0.0000, 2.0960, 0.0000],   // 5: H on N
+        [2.1290, 0.7340, 0.0000],   // 6: H on C1
+        [1.3500, -1.8600, 0.0000],  // 7: H on C2
+        [-1.3500, -1.8600, 0.0000], // 8: H on C3
+        [-2.1290, 0.7340, 0.0000],  // 9: H on C4
+    ];
+
+    let batch = MolecularBatch::new(atomic_numbers, &coords);
+    let initial_charges = vec![0.0; 10];
+    let result = compute_am1_bcc_charges(&batch, &initial_charges).expect("AM1-BCC failed");
+
+    // Exact conservation
+    let sum_final: f64 = result.bcc_charges.iter().sum();
+    assert!(sum_final.abs() < 1e-14);
+
+    // H on N receives +0.0580 (aromatic N-H shift)
+    let hn_corr = result.bond_charge_corrections[5];
+    assert!(
+        (hn_corr - 0.0580).abs() < 1e-6,
+        "Expected aromatic N-H correction +0.0580, got {}",
+        hn_corr
+    );
+
+    // H on aromatic C receives +0.0407 (aromatic C-H shift)
+    for h_idx in 6..10 {
+        let hc_corr = result.bond_charge_corrections[h_idx];
+        assert!(
+            (hc_corr - 0.0407).abs() < 1e-6,
+            "Expected aromatic C-H correction +0.0407, got {}",
+            hc_corr
+        );
+    }
+}

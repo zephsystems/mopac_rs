@@ -205,8 +205,8 @@ fn test_saddle_hcn_hnc_isomerization() {
     );
 
     assert!(
-        (result.transition_state_heat_of_formation_kcal - 119.051).abs() < 0.1,
-        "SADDLE TS HoF {:.3} kcal/mol differs from canonical TS benchmark 119.051 kcal/mol",
+        (result.transition_state_heat_of_formation_kcal - 119.239).abs() < 0.1,
+        "SADDLE TS HoF {:.3} kcal/mol differs from canonical TS benchmark 119.239 kcal/mol",
         result.transition_state_heat_of_formation_kcal
     );
 

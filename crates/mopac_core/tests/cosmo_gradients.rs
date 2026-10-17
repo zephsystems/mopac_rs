@@ -139,4 +139,34 @@ fn test_cosmo_dielectric_gradients_finite_difference() {
         rms_kcal, max_kcal);
     assert!(rms_kcal.is_finite());
     assert!(max_kcal.is_finite());
+    assert!(rms_kcal > 1.0, "Total gradient RMS must be non-zero");
+
+    // Total force zero-sum translational invariance under Newton's third law
+    let mut sum_fx = 0.0f64;
+    let mut sum_fy = 0.0f64;
+    let mut sum_fz = 0.0f64;
+    for g in &full_grads {
+        sum_fx += g[0];
+        sum_fy += g[1];
+        sum_fz += g[2];
+    }
+    println!(
+        "[COSMO] Total net force sum: ({:.2e}, {:.2e}, {:.2e}) eV/A",
+        sum_fx, sum_fy, sum_fz
+    );
+    assert!(
+        sum_fx.abs() < 1e-10,
+        "Total force non-zero in X: {}",
+        sum_fx
+    );
+    assert!(
+        sum_fy.abs() < 1e-10,
+        "Total force non-zero in Y: {}",
+        sum_fy
+    );
+    assert!(
+        sum_fz.abs() < 1e-10,
+        "Total force non-zero in Z: {}",
+        sum_fz
+    );
 }

@@ -303,3 +303,161 @@ fn test_vulkan_gpu_dense_grid_speedup() {
     assert!(!cpu_cube.is_empty());
     assert!(!gpu_cube_str.is_empty());
 }
+
+/// Task GPU-3 / Test 1: Performance Throughput Benchmark for GPU Volumetric Grid with d-Orbitals.
+#[test]
+fn test_gpu_cube_d_orbitals_throughput_benchmark() {
+    use mopac_core::export::cube::CubeGridConfig;
+    use mopac_core::parameters::Pm7Model;
+    use mopac_core::scf::scf_loop::run_rhf_scf;
+    use mopac_core::types::{BasisType, MolecularBatch, ScfWorkspace};
+
+    let ctx = match VulkanContext::new() {
+        Ok(c) => Arc::new(c),
+        Err(_) => return, // Skip gracefully if Vulkan runtime not present
+    };
+
+    let gpu_cube =
+        GpuCubeEvaluator::new(Arc::clone(&ctx)).expect("Failed to initialize GpuCubeEvaluator");
+
+    // H2S: Sulfur Z=16 (norbs=9, BasisType::SPD), Hydrogen Z=1 (norbs=1) -> 11 orbitals total
+    let atomic_numbers = vec![16, 1, 1];
+    let coords = vec![
+        [0.0, 0.0, 0.102],
+        [0.0, 0.962, -0.817],
+        [0.0, -0.962, -0.817],
+    ];
+    let pm7 = Pm7Model;
+    let batch = MolecularBatch::new_for_model(atomic_numbers, &coords, &pm7);
+    assert_eq!(batch.basis_types[0], BasisType::SPD);
+
+    let mut ws = ScfWorkspace::allocate(batch.norbs);
+    let scf_res = run_rhf_scf(&batch, &pm7, &mut ws, 100, 1e-6, 1e-5);
+    assert!(scf_res.converged);
+
+    let config = CubeGridConfig {
+        padding_angstrom: 2.0,
+        resolution_angstrom: 0.15, // ~60,000+ voxels
+        n_threads: None,
+    };
+
+    let start = std::time::Instant::now();
+    let iterations = 10;
+    for _ in 0..iterations {
+        let _ = gpu_cube
+            .generate_density_cube(&batch, &pm7, &ws.density, &config)
+            .unwrap();
+    }
+    let elapsed = start.elapsed();
+
+    let dims = [
+        (4.0 / 0.15) as usize,
+        (5.92 / 0.15) as usize,
+        (4.92 / 0.15) as usize,
+    ];
+    let approx_voxels = dims[0] * dims[1] * dims[2];
+    let total_voxels = (approx_voxels * iterations) as f64;
+    let throughput_mvox = (total_voxels / elapsed.as_secs_f64()) / 1_000_000.0;
+
+    println!(
+        "\n[BENCHMARK] GPU Volumetric Grid (d-orbitals / SPD) Throughput: {:.2} MVox/s ({:.2} ms per density cube)",
+        throughput_mvox,
+        elapsed.as_secs_f64() * 1000.0 / iterations as f64
+    );
+
+    let min_expected = if cfg!(debug_assertions) { 0.25 } else { 0.5 };
+    assert!(
+        throughput_mvox > min_expected,
+        "Throughput must exceed {} MVox/s on Vulkan GPU (achieved: {:.2})",
+        min_expected,
+        throughput_mvox
+    );
+}
+
+/// Task GPU-3 / Test 2: Mathematical Parity Between GPU and CPU Volumetric Grid Evaluators for SPD Orbitals.
+#[test]
+fn test_gpu_cube_d_orbitals_exact_mathematical_parity() {
+    use mopac_core::export::cube::ANGSTROM_TO_BOHR;
+    use mopac_core::parameters::Pm7Model;
+    use mopac_core::scf::scf_loop::run_rhf_scf;
+    use mopac_core::types::{BasisType, MolecularBatch, ScfWorkspace};
+
+    let ctx = match VulkanContext::new() {
+        Ok(c) => Arc::new(c),
+        Err(_) => return, // Skip gracefully if Vulkan runtime not present
+    };
+
+    let gpu_cube =
+        GpuCubeEvaluator::new(Arc::clone(&ctx)).expect("Failed to initialize GpuCubeEvaluator");
+
+    // H2S: S (Z=16, 9 orbs, SPD), 2x H (Z=1)
+    let atomic_numbers = vec![16, 1, 1];
+    let coords = vec![
+        [0.0, 0.0, 0.102],
+        [0.0, 0.962, -0.817],
+        [0.0, -0.962, -0.817],
+    ];
+    let pm7 = Pm7Model;
+    let batch = MolecularBatch::new_for_model(atomic_numbers, &coords, &pm7);
+    assert_eq!(batch.basis_types[0], BasisType::SPD);
+
+    let mut ws = ScfWorkspace::allocate(batch.norbs);
+    let scf_res = run_rhf_scf(&batch, &pm7, &mut ws, 100, 1e-6, 1e-5);
+    assert!(scf_res.converged);
+
+    // Evaluate HOMO orbital amplitude on a 15x15x15 grid (3,375 points)
+    let dims = (15, 15, 15);
+    let origin_bohr = [-2.5, -2.5, -2.5];
+    let step_bohr = 0.35f64;
+
+    let homo_idx = batch.norbs / 2 - 1;
+    let mo_coeffs = ws.eigenvectors.row(homo_idx);
+
+    let gpu_grid = gpu_cube
+        .compute_orbital_grid(&batch, &pm7, mo_coeffs, origin_bohr, step_bohr, dims)
+        .expect("GPU orbital grid computation failed");
+
+    // Compute CPU reference grid with d-orbitals active
+    let mut max_diff = 0.0f64;
+    for ix in 0..dims.0 {
+        for iy in 0..dims.1 {
+            for iz in 0..dims.2 {
+                let idx = ix * dims.1 * dims.2 + iy * dims.2 + iz;
+                let pt_angstrom = [
+                    (origin_bohr[0] + (ix as f64) * step_bohr) / ANGSTROM_TO_BOHR,
+                    (origin_bohr[1] + (iy as f64) * step_bohr) / ANGSTROM_TO_BOHR,
+                    (origin_bohr[2] + (iz as f64) * step_bohr) / ANGSTROM_TO_BOHR,
+                ];
+
+                let cpu_val = mopac_core::export::cube::evaluate_molecular_orbital_at_point(
+                    &batch,
+                    &pm7,
+                    mo_coeffs,
+                    pt_angstrom,
+                );
+
+                let gpu_val = gpu_grid[idx];
+                let diff = (gpu_val - cpu_val).abs();
+                if diff > max_diff {
+                    max_diff = diff;
+                }
+
+                assert!(
+                    diff < 5e-4,
+                    "Voxel ({}, {}, {}) mismatch: GPU = {:.6}, CPU = {:.6}, diff = {:e}",
+                    ix,
+                    iy,
+                    iz,
+                    gpu_val,
+                    cpu_val,
+                    diff
+                );
+            }
+        }
+    }
+
+    println!(
+        "[OK] H2S SPD d-orbital volumetric grid parity verified: max diff = {:e} across 3,375 voxels",
+        max_diff
+    );
+}

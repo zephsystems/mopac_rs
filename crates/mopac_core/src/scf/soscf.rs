@@ -21,7 +21,7 @@
 use crate::fock::build_fock;
 use crate::parameters::ParameterModel;
 use crate::scf::density::{compute_density_matrix, compute_electronic_energy, max_density_diff};
-use crate::scf::eigensolver::diagonalize_symmetric;
+use crate::scf::eigensolver::diagonalize_symmetric_with_work;
 use crate::types::{AlignedMatrix, AlignedVec64, MolecularBatch, ScfWorkspace};
 
 /// Summary result of an SOSCF step.
@@ -84,7 +84,7 @@ impl SoscfWorkspace {
 pub fn soscf_step(
     fock: &AlignedMatrix<f64>,
     eigenvectors: &mut AlignedMatrix<f64>,
-    eigenvalues: &AlignedVec64<f64>,
+    _eigenvalues: &AlignedVec64<f64>,
     density: &mut AlignedMatrix<f64>,
     nocc: usize,
     level_shift_ev: f64,
@@ -129,9 +129,9 @@ pub fn soscf_step(
     let nvirt = norbs - nocc;
 
     for i in 0..nocc {
-        let eps_i = eigenvalues[i];
+        let eps_i = ws.f_mo.get(i, i);
         for a in nocc..norbs {
-            let eps_a = eigenvalues[a];
+            let eps_a = ws.f_mo.get(a, a);
             let f_ai = ws.f_mo.get(a, i);
             let grad_ai = 4.0 * f_ai;
             let abs_grad = grad_ai.abs();
@@ -204,7 +204,7 @@ pub fn soscf_step(
         }
     }
 
-    diagonalize_symmetric(&ws.tmp1, &mut ws.evals, &mut ws.evecs);
+    diagonalize_symmetric_with_work(&ws.tmp1, &mut ws.tmp2, &mut ws.evals, &mut ws.evecs);
 
     // Compute S_U^(-1/2) = V * Lambda^(-1/2) * V^T into tmp2
     for i in 0..norbs {
@@ -274,7 +274,12 @@ pub fn run_rhf_soscf(
     // Initial H_core diagonalization
     crate::hamiltonian::build_hcore(batch, model, &mut ws.h_core);
     let enuc = crate::integrals::core_repulsion::compute_total_core_repulsion(batch, model);
-    diagonalize_symmetric(&ws.h_core, &mut ws.eigenvalues, &mut ws.eigenvectors);
+    diagonalize_symmetric_with_work(
+        &ws.h_core,
+        &mut ws.tmp1,
+        &mut ws.eigenvalues,
+        &mut ws.eigenvectors,
+    );
     compute_density_matrix(&ws.eigenvectors, nocc, &mut ws.density);
 
     let mut prev_energy = 0.0f64;

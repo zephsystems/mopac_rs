@@ -8,7 +8,7 @@ use crate::hamiltonian::build_hcore;
 use crate::integrals::core_repulsion::compute_total_core_repulsion;
 use crate::parameters::ParameterModel;
 use crate::scf::density::{compute_density_matrix, compute_electronic_energy, max_density_diff};
-use crate::scf::eigensolver::diagonalize_symmetric;
+use crate::scf::eigensolver::diagonalize_symmetric_with_work;
 use crate::types::{MolecularBatch, ScfWorkspace};
 
 /// Summary result of a completed Self-Consistent Field calculation.
@@ -260,7 +260,12 @@ pub fn run_rhf_scf_with_options(
                 }
             }
         } else {
-            diagonalize_symmetric(&ws.h_core, &mut ws.eigenvalues, &mut ws.eigenvectors);
+            diagonalize_symmetric_with_work(
+                &ws.h_core,
+                &mut ws.tmp2,
+                &mut ws.eigenvalues,
+                &mut ws.eigenvectors,
+            );
             compute_density_matrix(&ws.eigenvectors, nocc, &mut ws.density);
         }
     }
@@ -332,8 +337,13 @@ pub fn run_rhf_scf_with_options(
             apply_level_shift(&mut ws.fock, &ws.density, eff_shift);
         }
 
-        // Diagonalize Fock matrix: F C = C epsilon
-        diagonalize_symmetric(&ws.fock, &mut ws.eigenvalues, &mut ws.eigenvectors);
+        // Diagonalize Fock matrix: F C = C epsilon using preallocated tmp2 workspace
+        diagonalize_symmetric_with_work(
+            &ws.fock,
+            &mut ws.tmp2,
+            &mut ws.eigenvalues,
+            &mut ws.eigenvectors,
+        );
 
         // Compute candidate new density into temporary buffer ws.tmp1
         compute_density_matrix(&ws.eigenvectors, nocc, &mut ws.tmp1);
@@ -348,13 +358,13 @@ pub fn run_rhf_scf_with_options(
             consecutive_e_conv = 0;
         }
 
-        // Strict convergence guards: energy or DIIS convergence requires bounded density change
-        let e_converged = delta_e < options.energy_tol_ev && delta_p < 0.005;
-        let consec_e_converged = consecutive_e_conv >= 2 && delta_p < 0.005;
-        let p_converged = delta_p < options.density_tol;
-        let diis_converged = diis_res.rms_error < 0.005 && delta_p < 0.005;
+        // Strict convergence guards matching OpenMOPAC iter.F90 SELCON / PL criteria:
+        // Eliminates premature 0.005 DIIS bypass; checks strict user-specified tolerances.
+        let e_converged = delta_e < options.energy_tol_ev && delta_p < (options.density_tol * 10.0);
+        let consec_e_converged = consecutive_e_conv >= 2 && delta_p < (options.density_tol * 10.0);
+        let p_converged = delta_p < options.density_tol && delta_e < (options.energy_tol_ev * 10.0);
 
-        if iter > 1 && (p_converged || e_converged || consec_e_converged || diis_converged) {
+        if iter > 1 && (p_converged || e_converged || consec_e_converged) {
             converged = true;
             ws.density.data.copy_from_slice(&ws.tmp1.data);
             break;
@@ -417,7 +427,12 @@ pub fn run_rhf_scf_with_options(
         last_diel_ev = Some(ediel);
     }
 
-    diagonalize_symmetric(&ws.fock, &mut ws.eigenvalues, &mut ws.eigenvectors);
+    diagonalize_symmetric_with_work(
+        &ws.fock,
+        &mut ws.tmp2,
+        &mut ws.eigenvalues,
+        &mut ws.eigenvectors,
+    );
 
     let homo = ws.eigenvalues[nocc - 1];
     let lumo = if nocc < ws.norbs {

@@ -173,7 +173,7 @@ pub fn compute_transition_dipoles_and_oscillator_strengths(
                 }
             }
             pol_a2[c] = val_angstrom * val_angstrom;
-            dip_debye[c] = (val_angstrom * E_ANGSTROM_TO_DEBYE).abs();
+            dip_debye[c] = val_angstrom * E_ANGSTROM_TO_DEBYE;
         }
 
         let dip_sq =

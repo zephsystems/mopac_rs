@@ -132,7 +132,7 @@ pub fn compute_cartesian_gradients_with_options(
     batch: &mut MolecularBatch,
     model: &dyn ParameterModel,
     density: &AlignedMatrix<f64>,
-    ws: &mut GradientWorkspace,
+    _ws: &mut GradientWorkspace,
     gradients: &mut [[f64; 3]],
     use_nddo: bool,
 ) {
@@ -141,49 +141,82 @@ pub fn compute_cartesian_gradients_with_options(
     assert_eq!(density.rows, batch.norbs);
     assert_eq!(density.cols, batch.norbs);
 
+    for g in gradients.iter_mut() {
+        *g = [0.0, 0.0, 0.0];
+    }
+
+    if natoms <= 1 {
+        return;
+    }
+
     // MOPAC dcart.F90 step size: chnge = 1.0D-4 Angstroms
     let delta = 1.0e-4;
     let inv_2delta = 1.0 / (2.0 * delta);
 
+    // Pairwise diatomic decomposition: O(N^2) scaling matching OpenMOPAC dcart.F90 / dhc.F90
+    for a in 0..natoms {
+        let num_a = batch.basis_types[a].num_orbitals();
+        let off_a = batch.orbital_offsets[a];
+        let za = batch.atomic_numbers[a];
+
+        for b in (a + 1)..natoms {
+            let num_b = batch.basis_types[b].num_orbitals();
+            let off_b = batch.orbital_offsets[b];
+            let zb = batch.atomic_numbers[b];
+            let norbs_ab = num_a + num_b;
+
+            // Extract diatomic density block
+            let mut p_ab = AlignedMatrix::zeroed(norbs_ab, norbs_ab);
+            for mu in 0..num_a {
+                for nu in 0..num_a {
+                    p_ab.set(mu, nu, density.get(off_a + mu, off_a + nu));
+                }
+                for nu in 0..num_b {
+                    let val = density.get(off_a + mu, off_b + nu);
+                    p_ab.set(mu, num_a + nu, val);
+                    p_ab.set(num_a + nu, mu, val);
+                }
+            }
+            for mu in 0..num_b {
+                for nu in 0..num_b {
+                    p_ab.set(num_a + mu, num_a + nu, density.get(off_b + mu, off_b + nu));
+                }
+            }
+
+            let coord_a = [batch.x[a], batch.y[a], batch.z[a]];
+            let coord_b = [batch.x[b], batch.y[b], batch.z[b]];
+
+            let eval_pair = |ca: [f64; 3], cb: [f64; 3]| -> f64 {
+                let pair_batch = MolecularBatch::new_for_model(vec![za, zb], &[ca, cb], model);
+                let mut ws_ab = GradientWorkspace::allocate(norbs_ab);
+                evaluate_frozen_energy(&pair_batch, model, &p_ab, &mut ws_ab, use_nddo)
+            };
+
+            for k in 0..3 {
+                let mut ca_plus = coord_a;
+                ca_plus[k] += delta;
+                let e_plus = eval_pair(ca_plus, coord_b);
+
+                let mut ca_minus = coord_a;
+                ca_minus[k] -= delta;
+                let e_minus = eval_pair(ca_minus, coord_b);
+
+                let g_k = (e_plus - e_minus) * inv_2delta;
+                gradients[a][k] += g_k;
+                gradients[b][k] -= g_k;
+            }
+        }
+    }
+
+    // Translational invariance correction: project out any residual center-of-mass drift
     let mut sum_gx = 0.0;
     let mut sum_gy = 0.0;
     let mut sum_gz = 0.0;
-
-    for (a, grad) in gradients.iter_mut().enumerate().take(natoms) {
-        // --- X coordinate derivative ---
-        let orig_x = batch.x[a];
-        batch.x[a] = orig_x + delta;
-        let e_plus_x = evaluate_frozen_energy(batch, model, density, ws, use_nddo);
-        batch.x[a] = orig_x - delta;
-        let e_minus_x = evaluate_frozen_energy(batch, model, density, ws, use_nddo);
-        batch.x[a] = orig_x;
-        let gx = (e_plus_x - e_minus_x) * inv_2delta;
-
-        // --- Y coordinate derivative ---
-        let orig_y = batch.y[a];
-        batch.y[a] = orig_y + delta;
-        let e_plus_y = evaluate_frozen_energy(batch, model, density, ws, use_nddo);
-        batch.y[a] = orig_y - delta;
-        let e_minus_y = evaluate_frozen_energy(batch, model, density, ws, use_nddo);
-        batch.y[a] = orig_y;
-        let gy = (e_plus_y - e_minus_y) * inv_2delta;
-
-        // --- Z coordinate derivative ---
-        let orig_z = batch.z[a];
-        batch.z[a] = orig_z + delta;
-        let e_plus_z = evaluate_frozen_energy(batch, model, density, ws, use_nddo);
-        batch.z[a] = orig_z - delta;
-        let e_minus_z = evaluate_frozen_energy(batch, model, density, ws, use_nddo);
-        batch.z[a] = orig_z;
-        let gz = (e_plus_z - e_minus_z) * inv_2delta;
-
-        *grad = [gx, gy, gz];
-        sum_gx += gx;
-        sum_gy += gy;
-        sum_gz += gz;
+    for g in gradients.iter() {
+        sum_gx += g[0];
+        sum_gy += g[1];
+        sum_gz += g[2];
     }
-
-    // Translational invariance correction: project out center-of-mass drift
     let mean_gx = sum_gx / (natoms as f64);
     let mean_gy = sum_gy / (natoms as f64);
     let mean_gz = sum_gz / (natoms as f64);
@@ -249,7 +282,7 @@ pub fn compute_cartesian_gradients_uhf(
     model: &dyn ParameterModel,
     density_a: &AlignedMatrix<f64>,
     density_b: &AlignedMatrix<f64>,
-    ws: &mut GradientWorkspace,
+    _ws: &mut GradientWorkspace,
     gradients: &mut [[f64; 3]],
     use_nddo: bool,
 ) {
@@ -260,52 +293,103 @@ pub fn compute_cartesian_gradients_uhf(
     assert_eq!(density_b.rows, batch.norbs);
     assert_eq!(density_b.cols, batch.norbs);
 
+    for g in gradients.iter_mut() {
+        *g = [0.0, 0.0, 0.0];
+    }
+
+    if natoms <= 1 {
+        return;
+    }
+
     // MOPAC dcart.F90 step size: chnge = 1.0D-4 Angstroms
     let delta = 1.0e-4;
     let inv_2delta = 1.0 / (2.0 * delta);
 
+    // Pairwise diatomic decomposition for UHF: O(N^2) scaling
+    for a in 0..natoms {
+        let num_a = batch.basis_types[a].num_orbitals();
+        let off_a = batch.orbital_offsets[a];
+        let za = batch.atomic_numbers[a];
+
+        for b in (a + 1)..natoms {
+            let num_b = batch.basis_types[b].num_orbitals();
+            let off_b = batch.orbital_offsets[b];
+            let zb = batch.atomic_numbers[b];
+            let norbs_ab = num_a + num_b;
+
+            // Extract diatomic density blocks for alpha and beta
+            let mut p_a_ab = AlignedMatrix::zeroed(norbs_ab, norbs_ab);
+            let mut p_b_ab = AlignedMatrix::zeroed(norbs_ab, norbs_ab);
+            for mu in 0..num_a {
+                for nu in 0..num_a {
+                    p_a_ab.set(mu, nu, density_a.get(off_a + mu, off_a + nu));
+                    p_b_ab.set(mu, nu, density_b.get(off_a + mu, off_a + nu));
+                }
+                for nu in 0..num_b {
+                    let va = density_a.get(off_a + mu, off_b + nu);
+                    let vb = density_b.get(off_a + mu, off_b + nu);
+                    p_a_ab.set(mu, num_a + nu, va);
+                    p_a_ab.set(num_a + nu, mu, va);
+                    p_b_ab.set(mu, num_a + nu, vb);
+                    p_b_ab.set(num_a + nu, mu, vb);
+                }
+            }
+            for mu in 0..num_b {
+                for nu in 0..num_b {
+                    p_a_ab.set(
+                        num_a + mu,
+                        num_a + nu,
+                        density_a.get(off_b + mu, off_b + nu),
+                    );
+                    p_b_ab.set(
+                        num_a + mu,
+                        num_a + nu,
+                        density_b.get(off_b + mu, off_b + nu),
+                    );
+                }
+            }
+
+            let coord_a = [batch.x[a], batch.y[a], batch.z[a]];
+            let coord_b = [batch.x[b], batch.y[b], batch.z[b]];
+
+            let eval_pair_uhf = |ca: [f64; 3], cb: [f64; 3]| -> f64 {
+                let pair_batch = MolecularBatch::new_for_model(vec![za, zb], &[ca, cb], model);
+                let mut ws_ab = GradientWorkspace::allocate(norbs_ab);
+                evaluate_frozen_energy_uhf(
+                    &pair_batch,
+                    model,
+                    &p_a_ab,
+                    &p_b_ab,
+                    &mut ws_ab,
+                    use_nddo,
+                )
+            };
+
+            for k in 0..3 {
+                let mut ca_plus = coord_a;
+                ca_plus[k] += delta;
+                let e_plus = eval_pair_uhf(ca_plus, coord_b);
+
+                let mut ca_minus = coord_a;
+                ca_minus[k] -= delta;
+                let e_minus = eval_pair_uhf(ca_minus, coord_b);
+
+                let g_k = (e_plus - e_minus) * inv_2delta;
+                gradients[a][k] += g_k;
+                gradients[b][k] -= g_k;
+            }
+        }
+    }
+
+    // Translational invariance correction: project out any residual center-of-mass drift
     let mut sum_gx = 0.0;
     let mut sum_gy = 0.0;
     let mut sum_gz = 0.0;
-
-    for (a, grad) in gradients.iter_mut().enumerate().take(natoms) {
-        // --- X coordinate derivative ---
-        let orig_x = batch.x[a];
-        batch.x[a] = orig_x + delta;
-        let e_plus_x = evaluate_frozen_energy_uhf(batch, model, density_a, density_b, ws, use_nddo);
-        batch.x[a] = orig_x - delta;
-        let e_minus_x =
-            evaluate_frozen_energy_uhf(batch, model, density_a, density_b, ws, use_nddo);
-        batch.x[a] = orig_x;
-        let gx = (e_plus_x - e_minus_x) * inv_2delta;
-
-        // --- Y coordinate derivative ---
-        let orig_y = batch.y[a];
-        batch.y[a] = orig_y + delta;
-        let e_plus_y = evaluate_frozen_energy_uhf(batch, model, density_a, density_b, ws, use_nddo);
-        batch.y[a] = orig_y - delta;
-        let e_minus_y =
-            evaluate_frozen_energy_uhf(batch, model, density_a, density_b, ws, use_nddo);
-        batch.y[a] = orig_y;
-        let gy = (e_plus_y - e_minus_y) * inv_2delta;
-
-        // --- Z coordinate derivative ---
-        let orig_z = batch.z[a];
-        batch.z[a] = orig_z + delta;
-        let e_plus_z = evaluate_frozen_energy_uhf(batch, model, density_a, density_b, ws, use_nddo);
-        batch.z[a] = orig_z - delta;
-        let e_minus_z =
-            evaluate_frozen_energy_uhf(batch, model, density_a, density_b, ws, use_nddo);
-        batch.z[a] = orig_z;
-        let gz = (e_plus_z - e_minus_z) * inv_2delta;
-
-        *grad = [gx, gy, gz];
-        sum_gx += gx;
-        sum_gy += gy;
-        sum_gz += gz;
+    for g in gradients.iter() {
+        sum_gx += g[0];
+        sum_gy += g[1];
+        sum_gz += g[2];
     }
-
-    // Translational invariance correction: project out center-of-mass drift
     let mean_gx = sum_gx / (natoms as f64);
     let mean_gy = sum_gy / (natoms as f64);
     let mean_gz = sum_gz / (natoms as f64);

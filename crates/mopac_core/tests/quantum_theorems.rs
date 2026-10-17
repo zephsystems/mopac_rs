@@ -214,7 +214,7 @@ fn test_quantum_invariant_rotational_invariance_so3() {
         max_iter: 60,
         energy_tol_ev: 1e-11,
         density_tol: 1e-11,
-        use_nddo: false,
+        use_nddo: true,
         ..Default::default()
     };
 

@@ -249,8 +249,8 @@ impl MolecularBatch {
         let basis_types: Vec<BasisType> = atomic_numbers
             .iter()
             .map(|&z_num| match z_num {
-                1 => BasisType::S,
-                2..=20 => BasisType::SP,   // He..Ca main group
+                1 | 2 => BasisType::S,
+                3..=20 => BasisType::SP,   // Li..Ca main group
                 21..=29 => BasisType::SPD, // Sc..Cu 3d transition metals
                 30..=38 => BasisType::SP,  // Zn..Sr main group (Zn 3d is core)
                 39..=47 => BasisType::SPD, // Y..Ag 4d transition metals
@@ -332,6 +332,21 @@ impl MolecularBatch {
         let dy = self.y[a] - self.y[b];
         let dz = self.z[a] - self.z[b];
         (dx * dx + dy * dy + dz * dz).sqrt()
+    }
+
+    /// Map an atomic orbital index back to its parent atom index.
+    #[inline]
+    pub fn atom_of_orbital(&self, ao: usize) -> usize {
+        assert!(
+            ao < self.norbs,
+            "Orbital index {} out of range (norbs={})",
+            ao,
+            self.norbs
+        );
+        match self.orbital_offsets.binary_search(&ao) {
+            Ok(atom) => atom,
+            Err(atom) => atom - 1,
+        }
     }
 }
 

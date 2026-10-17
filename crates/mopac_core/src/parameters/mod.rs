@@ -104,6 +104,11 @@ pub trait ParameterModel: Send + Sync {
         None
     }
 
+    /// Retrieve Klopman-Ohno core radius override ($pocord$) in Bohr if supported (PM6, PM7).
+    fn get_pocord(&self, _z: u8) -> f64 {
+        0.0
+    }
+
     /// Determine the appropriate BasisType (S, SP, SPD) for an element under this model.
     fn basis_type(&self, z: u8) -> crate::types::BasisType {
         if let Some(p) = self.get_element(z) {

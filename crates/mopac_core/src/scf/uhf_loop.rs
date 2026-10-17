@@ -13,7 +13,7 @@ use crate::scf::density::{
     max_density_diff,
 };
 use crate::scf::diis::DiisWorkspace;
-use crate::scf::eigensolver::diagonalize_symmetric;
+use crate::scf::eigensolver::diagonalize_symmetric_with_work;
 use crate::types::{AlignedMatrix, AlignedVec64, MolecularBatch};
 
 /// Summary result of a completed Unrestricted Hartree-Fock (UHF) calculation.
@@ -198,7 +198,12 @@ pub fn run_uhf_scf_with_options(
     }
 
     // 4. Initial guess: diagonalize H_core to generate initial alpha and beta densities
-    diagonalize_symmetric(&ws.h_core, &mut ws.eigenvalues_a, &mut ws.eigenvectors_a);
+    diagonalize_symmetric_with_work(
+        &ws.h_core,
+        &mut ws.tmp_mult,
+        &mut ws.eigenvalues_a,
+        &mut ws.eigenvectors_a,
+    );
     ws.eigenvectors_b
         .data
         .copy_from_slice(&ws.eigenvectors_a.data);
@@ -306,8 +311,18 @@ pub fn run_uhf_scf_with_options(
                 .push_and_extrapolate(&mut ws.fock_b, &ws.density_b, &mut ws.tmp_mult);
 
         // Diagonalize alpha and beta Fock matrices
-        diagonalize_symmetric(&ws.fock_a, &mut ws.eigenvalues_a, &mut ws.eigenvectors_a);
-        diagonalize_symmetric(&ws.fock_b, &mut ws.eigenvalues_b, &mut ws.eigenvectors_b);
+        diagonalize_symmetric_with_work(
+            &ws.fock_a,
+            &mut ws.tmp_mult,
+            &mut ws.eigenvalues_a,
+            &mut ws.eigenvectors_a,
+        );
+        diagonalize_symmetric_with_work(
+            &ws.fock_b,
+            &mut ws.tmp_mult,
+            &mut ws.eigenvalues_b,
+            &mut ws.eigenvectors_b,
+        );
 
         // Compute candidate new spin densities
         compute_spin_density_matrix(&ws.eigenvectors_a, n_alpha, &mut ws.tmp_density_a);

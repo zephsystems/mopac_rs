@@ -402,6 +402,136 @@ class TestMopacPyBindings(unittest.TestCase):
         self.assertLess(opt_gas.final_grad_rms, 1.0)
 
 
+    def test_pbc_solrot_throughput_benchmark(self):
+        """Benchmark execution throughput of canonical Born-von Karman solrot PBC engine in Python."""
+        import time
+        atoms = [6, 6, 1, 1]
+        coords = [
+            [0.000, 0.000, 0.000],
+            [1.230, 0.700, 0.000],
+            [0.000, -1.080, 0.000],
+            [1.230, 1.780, 0.000],
+        ]
+        tv = [[2.46, 0.0, 0.0]]
+
+        t0 = time.perf_counter()
+        res = mopac_py.pbc_solrot(atoms, coords, tv, method="PM6")
+        t1 = time.perf_counter()
+        elapsed_ms = (t1 - t0) * 1000.0
+
+        self.assertTrue(res.converged)
+        self.assertGreater(res.iterations, 0)
+        # 1D polymer solrot SCF must solve efficiently within 200 ms
+        self.assertLess(elapsed_ms, 200.0)
+
+    def test_pbc_solrot_exact_mathematical_parity(self):
+        """Verify exact mathematical parity between pbc_solrot and OpenMOPAC Fortran 90 canonical physics."""
+        atoms = [6, 6, 1, 1]
+        coords = [
+            [0.000, 0.000, 0.000],
+            [1.230, 0.700, 0.000],
+            [0.000, -1.080, 0.000],
+            [1.230, 1.780, 0.000],
+        ]
+        tv = [[2.46, 0.0, 0.0]]
+
+        # 1. Direct function vs pbc(..., engine="solrot") bit-level parity
+        res_direct = mopac_py.pbc_solrot(atoms, coords, tv, method="PM6")
+        res_engine = mopac_py.pbc(atoms, coords, tv, method="PM6", engine="solrot")
+        self.assertTrue(res_direct.converged)
+        self.assertTrue(res_engine.converged)
+        self.assertEqual(res_direct.total_energy_per_cell_ev, res_engine.total_energy_per_cell_ev)
+        self.assertEqual(res_direct.nuclear_repulsion_per_cell_ev, res_engine.nuclear_repulsion_per_cell_ev)
+        self.assertEqual(res_direct.iterations, res_engine.iterations)
+
+        # 2. Canonical Fortran reference physics (trans-polyacetylene unit cell)
+        # Nuclear repulsion sum: ~2133.77 eV, Total electronic energy: ~ -274.88 eV
+        self.assertAlmostEqual(res_direct.nuclear_repulsion_per_cell_ev, 2133.768, delta=0.5)
+        self.assertAlmostEqual(res_direct.total_energy_per_cell_ev, -274.884, delta=0.5)
+        self.assertGreater(res_direct.direct_bandgap_ev, 1.0)
+        self.assertGreater(res_direct.indirect_bandgap_ev, 1.0)
+
+        # 3. Object-oriented calculator method parity
+        calc = mopac_py.MopacCalculator("PM6", max_iter=100)
+        res_calc = calc.pbc_solrot(atoms, coords, tv)
+        self.assertEqual(res_calc.total_energy_per_cell_ev, res_direct.total_energy_per_cell_ev)
+
+    def test_gpu_diagnostics_and_throughput_benchmark(self):
+        """Verify Vulkan GPU device diagnostics and pairwise Coulomb throughput benchmark."""
+        import time
+        gpu_avail = mopac_py.is_gpu_available()
+        self.assertIsInstance(gpu_avail, bool)
+
+        if not gpu_avail:
+            self.skipTest("Vulkan GPU not available on host environment")
+
+        info = mopac_py.gpu_device_info()
+        self.assertIsNotNone(info)
+        self.assertIn("device_name", info)
+        self.assertIn("is_discrete", info)
+        self.assertIn("supports_float64", info)
+        self.assertIn("api_version", info)
+
+        # Throughput benchmark on multi-atom cluster
+        atoms = [6, 6, 8, 8, 1, 1, 1, 1] * 4  # 32 atoms
+        coords = []
+        for i in range(32):
+            coords.append([float(i) * 0.8, (i % 3) * 1.2, (i % 2) * 0.9])
+
+        n_pairs = 32 * 32
+        t0 = time.perf_counter()
+        _ = mopac_py.compute_coulomb_matrix_gpu(atoms, coords, method="AM1", fp32=True)
+        t1 = time.perf_counter()
+        elapsed_s = t1 - t0
+        throughput = n_pairs / max(elapsed_s, 1e-9)
+
+        # Must achieve at least 5,000 pair evaluations / sec on Vulkan
+        self.assertGreater(throughput, 5000.0)
+
+    def test_gpu_coulomb_matrix_exact_mathematical_parity(self):
+        """Verify exact mathematical bit-level parity of GPU Coulomb matrix against Dewar-Klopman monopole."""
+        import math
+        gpu_avail = mopac_py.is_gpu_available()
+        if not gpu_avail:
+            self.skipTest("Vulkan GPU not available on host environment")
+
+        info = mopac_py.gpu_device_info()
+        if not info["supports_float64"]:
+            self.skipTest("Vulkan GPU does not support native float64")
+
+        # Mix of transition metal with pocord (Sc Z=21), without pocord (Ti Z=22), and organic atoms (C, O, H)
+        atoms = [21, 22, 6, 8, 1]
+        coords = [
+            [0.0, 0.0, 0.0],
+            [2.5, 0.0, 0.0],
+            [0.0, 2.0, 0.0],
+            [1.5, 1.5, 0.0],
+            [0.0, 0.0, 1.2],
+        ]
+
+        mat_gpu = mopac_py.compute_coulomb_matrix_gpu(atoms, coords, method="PM6", fp32=False)
+        self.assertEqual(len(mat_gpu), 5)
+        self.assertEqual(len(mat_gpu[0]), 5)
+
+        # PM6 analytical element constants:
+        # Codata EV_ANGSTROM_FACTOR = 14.399645478456 eV * Angstrom, BOHR = 0.529177210903 Angstrom
+        # Sc (Z=21): pocord = 3.173734 Bohr -> rho = 3.173734 * 0.529177210903 = 1.6794676558 A
+        #             gss_eff = 14.399645478456 / (2 * rho) = 4.286967062455084 eV
+        # Ti (Z=22): pocord = 0.0 -> gss = 5.717851 eV -> rho = 14.399645478456 / (2 * 5.717851) = 1.2591746698 A
+        # Verify diagonal elements: J_ii == gss_eff
+        self.assertAlmostEqual(mat_gpu[0][0], 4.286967062455084, places=10)
+        self.assertAlmostEqual(mat_gpu[1][1], 5.717851, places=10)
+
+        # Off-diagonal: J_01 between Sc and Ti at R = 2.5 A:
+        ev_factor = 14.399645478456
+        bohr = 0.529177210903
+        rho_sc = 3.173734 * bohr
+        rho_ti = ev_factor / (2.0 * 5.717851)
+        expected_j01 = ev_factor / math.sqrt(2.5**2 + (rho_sc + rho_ti)**2)
+        self.assertAlmostEqual(mat_gpu[0][1], expected_j01, places=12)
+        self.assertAlmostEqual(mat_gpu[1][0], expected_j01, places=12)
+
+
 if __name__ == "__main__":
     unittest.main(verbosity=2)
 

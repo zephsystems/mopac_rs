@@ -21,6 +21,32 @@ pub struct AtomGpuFP32 {
     pub gss: f32,
 }
 
+impl AtomGpuFP32 {
+    /// Calculate the effective Klopman-Ohno screening parameter $g_{ss}^{\text{eff}}$,
+    /// substituting transition-metal core radius ($pocord$) from OpenMOPAC `mndod.F90:53`.
+    #[inline(always)]
+    pub fn effective_gss(gss: f32, pocord: f32) -> f32 {
+        if pocord > 1.0e-5 {
+            (EV_ANGSTROM_FACTOR
+                / (2.0
+                    * (pocord as f64)
+                    * mopac_core::constants::codata2018::BOHR_RADIUS_ANGSTROMS)) as f32
+        } else {
+            gss
+        }
+    }
+
+    /// Constructs an `AtomGpuFP32` applying canonical $pocord$ modulation.
+    pub fn from_element_params(x: f32, y: f32, z: f32, gss: f32, pocord: f32) -> Self {
+        Self {
+            x,
+            y,
+            z,
+            gss: Self::effective_gss(gss, pocord),
+        }
+    }
+}
+
 #[repr(C)]
 #[derive(Clone, Copy, Debug)]
 struct PushConstantsFP32 {
@@ -282,12 +308,14 @@ impl GpuCoulombCalculatorFP32 {
             let param = model
                 .get_element(z)
                 .expect("Unsupported atomic element in batch");
-            atoms.push(AtomGpuFP32 {
-                x: batch.x[i] as f32,
-                y: batch.y[i] as f32,
-                z: batch.z[i] as f32,
-                gss: param.gss as f32,
-            });
+            let pocord = model.get_pocord(z) as f32;
+            atoms.push(AtomGpuFP32::from_element_params(
+                batch.x[i] as f32,
+                batch.y[i] as f32,
+                batch.z[i] as f32,
+                param.gss as f32,
+                pocord,
+            ));
         }
         self.compute_pairwise(&atoms)
     }

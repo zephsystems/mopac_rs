@@ -3,7 +3,7 @@
 //! Licensed under the Apache License, Version 2.0 (the "License").
 //! Direct mathematical translation of OpenMOPAC `mullik.F90` and `mult.F90`.
 
-use crate::integrals::overlap::compute_diatomic_overlap_block;
+use crate::integrals::overlap::compute_diatomic_overlap_matrix_9x9;
 use crate::parameters::ParameterModel;
 use crate::scf::eigensolver::diagonalize_symmetric;
 use crate::types::{AlignedMatrix, AlignedVec64, MolecularBatch};
@@ -86,12 +86,27 @@ pub fn compute_mulliken_population<M: ?Sized + ParameterModel>(
                 (batch.z[b] - batch.z[a]) / r_ab,
             ];
 
-            let mut s_block = [[0.0f64; 4]; 4];
-            compute_diatomic_overlap_block(za, zb, &p_a, &p_b, r_ab, dir, &mut s_block);
+            let mut s_block = [[0.0f64; 9]; 9];
+            let dx = dir[0] * r_ab;
+            let dy = dir[1] * r_ab;
+            let dz = dir[2] * r_ab;
+            compute_diatomic_overlap_matrix_9x9(
+                za,
+                zb,
+                norb_a,
+                norb_b,
+                &p_a,
+                &p_b,
+                dx,
+                dy,
+                dz,
+                r_ab,
+                &mut s_block,
+            );
 
-            for oa in 0..norb_a.min(4) {
+            for oa in 0..norb_a {
                 let idx_a = orb_a_start + oa;
-                for ob in 0..norb_b.min(4) {
+                for ob in 0..norb_b {
                     let idx_b = orb_b_start + ob;
                     let val = s_block[oa][ob];
                     s_mat.set(idx_a, idx_b, val);

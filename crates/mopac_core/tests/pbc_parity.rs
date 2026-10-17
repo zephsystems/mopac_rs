@@ -299,7 +299,7 @@ Tv 2.450000 0.000000 0.000000
     // Heat of formation is finite and bound
     let hof_diff = (res.heat_of_formation_kcal_mol - oracle_hof_val).abs();
     assert!(
-        hof_diff < 100.0,
+        hof_diff < 20.0,
         "PBC HoF parity discrepancy too large: diff = {:.4} kcal/mol",
         hof_diff
     );

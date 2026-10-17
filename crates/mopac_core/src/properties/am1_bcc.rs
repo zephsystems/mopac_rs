@@ -121,7 +121,7 @@ fn determine_atom_hybridization(
     }
 }
 
-/// Detect aromatic carbon atoms in 6-membered conjugated planar rings.
+/// Detect aromatic atoms in 5- and 6-membered conjugated planar rings according to Hückel's 4n+2 rule.
 fn detect_aromatic_atoms(batch: &MolecularBatch, structure: &LewisStructure) -> Vec<bool> {
     let natoms = batch.natoms;
     let mut is_aromatic = vec![false; natoms];
@@ -133,46 +133,112 @@ fn detect_aromatic_atoms(batch: &MolecularBatch, structure: &LewisStructure) -> 
         adj[bond.atom2].push(bond.atom1);
     }
 
-    // Identify 6-membered rings of carbons/heteroatoms
-    for a0 in 0..natoms {
-        if batch.atomic_numbers[a0] != 6 && batch.atomic_numbers[a0] != 7 {
-            continue;
+    // Find all simple cycles of length 5 and 6 using recursive search
+    let mut rings: Vec<Vec<usize>> = Vec::new();
+
+    fn dfs_rings(
+        start: usize,
+        curr: usize,
+        path: &mut Vec<usize>,
+        adj: &[Vec<usize>],
+        rings: &mut Vec<Vec<usize>>,
+    ) {
+        if path.len() > 6 {
+            return;
         }
-        for &a1 in &adj[a0] {
-            if a1 <= a0 {
+        for &nxt in &adj[curr] {
+            if nxt == start && (path.len() == 5 || path.len() == 6) {
+                // Canonicalize ring representation
+                let mut canon = path.clone();
+                let min_pos = canon
+                    .iter()
+                    .position(|&x| x == *canon.iter().min().unwrap())
+                    .unwrap();
+                canon.rotate_left(min_pos);
+                if canon.len() > 1 && canon[1] > canon[canon.len() - 1] {
+                    let first = canon[0];
+                    canon[1..].reverse();
+                    canon[0] = first;
+                }
+                if !rings.contains(&canon) {
+                    rings.push(canon);
+                }
+            } else if !path.contains(&nxt) && path.len() < 6 && nxt > start {
+                path.push(nxt);
+                dfs_rings(start, nxt, path, adj, rings);
+                path.pop();
+            }
+        }
+    }
+
+    for start in 0..natoms {
+        let z = batch.atomic_numbers[start];
+        if z == 6 || z == 7 || z == 8 || z == 16 {
+            let mut path = vec![start];
+            dfs_rings(start, start, &mut path, &adj, &mut rings);
+        }
+    }
+
+    // Verify Hückel 4n+2 aromaticity (n=1 => 6 pi electrons) for each detected ring
+    for ring in rings {
+        let n = ring.len();
+        if n == 6 {
+            // 6-membered ring: All 6 atoms must be C or N with coordination <= 3
+            let all_sp2 = ring.iter().all(|&at| {
+                let z = batch.atomic_numbers[at];
+                (z == 6 || z == 7) && structure.coordination_numbers[at] <= 3
+            });
+            if all_sp2 {
+                for &at in &ring {
+                    is_aromatic[at] = true;
+                }
+            }
+        } else if n == 5 {
+            // 5-membered ring: C, N, O, S
+            let valid_geom = ring.iter().all(|&at| {
+                let z = batch.atomic_numbers[at];
+                match z {
+                    6 | 7 => structure.coordination_numbers[at] <= 3,
+                    8 | 16 => structure.coordination_numbers[at] <= 2,
+                    _ => false,
+                }
+            });
+            if !valid_geom {
                 continue;
             }
-            for &a2 in &adj[a1] {
-                if a2 == a0 {
-                    continue;
+
+            // Count pi electrons:
+            // - C with coord <= 3: 1 pi electron
+            // - Pyridine-like N with a double bond in the ring (coord == 2): 1 pi electron
+            // - Pyrrole-like N with single bonds (coord == 3): 2 pi electrons
+            // - O or S with coord == 2: 2 pi electrons
+            let mut pi_electrons = 0;
+            for &at in &ring {
+                let z = batch.atomic_numbers[at];
+                let coord = structure.coordination_numbers[at];
+                match z {
+                    6 => pi_electrons += 1,
+                    7 => {
+                        let has_double_in_ring = structure.bonds.iter().any(|b| {
+                            (b.atom1 == at && ring.contains(&b.atom2)
+                                || b.atom2 == at && ring.contains(&b.atom1))
+                                && b.order >= 2
+                        });
+                        if has_double_in_ring || coord == 2 {
+                            pi_electrons += 1;
+                        } else {
+                            pi_electrons += 2;
+                        }
+                    }
+                    8 | 16 => pi_electrons += 2,
+                    _ => {}
                 }
-                for &a3 in &adj[a2] {
-                    if a3 == a1 || a3 == a0 {
-                        continue;
-                    }
-                    for &a4 in &adj[a3] {
-                        if a4 == a2 || a4 == a1 || a4 == a0 {
-                            continue;
-                        }
-                        for &a5 in &adj[a4] {
-                            if a5 == a3 || a5 == a2 || a5 == a1 {
-                                continue;
-                            }
-                            if adj[a5].contains(&a0) {
-                                // Found a 6-membered ring [a0, a1, a2, a3, a4, a5]
-                                let ring = [a0, a1, a2, a3, a4, a5];
-                                // Verify all ring atoms have coordination <= 3
-                                let all_sp2 = ring
-                                    .iter()
-                                    .all(|&at| structure.coordination_numbers[at] <= 3);
-                                if all_sp2 {
-                                    for &at in &ring {
-                                        is_aromatic[at] = true;
-                                    }
-                                }
-                            }
-                        }
-                    }
+            }
+
+            // Hückel rule for n=1: 6 pi electrons
+            if pi_electrons == 6 {
+                for &at in &ring {
+                    is_aromatic[at] = true;
                 }
             }
         }
@@ -312,10 +378,13 @@ fn lookup_bcc_delta(
     }
 
     if z_i == 7 && z_j == 1 {
+        if hyb_i == Hybridization::Aromatic {
+            return -0.0580; // N(aromatic) - H (pyrrole / indole / imidazole)
+        }
         return -0.0460; // N gets -0.0460, H gets +0.0460
     }
     if z_i == 1 && z_j == 7 {
-        return 0.0460;
+        return -lookup_bcc_delta(z_j, hyb_j, z_i, hyb_i, bond_order);
     }
 
     if z_i == 16 && z_j == 1 {
@@ -329,6 +398,9 @@ fn lookup_bcc_delta(
     if z_i == 6 && z_j == 16 {
         if bond_order == 2 {
             return 0.0550; // C = S
+        }
+        if hyb_i == Hybridization::Aromatic {
+            return 0.0180; // C(ar) - S (thiophene)
         }
         return 0.0220; // C - S
     }

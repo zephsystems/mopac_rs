@@ -86,6 +86,33 @@ fn evaluate_sto_sp(z: u8, dx: f64, dy: f64, dz: f64, zs: f64, zp: f64) -> [f64; 
     }
 }
 
+/// Evaluates normalized Slater-Type Atomic Orbitals (STOs) including d-orbitals at displacement vector (dx, dy, dz).
+///
+/// Returns [s, px, py, pz, dx2-y2, dxz, dz2, dyz, dxy] in atomic units.
+#[inline(always)]
+pub fn evaluate_sto_spd(z: u8, dx: f64, dy: f64, dz: f64, zs: f64, zp: f64, zd: f64) -> [f64; 9] {
+    let r2 = dx * dx + dy * dy + dz * dz;
+    let r = r2.sqrt();
+    let sp = evaluate_sto_sp(z, dx, dy, dz, zs, zp);
+    let mut res = [sp[0], sp[1], sp[2], sp[3], 0.0, 0.0, 0.0, 0.0, 0.0];
+    if zd > 1.0e-8 {
+        let exp_d = (-zd * r).exp();
+        let norm_d = (2.0 * zd.powi(7) / (3.0 * PI)).sqrt();
+        let common = norm_d * exp_d;
+        // 1: dx2-y2
+        res[4] = 0.5 * common * (dx * dx - dy * dy);
+        // 2: dxz
+        res[5] = common * dx * dz;
+        // 3: dz2
+        res[6] = (0.5 / 3.0f64.sqrt()) * common * (2.0 * dz * dz - dx * dx - dy * dy);
+        // 4: dyz
+        res[7] = common * dy * dz;
+        // 5: dxy
+        res[8] = common * dx * dy;
+    }
+    res
+}
+
 /// Evaluates molecular orbital amplitude $\psi_i(\vec{r}) = \sum_\mu C_{\mu i} \phi_\mu(\vec{r})$.
 pub fn evaluate_molecular_orbital_at_point(
     batch: &MolecularBatch,
@@ -112,7 +139,7 @@ pub fn evaluate_molecular_orbital_at_point(
         let dy = py - ay;
         let dz = pz - az;
 
-        let sto = evaluate_sto_sp(z, dx, dy, dz, p.zs, p.zp);
+        let sto = evaluate_sto_spd(z, dx, dy, dz, p.zs, p.zp, p.zd);
         let offset = batch.orbital_offsets[a];
 
         match batch.basis_types[a] {
@@ -126,11 +153,9 @@ pub fn evaluate_molecular_orbital_at_point(
                 psi += mo_coefficients[offset + 3] * sto[3];
             }
             BasisType::SPD => {
-                // S and P contributions
-                psi += mo_coefficients[offset] * sto[0];
-                psi += mo_coefficients[offset + 1] * sto[1];
-                psi += mo_coefficients[offset + 2] * sto[2];
-                psi += mo_coefficients[offset + 3] * sto[3];
+                for i in 0..9 {
+                    psi += mo_coefficients[offset + i] * sto[i];
+                }
             }
         }
     }
@@ -164,18 +189,21 @@ pub fn evaluate_density_at_point(
         let dy = py - ay;
         let dz = pz - az;
 
-        let sto = evaluate_sto_sp(z, dx, dy, dz, p.zs, p.zp);
+        let sto = evaluate_sto_spd(z, dx, dy, dz, p.zs, p.zp, p.zd);
         let offset = batch.orbital_offsets[a];
 
         match batch.basis_types[a] {
             BasisType::S => {
                 basis_vals[offset] = sto[0];
             }
-            BasisType::SP | BasisType::SPD => {
+            BasisType::SP => {
                 basis_vals[offset] = sto[0];
                 basis_vals[offset + 1] = sto[1];
                 basis_vals[offset + 2] = sto[2];
                 basis_vals[offset + 3] = sto[3];
+            }
+            BasisType::SPD => {
+                basis_vals[offset..(offset + 9)].copy_from_slice(&sto);
             }
         }
     }

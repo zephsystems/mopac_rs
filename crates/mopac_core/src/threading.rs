@@ -23,12 +23,16 @@ where
 {
     match n_threads {
         Some(n) if n > 0 => {
-            let pool = ThreadPoolBuilder::new()
-                .num_threads(n)
-                .thread_name(|idx| format!("mopac-worker-{}", idx))
-                .build()
-                .expect("Failed to initialize bounded MOPAC thread pool");
-            pool.install(f)
+            if rayon::current_num_threads() == n {
+                f()
+            } else {
+                let pool = ThreadPoolBuilder::new()
+                    .num_threads(n)
+                    .thread_name(|idx| format!("mopac-worker-{}", idx))
+                    .build()
+                    .expect("Failed to initialize bounded MOPAC thread pool");
+                pool.install(f)
+            }
         }
         _ => f(),
     }

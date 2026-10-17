@@ -20,8 +20,10 @@ pub struct AtomDataGpu {
     pub z: f32,
     pub zs: f32,
     pub zp: f32,
+    pub zd: f32,
     pub norm_s: f32,
     pub norm_p: f32,
+    pub norm_d: f32,
     pub z_num: u32,
     pub offset: u32,
     pub basis_type: u32,
@@ -42,18 +44,23 @@ struct CubePushConstants {
 }
 
 #[inline(always)]
-fn compute_sto_norms_f32(z: u8, zs: f64, zp: f64) -> (f32, f32) {
+fn compute_sto_norms_f32(z: u8, zs: f64, zp: f64, zd: f64) -> (f32, f32, f32) {
+    let norm_d = if zd > 1.0e-8 {
+        (2.0 * zd.powi(7) / (3.0 * PI)).sqrt() as f32
+    } else {
+        0.0f32
+    };
     if z == 1 {
         let norm_s = (zs * zs * zs / PI).sqrt();
-        (norm_s as f32, 0.0f32)
+        (norm_s as f32, 0.0f32, norm_d)
     } else if z <= 10 {
         let norm_s = (zs.powi(5) / (3.0 * PI)).sqrt();
         let norm_p = (zp.powi(5) / PI).sqrt();
-        (norm_s as f32, norm_p as f32)
+        (norm_s as f32, norm_p as f32, norm_d)
     } else {
         let norm_s = (2.0 * zs.powi(7) / (45.0 * PI)).sqrt();
         let norm_p = (2.0 * zp.powi(7) / (15.0 * PI)).sqrt();
-        (norm_s as f32, norm_p as f32)
+        (norm_s as f32, norm_p as f32, norm_d)
     }
 }
 
@@ -191,7 +198,7 @@ impl GpuCubeEvaluator {
             let ax = (batch.x[a] * ANGSTROM_TO_BOHR) as f32;
             let ay = (batch.y[a] * ANGSTROM_TO_BOHR) as f32;
             let az = (batch.z[a] * ANGSTROM_TO_BOHR) as f32;
-            let (norm_s, norm_p) = compute_sto_norms_f32(z, p.zs, p.zp);
+            let (norm_s, norm_p, norm_d) = compute_sto_norms_f32(z, p.zs, p.zp, p.zd);
 
             let basis_type = match batch.basis_types[a] {
                 BasisType::S => 0,
@@ -205,8 +212,10 @@ impl GpuCubeEvaluator {
                 z: az,
                 zs: p.zs as f32,
                 zp: p.zp as f32,
+                zd: p.zd as f32,
                 norm_s,
                 norm_p,
+                norm_d,
                 z_num: z as u32,
                 offset: batch.orbital_offsets[a] as u32,
                 basis_type,

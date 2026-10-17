@@ -111,7 +111,7 @@ pub const NPQ: [[u8; 3]; 108] = [
     [0, 0, 0], // Z = 87
     [0, 0, 0], // Z = 88
     [0, 0, 0], // Z = 89
-    [0, 0, 0], // Z = 90
+    [7, 7, 6], // Z = 90
     [0, 0, 0], // Z = 91
     [0, 0, 0], // Z = 92
     [0, 0, 0], // Z = 93
@@ -653,13 +653,25 @@ pub fn compute_diatomic_overlap_matrix_9x9(
         return;
     }
 
-    let ia = (pq1 + 1).min(3);
-    let ib = (pq2 + 1).min(3);
+    let ia = if norb_a <= 1 {
+        1
+    } else if norb_a <= 4 {
+        2
+    } else {
+        3
+    };
+    let ib = if norb_b <= 1 {
+        1
+    } else if norb_b <= 4 {
+        2
+    } else {
+        3
+    };
     let a = ia - 1;
     let b = ib - 1;
 
-    let ul1 = [0.0, p_a.zs, p_a.zp, p_a.zd.max(0.3)];
-    let ul2 = [0.0, p_b.zs, p_b.zp, p_b.zd.max(0.3)];
+    let ul1 = [0.0, p_a.zs, p_a.zp, p_a.zd];
+    let ul2 = [0.0, p_b.zs, p_b.zp, p_b.zd];
 
     let newk = a.min(b);
     let nk1 = newk + 1;
@@ -803,8 +815,23 @@ pub fn build_overlap_matrix<M: ?Sized + crate::parameters::ParameterModel>(
                 (batch.z[b] - batch.z[a]) / r_ab,
             ];
 
-            let mut s_block = [[0.0f64; 4]; 4];
-            compute_diatomic_overlap_block(za, zb, &p_a, &p_b, r_ab, dir, &mut s_block);
+            let mut s_block = [[0.0f64; 9]; 9];
+            let dx = dir[0] * r_ab;
+            let dy = dir[1] * r_ab;
+            let dz = dir[2] * r_ab;
+            compute_diatomic_overlap_matrix_9x9(
+                za,
+                zb,
+                norb_a,
+                norb_b,
+                &p_a,
+                &p_b,
+                dx,
+                dy,
+                dz,
+                r_ab,
+                &mut s_block,
+            );
 
             for mu in 0..norb_a {
                 for nu in 0..norb_b {

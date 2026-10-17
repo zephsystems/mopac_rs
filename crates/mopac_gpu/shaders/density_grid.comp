@@ -11,8 +11,10 @@ struct AtomData {
     float z;
     float zs;
     float zp;
+    float zd;
     float norm_s;
     float norm_p;
+    float norm_d;
     uint z_num;
     uint offset;
     uint basis_type; // 0 = S (1 orb), 1 = SP (4 orbs), 2 = SPD (9 orbs)
@@ -21,7 +23,8 @@ struct AtomData {
 struct ActiveAtom {
     uint offset;
     uint count;
-    float vals[4];
+    float vals[9];
+    float pad;
 };
 
 layout(push_constant) uniform PushConstants {
@@ -90,9 +93,6 @@ void main() {
                 // H: 1s orbital
                 active_atoms[n_active].count = 1u;
                 active_atoms[n_active].vals[0] = norm_s * exp(-zs * r);
-                active_atoms[n_active].vals[1] = 0.0;
-                active_atoms[n_active].vals[2] = 0.0;
-                active_atoms[n_active].vals[3] = 0.0;
             } else if (z <= 10u) {
                 // Row 2: 2s, 2px, 2py, 2pz
                 float exp_s = exp(-zs * r);
@@ -103,7 +103,7 @@ void main() {
                 active_atoms[n_active].vals[2] = norm_p * dy * exp_p;
                 active_atoms[n_active].vals[3] = norm_p * dz * exp_p;
             } else {
-                // Row 3: 3s, 3px, 3py, 3pz
+                // Row 3+: 3s, 3px, 3py, 3pz
                 float exp_s = exp(-zs * r);
                 float exp_p = exp(-zp * r);
                 active_atoms[n_active].count = 4u;
@@ -112,6 +112,19 @@ void main() {
                 active_atoms[n_active].vals[2] = norm_p * dy * r * exp_p;
                 active_atoms[n_active].vals[3] = norm_p * dz * r * exp_p;
             }
+
+            // 5 d-orbitals for SPD basis (dx2-y2, dxz, dz2, dyz, dxy)
+            if (atoms[a].basis_type == 2u && atoms[a].zd > 1e-8) {
+                float exp_d = exp(-atoms[a].zd * r);
+                float d_prefactor = atoms[a].norm_d * exp_d;
+                active_atoms[n_active].count = 9u;
+                active_atoms[n_active].vals[4] = 0.5 * d_prefactor * (dx * dx - dy * dy);
+                active_atoms[n_active].vals[5] = d_prefactor * dx * dz;
+                active_atoms[n_active].vals[6] = 0.28867513459 * d_prefactor * (2.0 * dz * dz - dx * dx - dy * dy);
+                active_atoms[n_active].vals[7] = d_prefactor * dy * dz;
+                active_atoms[n_active].vals[8] = d_prefactor * dx * dy;
+            }
+
             n_active++;
         }
     }

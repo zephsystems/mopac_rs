@@ -454,3 +454,324 @@ fn test_scrutiny_vulkan_gpu_gddr6_batch_pipelining_parity() {
 
     println!("[OK] GDDR6 VRAM batch pipelining verified for 2 concurrent geometries with zero per-molecule CPU sync!");
 }
+
+/// Task GPU-1 / Test 1: Performance & Throughput Benchmark for GPU Transition-Metal Evaluation.
+#[test]
+fn test_gpu_pocord_transition_metal_throughput_benchmark() {
+    use mopac_core::parameters::Pm6Model;
+    use mopac_core::types::MolecularBatch;
+
+    let ctx = match VulkanContext::new() {
+        Ok(c) => Arc::new(c),
+        Err(_) => return, // Skip gracefully if Vulkan runtime not present
+    };
+
+    if !ctx.device_info.supports_float64 {
+        return;
+    }
+
+    let calc = GpuCoulombCalculator::new(Arc::clone(&ctx))
+        .expect("Failed to initialize GpuCoulombCalculator");
+
+    let pm6 = Pm6Model;
+
+    // Transition-metal cluster: 16-atom cluster containing Sc (Z=21), Fe (Z=26), Ti (Z=22), and O (Z=8)
+    let atomic_numbers = vec![21, 26, 22, 8, 21, 26, 22, 8, 21, 26, 22, 8, 21, 26, 22, 8];
+    let mut coords = Vec::with_capacity(16);
+    for i in 0..16 {
+        coords.push([
+            (i as f64) * 1.85,
+            ((i % 4) as f64) * 2.10,
+            ((i % 3) as f64) * 1.60,
+        ]);
+    }
+
+    let batch = MolecularBatch::new(atomic_numbers, &coords);
+
+    // Warm-up
+    let _ = calc.compute_batch(&batch, &pm6).unwrap();
+
+    let iterations = 100;
+    let start = std::time::Instant::now();
+    for _ in 0..iterations {
+        let _ = calc.compute_batch(&batch, &pm6).unwrap();
+    }
+    let elapsed = start.elapsed();
+
+    let total_evals = iterations as f64 * (16.0 * 16.0);
+    let throughput = total_evals / elapsed.as_secs_f64();
+    println!(
+        "\n[BENCHMARK] GPU FP64 Transition-Metal (pocord) Coulomb Throughput: {:.2} pair-evals/s ({:.2} us/matrix, {} iterations)",
+        throughput,
+        elapsed.as_micros() as f64 / iterations as f64,
+        iterations
+    );
+
+    assert!(
+        throughput > 10_000.0,
+        "GPU throughput must exceed 10,000 pair evaluations per second"
+    );
+}
+
+/// Task GPU-1 / Test 2: Exact Mathematical Parity Between GPU Matrix and OpenMOPAC core_monopole with pocord.
+#[test]
+fn test_gpu_pocord_exact_mathematical_parity_against_openmopac() {
+    use mopac_core::integrals::core_repulsion::core_monopole;
+    use mopac_core::parameters::pm6::Pm6Model;
+    use mopac_core::parameters::pm7::Pm7Model;
+    use mopac_core::parameters::ParameterModel;
+    use mopac_core::types::MolecularBatch;
+
+    let ctx = match VulkanContext::new() {
+        Ok(c) => Arc::new(c),
+        Err(_) => return, // Skip gracefully if Vulkan runtime not present
+    };
+
+    if !ctx.device_info.supports_float64 {
+        return;
+    }
+
+    let calc = GpuCoulombCalculator::new(Arc::clone(&ctx))
+        .expect("Failed to initialize GpuCoulombCalculator");
+
+    // 1. PM6 Model verification with Scandium (Z=21, pocord = 3.173734 Bohr) and Titanium (Z=22)
+    let pm6 = Pm6Model;
+    let atoms_pm6 = vec![21, 22, 8, 1]; // Sc, Ti, O, H
+    let coords_pm6 = vec![
+        [0.0, 0.0, 0.0],
+        [2.1, 0.0, 0.0],
+        [1.05, 1.8, 0.0],
+        [1.05, 2.7, 0.0],
+    ];
+    let batch_pm6 = MolecularBatch::new(atoms_pm6.clone(), &coords_pm6);
+
+    let gpu_mat_pm6 = calc
+        .compute_batch(&batch_pm6, &pm6)
+        .expect("GPU PM6 batch compute failed");
+
+    let n = atoms_pm6.len();
+    for i in 0..n {
+        let za = atoms_pm6[i];
+        let pa = pm6.get_element(za).unwrap();
+        let pocord_a = Pm6Model::get_pocord(za);
+
+        for j in 0..n {
+            let zb = atoms_pm6[j];
+            let pb = pm6.get_element(zb).unwrap();
+            let pocord_b = Pm6Model::get_pocord(zb);
+
+            let dx = coords_pm6[i][0] - coords_pm6[j][0];
+            let dy = coords_pm6[i][1] - coords_pm6[j][1];
+            let dz = coords_pm6[i][2] - coords_pm6[j][2];
+            let r = (dx * dx + dy * dy + dz * dz).sqrt();
+
+            let canonical_cpu = core_monopole(r, pa.gss, pb.gss, pocord_a, pocord_b);
+            let gpu_val = gpu_mat_pm6.get(i, j);
+
+            let diff = (gpu_val - canonical_cpu).abs();
+            assert!(
+                diff < 1e-12,
+                "GPU vs Canonical CPU mismatch on PM6 pair ({}, {}): GPU={:.12}, CPU={:.12}, diff={:e}",
+                i, j, gpu_val, canonical_cpu, diff
+            );
+        }
+    }
+
+    // 2. PM7 Model verification with Iron (Z=26) and Scandium (Z=21)
+    let pm7 = Pm7Model;
+    let atoms_pm7 = vec![26, 21, 8]; // Fe, Sc, O
+    let coords_pm7 = vec![[0.0, 0.0, 0.0], [2.35, 0.0, 0.0], [1.15, 1.95, 0.0]];
+    let batch_pm7 = MolecularBatch::new(atoms_pm7.clone(), &coords_pm7);
+
+    let gpu_mat_pm7 = calc
+        .compute_batch(&batch_pm7, &pm7)
+        .expect("GPU PM7 batch compute failed");
+
+    for i in 0..3 {
+        let za = atoms_pm7[i];
+        let pa = pm7.get_element(za).unwrap();
+        let pocord_a = Pm7Model::get_pocord(za);
+
+        for j in 0..3 {
+            let zb = atoms_pm7[j];
+            let pb = pm7.get_element(zb).unwrap();
+            let pocord_b = Pm7Model::get_pocord(zb);
+
+            let dx = coords_pm7[i][0] - coords_pm7[j][0];
+            let dy = coords_pm7[i][1] - coords_pm7[j][1];
+            let dz = coords_pm7[i][2] - coords_pm7[j][2];
+            let r = (dx * dx + dy * dy + dz * dz).sqrt();
+
+            let canonical_cpu = core_monopole(r, pa.gss, pb.gss, pocord_a, pocord_b);
+            let gpu_val = gpu_mat_pm7.get(i, j);
+
+            let diff = (gpu_val - canonical_cpu).abs();
+            assert!(
+                diff < 1e-12,
+                "GPU vs Canonical CPU mismatch on PM7 pair ({}, {}): GPU={:.12}, CPU={:.12}, diff={:e}",
+                i, j, gpu_val, canonical_cpu, diff
+            );
+        }
+    }
+
+    println!("[OK] GPU FP64 exact mathematical parity against OpenMOPAC pocord core_monopole verified (< 1e-12 eV)!");
+}
+
+/// Task GPU-2 / Test 1: Performance & Throughput Benchmark for GPU Core Repulsion Evaluation.
+#[test]
+fn test_gpu_core_repulsion_throughput_benchmark() {
+    use mopac_core::parameters::Am1Model;
+    use mopac_core::types::MolecularBatch;
+    use mopac_gpu::GpuCoreRepulsionCalculator;
+
+    let ctx = match VulkanContext::new() {
+        Ok(c) => Arc::new(c),
+        Err(_) => return, // Skip gracefully if Vulkan runtime not present
+    };
+
+    if !ctx.device_info.supports_float64 {
+        return;
+    }
+
+    let calc = GpuCoreRepulsionCalculator::new(Arc::clone(&ctx))
+        .expect("Failed to create GpuCoreRepulsionCalculator");
+
+    let am1 = Am1Model;
+
+    // 16-atom organic model: 8 carbons, 8 oxygens
+    let atomic_numbers = vec![6, 8, 6, 8, 6, 8, 6, 8, 6, 8, 6, 8, 6, 8, 6, 8];
+    let mut coords = Vec::with_capacity(16);
+    for i in 0..16 {
+        coords.push([
+            (i as f64) * 1.45,
+            ((i % 4) as f64) * 1.35,
+            ((i % 3) as f64) * 1.25,
+        ]);
+    }
+    let batch = MolecularBatch::new(atomic_numbers, &coords);
+
+    // Warm-up
+    let _ = calc.compute_batch(&batch, &am1).unwrap();
+
+    let iterations = 100;
+    let start = std::time::Instant::now();
+    for _ in 0..iterations {
+        let _ = calc.compute_batch(&batch, &am1).unwrap();
+    }
+    let elapsed = start.elapsed();
+
+    let total_evals = iterations as f64 * (16.0 * 16.0);
+    let throughput = total_evals / elapsed.as_secs_f64();
+    println!(
+        "\n[BENCHMARK] GPU FP64 Core-Core Repulsion Throughput: {:.2} pair-evals/s ({:.2} us/matrix, {} iterations)",
+        throughput,
+        elapsed.as_micros() as f64 / iterations as f64,
+        iterations
+    );
+
+    assert!(
+        throughput > 5_000.0,
+        "GPU core repulsion throughput must exceed 5,000 pair-evals/s"
+    );
+}
+
+/// Task GPU-2 / Test 2: Exact Mathematical Parity Between GPU Core Repulsion and OpenMOPAC Canonical Formulation.
+#[test]
+fn test_gpu_core_repulsion_exact_mathematical_parity() {
+    use mopac_core::integrals::core_repulsion::{
+        compute_pair_core_repulsion, unpolarizable_core_repulsion,
+    };
+    use mopac_core::parameters::Am1Model;
+    use mopac_core::parameters::ParameterModel;
+    use mopac_core::types::MolecularBatch;
+    use mopac_gpu::GpuCoreRepulsionCalculator;
+
+    let ctx = match VulkanContext::new() {
+        Ok(c) => Arc::new(c),
+        Err(_) => return, // Skip gracefully if Vulkan runtime not present
+    };
+
+    if !ctx.device_info.supports_float64 {
+        return;
+    }
+
+    let calc = GpuCoreRepulsionCalculator::new(Arc::clone(&ctx))
+        .expect("Failed to create GpuCoreRepulsionCalculator");
+
+    let am1 = Am1Model;
+
+    // Test system: Water (H2O, 3 atoms) + Formic Acid (HCOOH, 5 atoms)
+    let h2o_coords = [
+        [0.000, 0.000, 0.065],
+        [0.000, 0.757, -0.520],
+        [0.000, -0.757, -0.520],
+    ];
+    let h2o_atoms = vec![8, 1, 1];
+    let batch_h2o = MolecularBatch::new(h2o_atoms.clone(), &h2o_coords);
+
+    let gpu_mat_h2o = calc
+        .compute_batch(&batch_h2o, &am1)
+        .expect("GPU core repulsion compute failed");
+
+    let n = h2o_atoms.len();
+    for i in 0..n {
+        let za = h2o_atoms[i];
+        let pa = am1.get_element(za).unwrap();
+        for j in 0..n {
+            if i == j {
+                assert_eq!(gpu_mat_h2o.get(i, j), 0.0);
+                continue;
+            }
+            let zb = h2o_atoms[j];
+            let pb = am1.get_element(zb).unwrap();
+
+            let dx = h2o_coords[i][0] - h2o_coords[j][0];
+            let dy = h2o_coords[i][1] - h2o_coords[j][1];
+            let dz = h2o_coords[i][2] - h2o_coords[j][2];
+            let r = (dx * dx + dy * dy + dz * dz).sqrt();
+
+            let canonical_cpu = compute_pair_core_repulsion(r, &pa, &pb, true);
+            let lj = unpolarizable_core_repulsion(r, za, zb);
+            let expected_cpu = canonical_cpu + lj;
+
+            let gpu_val = gpu_mat_h2o.get(i, j);
+            let diff = (gpu_val - expected_cpu).abs();
+
+            assert!(
+                diff < 1e-10,
+                "GPU vs Canonical CPU Core Repulsion mismatch on H2O pair ({}, {}): GPU={:.12}, CPU={:.12}, diff={:e}",
+                i, j, gpu_val, expected_cpu, diff
+            );
+        }
+    }
+
+    // Verify total scalar nuclear repulsion energy E_nuc via GPU sum
+    let gpu_e_nuc = calc
+        .compute_total_energy(&batch_h2o, &am1)
+        .expect("Failed to compute total nuclear energy on GPU");
+
+    let mut cpu_e_nuc = 0.0;
+    for i in 0..n {
+        let pa = am1.get_element(h2o_atoms[i]).unwrap();
+        for j in (i + 1)..n {
+            let pb = am1.get_element(h2o_atoms[j]).unwrap();
+            let dx = h2o_coords[i][0] - h2o_coords[j][0];
+            let dy = h2o_coords[i][1] - h2o_coords[j][1];
+            let dz = h2o_coords[i][2] - h2o_coords[j][2];
+            let r = (dx * dx + dy * dy + dz * dz).sqrt();
+            cpu_e_nuc += compute_pair_core_repulsion(r, &pa, &pb, true)
+                + unpolarizable_core_repulsion(r, h2o_atoms[i], h2o_atoms[j]);
+        }
+    }
+
+    let diff_total = (gpu_e_nuc - cpu_e_nuc).abs();
+    assert!(
+        diff_total < 1e-10,
+        "Total E_nuc GPU vs CPU mismatch: GPU={:.12}, CPU={:.12}, diff={:e}",
+        gpu_e_nuc,
+        cpu_e_nuc,
+        diff_total
+    );
+
+    println!("[OK] GPU FP64 core-core nuclear repulsion bit-exact parity verified (< 1e-10 eV)!");
+}

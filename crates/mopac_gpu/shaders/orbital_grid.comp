@@ -2,7 +2,6 @@
 layout(local_size_x = 64, local_size_y = 1, local_size_z = 1) in;
 
 // Physical constants in atomic units (Bohr)
-const float PI = 3.14159265358979323846;
 const float CUTOFF_R2 = 144.0; // 12.0 Bohr squared
 
 struct AtomData {
@@ -11,8 +10,10 @@ struct AtomData {
     float z;
     float zs;
     float zp;
+    float zd;
     float norm_s;
     float norm_p;
+    float norm_d;
     uint z_num;
     uint offset;
     uint basis_type; // 0 = S (1 orb), 1 = SP (4 orbs), 2 = SPD (9 orbs)
@@ -95,7 +96,7 @@ void main() {
                 psi += mo_coeffs[off + 2u] * val_py;
                 psi += mo_coeffs[off + 3u] * val_pz;
             } else {
-                // Row 3: 3s, 3px, 3py, 3pz
+                // Row 3+: 3s, 3px, 3py, 3pz
                 float exp_s = exp(-zs * r);
                 float exp_p = exp(-zp * r);
                 float val_s = norm_s * r2 * exp_s;
@@ -107,6 +108,23 @@ void main() {
                 psi += mo_coeffs[off + 1u] * val_px;
                 psi += mo_coeffs[off + 2u] * val_py;
                 psi += mo_coeffs[off + 3u] * val_pz;
+            }
+
+            // 5 d-orbitals for SPD basis (dx2-y2, dxz, dz2, dyz, dxy)
+            if (atoms[a].basis_type == 2u && atoms[a].zd > 1e-8) {
+                float exp_d = exp(-atoms[a].zd * r);
+                float d_prefactor = atoms[a].norm_d * exp_d;
+                float val_dx2y2 = 0.5 * d_prefactor * (dx * dx - dy * dy);
+                float val_dxz   = d_prefactor * dx * dz;
+                float val_dz2   = 0.28867513459 * d_prefactor * (2.0 * dz * dz - dx * dx - dy * dy);
+                float val_dyz   = d_prefactor * dy * dz;
+                float val_dxy   = d_prefactor * dx * dy;
+
+                psi += mo_coeffs[off + 4u] * val_dx2y2;
+                psi += mo_coeffs[off + 5u] * val_dxz;
+                psi += mo_coeffs[off + 6u] * val_dz2;
+                psi += mo_coeffs[off + 7u] * val_dyz;
+                psi += mo_coeffs[off + 8u] * val_dxy;
             }
         }
     }

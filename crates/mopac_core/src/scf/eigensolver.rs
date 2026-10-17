@@ -41,14 +41,41 @@ pub fn diagonalize_symmetric_with_work(
     assert_eq!(eigenvectors.rows, n);
     assert_eq!(eigenvectors.cols, n);
 
-    // Working copy of matrix A
-    work.copy_from(a);
+    diagonalize_symmetric_submatrix_with_work(a, n, work, eigenvalues, eigenvectors)
+}
+
+/// Diagonalize a leading submatrix of dimension `dim x dim` of a real symmetric matrix $A$.
+///
+/// On exit:
+/// * `eigenvalues[0..dim]` contains the sorted eigenvalues.
+/// * `eigenvectors` contains the orthonormal eigenvectors in the leading `dim x dim` block.
+/// * Strictly 0 heap allocations when reusing `work`.
+pub fn diagonalize_symmetric_submatrix_with_work(
+    a: &AlignedMatrix<f64>,
+    dim: usize,
+    work: &mut AlignedMatrix<f64>,
+    eigenvalues: &mut [f64],
+    eigenvectors: &mut AlignedMatrix<f64>,
+) -> usize {
+    let n = dim;
+    assert!(a.rows >= n && a.cols >= n);
+    assert!(work.rows >= n && work.cols >= n);
+    assert!(eigenvalues.len() >= n);
+    assert!(eigenvectors.rows >= n && eigenvectors.cols >= n);
+
+    // Working copy of leading submatrix
+    for i in 0..n {
+        for j in 0..n {
+            work.set(i, j, a.get(i, j));
+        }
+    }
     let mat = work;
 
     // Initialize eigenvectors to identity matrix
-    eigenvectors.fill_zero();
     for i in 0..n {
-        eigenvectors.set(i, i, 1.0);
+        for j in 0..n {
+            eigenvectors.set(i, j, if i == j { 1.0 } else { 0.0 });
+        }
     }
 
     let max_sweeps = 100;
@@ -159,8 +186,8 @@ pub fn diagonalize_symmetric_with_work(
     }
 
     // Extract eigenvalues from diagonal
-    for i in 0..n {
-        eigenvalues[i] = mat.get(i, i);
+    for (i, ev) in eigenvalues.iter_mut().enumerate().take(n) {
+        *ev = mat.get(i, i);
     }
 
     // Sort eigenvalues and corresponding eigenvector columns in ascending order

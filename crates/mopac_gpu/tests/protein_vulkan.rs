@@ -11,10 +11,11 @@ use mopac_core::parameters::ParameterModel;
 use mopac_core::types::MolecularBatch;
 use mopac_gpu::{GpuCoulombCalculator, VulkanContext};
 use std::fs::File;
-use std::io::{BufRead, BufReader, Write};
+use std::io::{BufRead, BufReader};
 use std::sync::Arc;
 use std::time::Instant;
 
+#[allow(dead_code)] // PDB record metadata retained for diagnostics
 struct PdbAtom {
     atom_num: usize,
     atom_name: String,
@@ -197,139 +198,35 @@ fn test_vulkan_gpu_t4_lysozyme_protein() {
         "Vulkan GPU Float64 mismatch exceeded threshold"
     );
 
-    // Total classical Coulomb electrostatic energy of the protein fold
-    let mut total_coulomb_ev = 0.0;
+    // Verify GPU Coulomb matrix symmetry strictly
     for i in 0..natoms {
-        for j in (i + 1)..natoms {
-            total_coulomb_ev += gpu_matrix.get(i, j);
-        }
-    }
-    println!(
-        "  Total Protein Fold Coulomb Repulsion: {:.2} eV ({:.2} kcal/mol)",
-        total_coulomb_ev,
-        total_coulomb_ev * EV_TO_KCAL_MOL
-    );
-
-    // 4. Generate Molstar-Compatible Files (PDB with Quantum Charges in B-factor column & PDBQT)
-    let out_pdb_path = repo_root.join("benchmarks/data/2lzm_mopac_charges.pdb");
-    let out_pdbqt_path = repo_root.join("benchmarks/data/2lzm_mopac.pdbqt");
-
-    let mut pdb_out = File::create(&out_pdb_path).expect("Failed to create output PDB");
-    let mut pdbqt_out = File::create(&out_pdbqt_path).expect("Failed to create output PDBQT");
-
-    writeln!(pdb_out, "REMARK   MOPAC_RS QUANTUM ANNOTATED PDB FILE").unwrap();
-    writeln!(
-        pdb_out,
-        "REMARK   B-FACTOR COLUMN CONTAINS QUANTUM COULOMB POTENTIAL (eV)"
-    )
-    .unwrap();
-    writeln!(
-        pdb_out,
-        "REMARK   IN MOLSTAR: SELECT COLOR -> UNCERTAINTY/B-FACTOR TO RENDER"
-    )
-    .unwrap();
-
-    // Compute local Coulomb potential per atom: V_i = sum_j (gamma_ij * Z_eff_j)
-    let mut local_potentials = Vec::with_capacity(natoms);
-    for i in 0..natoms {
-        let mut pot = 0.0;
         for j in 0..natoms {
-            if i != j {
-                let zj = batch.atomic_numbers[j];
-                let pj = pm6.get_element(zj).unwrap();
-                pot += gpu_matrix.get(i, j) * pj.core_charge;
-            }
+            assert!(
+                (gpu_matrix.get(i, j) - gpu_matrix.get(j, i)).abs() < 1e-10,
+                "GPU Coulomb matrix must be strictly symmetric at ({}, {})",
+                i,
+                j
+            );
         }
-        local_potentials.push(pot);
     }
 
-    let min_pot = local_potentials
-        .iter()
-        .cloned()
-        .fold(f64::INFINITY, f64::min);
-    let max_pot = local_potentials
-        .iter()
-        .cloned()
-        .fold(f64::NEG_INFINITY, f64::max);
-    let mean_pot: f64 = local_potentials.iter().sum::<f64>() / natoms as f64;
-    println!(
-        "  Local Coulomb Potential Range: [{:.2}, {:.2}] eV (Mean: {:.2} eV)",
-        min_pot, max_pot, mean_pot
-    );
-
-    for (i, atom) in pdb_atoms.iter().enumerate() {
-        let pot = local_potentials[i];
-        let b_factor_norm = if max_pot > min_pot {
-            ((pot - min_pot) / (max_pot - min_pot) * 99.99).clamp(0.0, 99.99)
-        } else {
-            50.0
-        };
-
-        // Standard PDB format line:
-        // ATOM  serial name resName chainID resSeq    x y z occupancy tempFactor elem
-        writeln!(
-            pdb_out,
-            "ATOM  {:5} {:^4} {:3} {}{:4}    {:8.3}{:8.3}{:8.3}{:6.2}{:6.2}          {:>2}",
-            atom.atom_num,
-            atom.atom_name,
-            atom.res_name,
-            atom.chain_id,
-            atom.res_seq,
-            atom.x,
-            atom.y,
-            atom.z,
-            1.00,
-            b_factor_norm,
-            mopac_core::export::sdf::z_to_symbol(atom.z_atomic)
-        )
-        .unwrap();
-
-        // Standard PDBQT format line (Autodock charge in cols 71-76, atom type in 78-79)
-        let autodock_type = match atom.z_atomic {
-            1 => "HD",
-            6 => {
-                if atom.atom_name.starts_with("C") {
-                    "C"
-                } else {
-                    "A"
-                }
-            }
-            7 => "NA",
-            8 => "OA",
-            16 => "SA",
-            _ => "C",
-        };
-        let partial_charge = (b_factor_norm * 0.01).clamp(-2.0, 2.0);
-        writeln!(
-            pdbqt_out,
-            "ATOM  {:5} {:^4} {:3} {}{:4}    {:8.3}{:8.3}{:8.3}{:6.2}{:6.2}    {:>+6.3} {:<2}",
-            atom.atom_num,
-            atom.atom_name,
-            atom.res_name,
-            atom.chain_id,
-            atom.res_seq,
-            atom.x,
-            atom.y,
-            atom.z,
-            1.00,
-            20.00,
-            partial_charge,
-            autodock_type
-        )
-        .unwrap();
+    // Total classical Coulomb nuclear-core repulsion of the protein fold: E_nuc = sum_{i < j} Z_i * Z_j * gamma_ij
+    let mut total_core_repulsion_ev = 0.0;
+    for i in 0..natoms {
+        let zi = batch.atomic_numbers[i];
+        let pi = pm6.get_element(zi).unwrap();
+        for j in (i + 1)..natoms {
+            let zj = batch.atomic_numbers[j];
+            let pj = pm6.get_element(zj).unwrap();
+            total_core_repulsion_ev += pi.core_charge * pj.core_charge * gpu_matrix.get(i, j);
+        }
     }
-
-    writeln!(pdb_out, "END").unwrap();
-    writeln!(pdbqt_out, "END").unwrap();
-
-    println!("\n[Molstar Visualization Files Successfully Generated]");
+    assert!(total_core_repulsion_ev.is_finite() && total_core_repulsion_ev > 0.0);
     println!(
-        "  PDB with Quantum Potential in B-factor: {}",
-        out_pdb_path.display()
+        "  Total Protein Nuclear-Core Classical Repulsion: {:.2} eV ({:.2} kcal/mol)",
+        total_core_repulsion_ev,
+        total_core_repulsion_ev * EV_TO_KCAL_MOL
     );
-    println!(
-        "  PDBQT with AutoDock Partial Charges:     {}",
-        out_pdbqt_path.display()
-    );
+    println!("\n[Protein Vulkan GPU Monopole Parity Test: PASSED]");
     println!("{}", "=".repeat(80));
 }

@@ -5,7 +5,7 @@
 //! orthonormal Lewis bonding ($\sigma, \pi$), antibonding ($\sigma^*, \pi^*$), and lone-pair LMOs matching OpenMOPAC `hybrid.F90`.
 
 use super::types::{LewisStructure, Lmo, LmoType};
-use crate::types::{BasisType, MolecularBatch};
+use crate::types::{AlignedMatrix, AlignedVec64, BasisType, MolecularBatch};
 
 /// Directional Hybrid Atomic Orbital (HAO) on a single atomic center.
 #[derive(Debug, Clone)]
@@ -396,58 +396,16 @@ fn lowdin_orthogonalize(hybrids: &[Vec<f64>]) -> Vec<Vec<f64>> {
 
     let n = hybrids[0].len();
     // Build overlap matrix S (m x m)
-    let mut s = vec![vec![0.0; m]; m];
+    let mut s = AlignedMatrix::zeroed(m, m);
     for i in 0..m {
         for j in 0..m {
-            s[i][j] = dot_product(&hybrids[i], &hybrids[j]);
+            s.set(i, j, dot_product(&hybrids[i], &hybrids[j]));
         }
     }
 
-    // Jacobi eigenvalue decomposition for symmetric m x m matrix (m <= 4)
-    let mut v = vec![vec![0.0; m]; m];
-    for i in 0..m {
-        v[i][i] = 1.0;
-    }
-    let mut a = s.clone();
-
-    for _sweep in 0..50 {
-        let mut max_off = 0.0;
-        for p in 0..m {
-            for q in (p + 1)..m {
-                let val = a[p][q].abs();
-                if val > max_off {
-                    max_off = val;
-                }
-                if val > 1e-12 {
-                    let theta = 0.5 * (2.0 * a[p][q]).atan2(a[q][q] - a[p][p]);
-                    let c = theta.cos();
-                    let s = theta.sin();
-
-                    // Apply rotation to A
-                    let mut a_new = a.clone();
-                    for i in 0..m {
-                        a_new[i][p] = c * a[i][p] - s * a[i][q];
-                        a_new[i][q] = s * a[i][p] + c * a[i][q];
-                    }
-                    for i in 0..m {
-                        a[p][i] = c * a_new[p][i] - s * a_new[q][i];
-                        a[q][i] = s * a_new[p][i] + c * a_new[q][i];
-                    }
-
-                    // Accumulate eigenvectors in V
-                    for i in 0..m {
-                        let vip = v[i][p];
-                        let viq = v[i][q];
-                        v[i][p] = c * vip - s * viq;
-                        v[i][q] = s * vip + c * viq;
-                    }
-                }
-            }
-        }
-        if max_off < 1e-12 {
-            break;
-        }
-    }
+    let mut eigenvalues = AlignedVec64::zeroed(m);
+    let mut eigenvectors = AlignedMatrix::zeroed(m, m);
+    crate::scf::eigensolver::diagonalize_symmetric(&s, &mut eigenvalues, &mut eigenvectors);
 
     // Compute S^(-1/2) = V * diag(lambda^(-1/2)) * V^T
     let mut s_inv_sqrt = vec![vec![0.0; m]; m];
@@ -455,8 +413,8 @@ fn lowdin_orthogonalize(hybrids: &[Vec<f64>]) -> Vec<Vec<f64>> {
         for j in 0..m {
             let mut sum = 0.0;
             for k in 0..m {
-                let lambda_k = a[k][k].max(1e-8);
-                sum += v[i][k] * (1.0 / lambda_k.sqrt()) * v[j][k];
+                let lambda_k = eigenvalues[k].max(1e-8);
+                sum += eigenvectors.get(i, k) * (1.0 / lambda_k.sqrt()) * eigenvectors.get(j, k);
             }
             s_inv_sqrt[i][j] = sum;
         }

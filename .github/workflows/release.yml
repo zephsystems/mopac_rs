@@ -25,6 +25,8 @@ jobs:
           sudo apt-get install -y libvulkan-dev vulkan-tools libvulkan1
 
       - name: Build Optimized Release Binary
+        env:
+          RUSTFLAGS: "--remap-path-prefix=${{ github.workspace }}=/build --remap-path-prefix=/home/runner=/build"
         run: cargo build --release --bin mopac
 
       - name: Package Release Assets
@@ -36,6 +38,7 @@ jobs:
       - name: Publish GitHub Release
         uses: softprops/action-gh-release@v2
         with:
+          body_path: RELEASE_DRAFT.md
           files: |
             mopac-linux-x86_64.tar.gz
             mopac-linux-x86_64.tar.gz.sha256

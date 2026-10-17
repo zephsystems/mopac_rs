@@ -189,11 +189,11 @@ fn determine_bond_order(z1: u8, z2: u8, dist: f64, r_sum: f64) -> usize {
     if ratio < 0.82 {
         // Triple bond region (e.g. C#C ~ 1.20 A / 1.52 = 0.79, C#N ~ 1.16 A / 1.47 = 0.79)
         3
-    } else if ratio < 0.92 {
+    } else if ratio < 0.89 {
         // Double bond region (e.g. C=C ~ 1.34 A / 1.52 = 0.88, C=O ~ 1.22 A / 1.42 = 0.86)
         2
     } else {
-        // Single bond region
+        // Single bond region (e.g. peptide C-N ~ 1.34 A / 1.47 = 0.91, C-C ~ 1.54 A / 1.52 = 1.01)
         1
     }
 }

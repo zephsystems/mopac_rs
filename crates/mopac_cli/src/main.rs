@@ -183,6 +183,10 @@ struct Cli {
     #[arg(long = "mers")]
     mers: Option<String>,
 
+    /// Use canonical OpenMOPAC Born-von Kármán direct-space solrot PBC engine (default for 1SCF runs with Tv vectors)
+    #[arg(long = "solrot")]
+    solrot: bool,
+
     /// Custom archive file path (.arc)
     #[arg(long)]
     arc: Option<PathBuf>,
@@ -859,7 +863,7 @@ fn parse_mopac_input(content: &str) -> io::Result<ParsedInput> {
     })
 }
 
-fn build_batch(atoms: &[ParsedAtom]) -> MolecularBatch {
+fn build_batch(atoms: &[ParsedAtom], model: &dyn ParameterModel) -> MolecularBatch {
     let natoms = atoms.len();
     let mut atomic_numbers = Vec::with_capacity(natoms);
     let mut coords = Vec::with_capacity(natoms);
@@ -869,7 +873,7 @@ fn build_batch(atoms: &[ParsedAtom]) -> MolecularBatch {
         coords.push([a.x, a.y, a.z_coord]);
     }
 
-    MolecularBatch::new(atomic_numbers, &coords)
+    MolecularBatch::new_for_model(atomic_numbers, &coords, model)
 }
 
 fn compute_wavefunction_properties(
@@ -990,8 +994,11 @@ fn main() -> Result<(), Box<dyn std::error::Error>> {
         _ => Box::new(Am1Model),
     };
 
-    let use_nddo =
-        (!cli.monopole && !parsed.is_monopole_requested) || cli.nddo || parsed.is_nddo_requested;
+    let use_nddo = if use_gpu && !cli.nddo && !parsed.is_nddo_requested {
+        false
+    } else {
+        (!cli.monopole && !parsed.is_monopole_requested) || cli.nddo || parsed.is_nddo_requested
+    };
     let charge = cli.charge.or(parsed.charge).unwrap_or(0);
 
     println!("===============================================================================");
@@ -1007,6 +1014,8 @@ fn main() -> Result<(), Box<dyn std::error::Error>> {
         " NDDO Multipoles       : {}",
         if use_nddo {
             "Enabled (Full 22 Multipoles)"
+        } else if use_gpu {
+            "GPU Monopole Coulomb Pipeline"
         } else {
             "Monopole Approximation"
         }
@@ -1042,7 +1051,7 @@ fn main() -> Result<(), Box<dyn std::error::Error>> {
     println!(" Title Line            : \"{}\"", parsed.title);
     println!("-------------------------------------------------------------------------------");
 
-    let mut batch = build_batch(&parsed.atoms);
+    let mut batch = build_batch(&parsed.atoms, model.as_ref());
 
     let is_pbc = cli.pbc || !parsed.translation_vectors.is_empty();
     if is_pbc {
@@ -1075,23 +1084,47 @@ fn main() -> Result<(), Box<dyn std::error::Error>> {
         }
         pbc_opts.use_nddo = use_nddo;
 
-        println!(" [PBC] Starting Crystal Orbital Roothaan-Hall Bloch SCF...");
-        println!(
-            " [PBC] Periodic System : {:?}",
-            pbc_opts.unit_cell.dimension
-        );
-        println!(" [PBC] Supercell MERS  : {:?}", pbc_opts.mers);
-        println!(" [PBC] k-point grid    : {:?}", pbc_opts.k_grid);
+        let is_solrot = cli.solrot || (cli.k_grid.is_none() && parsed.k_grid.is_none());
+        let pbc_res = if is_solrot {
+            println!(" [PBC] Using Canonical OpenMOPAC Born-von Kármán Direct-Space Engine (solrot.F90)...");
+            println!(
+                " [PBC] Periodic System : {:?}",
+                pbc_opts.unit_cell.dimension
+            );
+            println!(" [PBC] Lattice Cutoff  : 30.0 A (clower=17.0 A, cutofp=30.0 A)");
+            match mopac_core::pbc::solrot::run_solrot_pbc_scf(
+                &batch,
+                model.as_ref(),
+                &pbc_opts.unit_cell,
+                pbc_opts.max_iter,
+                1e-6,
+                1e-5,
+            ) {
+                Ok(r) => r,
+                Err(e) => {
+                    eprintln!("Error in PBC solrot SCF: {}", e);
+                    std::process::exit(1);
+                }
+            }
+        } else {
+            println!(" [PBC] Starting Crystal Orbital Roothaan-Hall Bloch SCF...");
+            println!(
+                " [PBC] Periodic System : {:?}",
+                pbc_opts.unit_cell.dimension
+            );
+            println!(" [PBC] Supercell MERS  : {:?}", pbc_opts.mers);
+            println!(" [PBC] k-point grid    : {:?}", pbc_opts.k_grid);
 
-        let n_trans = pbc_opts.mers[0] * pbc_opts.mers[1] * pbc_opts.mers[2];
-        let n_k = pbc_opts.k_grid[0] * pbc_opts.k_grid[1] * pbc_opts.k_grid[2];
-        let mut pbc_ws = PbcWorkspace::allocate(batch.norbs, n_trans, n_k);
+            let n_trans = pbc_opts.mers[0] * pbc_opts.mers[1] * pbc_opts.mers[2];
+            let n_k = pbc_opts.k_grid[0] * pbc_opts.k_grid[1] * pbc_opts.k_grid[2];
+            let mut pbc_ws = PbcWorkspace::allocate(batch.norbs, n_trans, n_k);
 
-        let pbc_res = match run_pbc_scf(&batch, model.as_ref(), &pbc_opts, &mut pbc_ws) {
-            Ok(r) => r,
-            Err(e) => {
-                eprintln!("Error in PBC Bloch SCF: {}", e);
-                std::process::exit(1);
+            match run_pbc_scf(&batch, model.as_ref(), &pbc_opts, &mut pbc_ws) {
+                Ok(r) => r,
+                Err(e) => {
+                    eprintln!("Error in PBC Bloch SCF: {}", e);
+                    std::process::exit(1);
+                }
             }
         };
 
@@ -1402,36 +1435,60 @@ fn main() -> Result<(), Box<dyn std::error::Error>> {
     // If GPU is requested, warm up and verify device acceleration
     if use_gpu {
         println!(" [Vulkan GPU] Initializing PCIe DMA buffers & GDDR6 device memory...");
-        let ctx = match VulkanContext::new() {
-            Ok(c) => Arc::new(c),
+        match VulkanContext::new() {
+            Ok(c) => {
+                let ctx = Arc::new(c);
+                println!(
+                    " [Vulkan GPU] Device: {} (Discrete: {})",
+                    ctx.device_info.device_name, ctx.device_info.is_discrete
+                );
+                if use_fp32 {
+                    match GpuCoulombCalculatorFP32::new(Arc::clone(&ctx)) {
+                        Ok(gpu_calc) => match gpu_calc.compute_batch(&batch, model.as_ref()) {
+                            Ok(gpu_matrix) => {
+                                let mut gamma_f64 =
+                                    AlignedMatrix::zeroed(gpu_matrix.rows, gpu_matrix.cols);
+                                for i in 0..gpu_matrix.data.len() {
+                                    gamma_f64.data[i] = gpu_matrix.data[i] as f64;
+                                }
+                                ws.gamma = Some(gamma_f64);
+                                println!(
+                                    " [Vulkan GPU] Evaluated pairwise Coulomb matrix using FP32 hardware pipeline & dispatched to SCF solver."
+                                );
+                            }
+                            Err(e) => {
+                                eprintln!(" [Vulkan GPU Warning] Kernel dispatch failed: {}. Continuing on CPU.", e);
+                            }
+                        },
+                        Err(e) => {
+                            eprintln!(" [Vulkan GPU Warning] Failed to initialize FP32 pipeline: {}. Continuing on CPU.", e);
+                        }
+                    }
+                } else {
+                    match GpuCoulombCalculator::new(Arc::clone(&ctx)) {
+                        Ok(gpu_calc) => match gpu_calc.compute_batch(&batch, model.as_ref()) {
+                            Ok(gpu_matrix) => {
+                                ws.gamma = Some(gpu_matrix);
+                                println!(
+                                    " [Vulkan GPU] Evaluated pairwise Coulomb matrix using native Float64 pipeline & dispatched to SCF solver."
+                                );
+                            }
+                            Err(e) => {
+                                eprintln!(" [Vulkan GPU Warning] Kernel dispatch failed: {}. Continuing on CPU.", e);
+                            }
+                        },
+                        Err(e) => {
+                            eprintln!(" [Vulkan GPU Warning] Failed to initialize FP64 pipeline: {}. Continuing on CPU.", e);
+                        }
+                    }
+                }
+            }
             Err(e) => {
-                eprintln!(" [Vulkan GPU Warning] Failed to initialize Vulkan device: {}. Falling back to CPU.", e);
-                Arc::new(VulkanContext::new()?)
+                eprintln!(
+                    " [Vulkan GPU Warning] Failed to initialize Vulkan device: {}. Falling back to CPU.",
+                    e
+                );
             }
-        };
-
-        println!(
-            " [Vulkan GPU] Device: {} (Discrete: {})",
-            ctx.device_info.device_name, ctx.device_info.is_discrete
-        );
-        if use_fp32 {
-            let gpu_calc = GpuCoulombCalculatorFP32::new(Arc::clone(&ctx))?;
-            let gpu_matrix = gpu_calc.compute_batch(&batch, model.as_ref())?;
-            let mut gamma_f64 = AlignedMatrix::zeroed(gpu_matrix.rows, gpu_matrix.cols);
-            for i in 0..gpu_matrix.data.len() {
-                gamma_f64.data[i] = gpu_matrix.data[i] as f64;
-            }
-            ws.gamma = Some(gamma_f64);
-            println!(
-                " [Vulkan GPU] Evaluated pairwise Coulomb matrix using FP32 hardware pipeline & dispatched to SCF solver."
-            );
-        } else {
-            let gpu_calc = GpuCoulombCalculator::new(Arc::clone(&ctx))?;
-            let gpu_matrix = gpu_calc.compute_batch(&batch, model.as_ref())?;
-            ws.gamma = Some(gpu_matrix);
-            println!(
-                " [Vulkan GPU] Evaluated pairwise Coulomb matrix using native Float64 pipeline & dispatched to SCF solver."
-            );
         }
     }
 

@@ -170,7 +170,7 @@ fn test_water_mozyme_pm6_openmopac_parity() {
             res.heat_of_formation_kcal, oracle_hof, (res.heat_of_formation_kcal - oracle_hof).abs()
         );
         assert!(
-            (res.heat_of_formation_kcal - oracle_hof).abs() < 0.50,
+            (res.heat_of_formation_kcal - oracle_hof).abs() < 0.02,
             "MOZYME PM6 water heat of formation deviates from OpenMOPAC: diff = {}",
             (res.heat_of_formation_kcal - oracle_hof).abs()
         );
@@ -325,12 +325,12 @@ fn test_peptide_bond_mozyme_pm6_openmopac_parity() {
             res.heat_of_formation_kcal, oracle_hof, (res.heat_of_formation_kcal - oracle_hof).abs()
         );
         assert!(
-            (res.heat_of_formation_kcal - oracle_hof).abs() < 25.0,
+            (res.heat_of_formation_kcal - oracle_hof).abs() < 0.25,
             "Peptide MOZYME PM6 heat of formation deviates from OpenMOPAC: diff = {}",
             (res.heat_of_formation_kcal - oracle_hof).abs()
         );
         assert!(
-            (res.total_energy_ev - (-934.10605)).abs() < 1.5,
+            (res.total_energy_ev - (-934.10605)).abs() < 0.05,
             "Peptide MOZYME PM6 total energy deviates from OpenMOPAC: diff = {}",
             (res.total_energy_ev - (-934.10605)).abs()
         );

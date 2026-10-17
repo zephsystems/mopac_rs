@@ -57,12 +57,14 @@ fn test_boron_bh3_scf_am1() {
         res.lumo_energy_ev
     );
     assert!(
-        (res.total_energy_ev - (-109.43073)).abs() < 1.0,
-        "Total energy deviation"
+        (res.total_energy_ev - (-109.43073)).abs() < 1e-4,
+        "Total energy deviation: got {}",
+        res.total_energy_ev
     );
     assert!(
-        (res.homo_energy_ev - (-11.861)).abs() < 1.5,
-        "HOMO deviation"
+        (res.homo_energy_ev - (-11.861)).abs() < 0.01,
+        "HOMO deviation: got {}",
+        res.homo_energy_ev
     );
 
     // Check Heat of Formation
@@ -72,7 +74,7 @@ fn test_boron_bh3_scf_am1() {
         hof_kcal
     );
     assert!(
-        (hof_kcal - 26.25).abs() < 25.0,
+        (hof_kcal - 26.25).abs() < 0.01,
         "BH3 AM1 HoF deviated: got {:.4}, expected close to 26.25",
         hof_kcal
     );

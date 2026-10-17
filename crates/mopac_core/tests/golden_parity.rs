@@ -244,6 +244,11 @@ fn test_golden_parity_water_am1() {
     let hof_diff = (hof_mopacrs - oracle.heat_of_formation_kcal).abs();
     println!("[ORACLE PARITY] H2O AM1: MOPAC_RS = {:.5} kcal/mol, OpenMOPAC = {:.5} kcal/mol, diff = {:.4} kcal/mol",
         hof_mopacrs, oracle.heat_of_formation_kcal, hof_diff);
+    assert!(
+        hof_diff < 0.005,
+        "H2O AM1 Heat of formation deviated from OpenMOPAC oracle: diff = {} kcal/mol",
+        hof_diff
+    );
 
     // Verify core repulsion matches oracle to machine precision
     if let Some(oracle_nuc) = oracle.core_repulsion_ev {
@@ -308,6 +313,11 @@ fn test_golden_parity_methane_am1() {
     let hof_diff = (hof_mopacrs - oracle.heat_of_formation_kcal).abs();
     println!("[ORACLE PARITY] CH4 AM1: MOPAC_RS = {:.5} kcal/mol, OpenMOPAC = {:.5} kcal/mol, diff = {:.4} kcal/mol",
         hof_mopacrs, oracle.heat_of_formation_kcal, hof_diff);
+    assert!(
+        hof_diff < 0.005,
+        "CH4 AM1 Heat of formation deviated from OpenMOPAC oracle: diff = {} kcal/mol",
+        hof_diff
+    );
 
     // Verify core repulsion matches oracle to machine precision
     if let Some(oracle_nuc) = oracle.core_repulsion_ev {
@@ -371,6 +381,11 @@ fn test_golden_parity_formaldehyde_am1() {
     let hof_diff = (hof_mopacrs - oracle.heat_of_formation_kcal).abs();
     println!("[ORACLE PARITY] H2CO AM1: MOPAC_RS = {:.5} kcal/mol, OpenMOPAC = {:.5} kcal/mol, diff = {:.4} kcal/mol",
         hof_mopacrs, oracle.heat_of_formation_kcal, hof_diff);
+    assert!(
+        hof_diff < 0.005,
+        "H2CO AM1 Heat of formation deviated from OpenMOPAC oracle: diff = {} kcal/mol",
+        hof_diff
+    );
 
     // Verify core repulsion matches oracle to machine precision
     if let Some(oracle_nuc) = oracle.core_repulsion_ev {
@@ -519,6 +534,11 @@ fn test_golden_parity_water_pm7() {
     let hof_diff = (hof_mopacrs - oracle.heat_of_formation_kcal).abs();
     println!("[ORACLE PARITY] H2O PM7: MOPAC_RS = {:.5} kcal/mol, OpenMOPAC = {:.5} kcal/mol, diff = {:.4} kcal/mol",
         hof_mopacrs, oracle.heat_of_formation_kcal, hof_diff);
+    assert!(
+        hof_diff < 0.005,
+        "H2O PM7 Heat of formation deviated from OpenMOPAC oracle: diff = {} kcal/mol",
+        hof_diff
+    );
 
     // Print pairwise core repulsions
     let elem_o = model.get_element(8).unwrap();
@@ -603,6 +623,11 @@ fn test_golden_parity_zinc_hydride_pm7() {
         "[ORACLE PARITY] ZnH2 PM7: MOPAC_RS = {:.5} kcal/mol, OpenMOPAC = {:.5} kcal/mol, diff = {:.4} kcal/mol",
         hof_mopacrs, oracle.heat_of_formation_kcal, hof_diff
     );
+    assert!(
+        hof_diff < 0.005,
+        "ZnH2 PM7 Heat of formation deviated from OpenMOPAC oracle: diff = {} kcal/mol",
+        hof_diff
+    );
 
     if let Some(oracle_nuc) = oracle.core_repulsion_ev {
         let nuc_diff = (scf_res.nuclear_repulsion_ev - oracle_nuc).abs();
@@ -669,6 +694,11 @@ fn test_golden_parity_hydrogen_sulfide_pm7() {
         "[ORACLE PARITY] H2S PM7: MOPAC_RS = {:.5} kcal/mol, OpenMOPAC = {:.5} kcal/mol, diff = {:.4} kcal/mol",
         hof_mopacrs, oracle.heat_of_formation_kcal, hof_diff
     );
+    assert!(
+        hof_diff < 0.001,
+        "H2S PM7 Heat of formation deviated from OpenMOPAC oracle: diff = {} kcal/mol",
+        hof_diff
+    );
 
     if let Some(oracle_nuc) = oracle.core_repulsion_ev {
         let nuc_diff = (scf_res.nuclear_repulsion_ev - oracle_nuc).abs();
@@ -676,18 +706,18 @@ fn test_golden_parity_hydrogen_sulfide_pm7() {
             "[ORACLE PARITY] H2S Core Repulsion: MOPAC_RS = {:.6}, Oracle = {:.6}, diff = {:.6}",
             scf_res.nuclear_repulsion_ev, oracle_nuc, nuc_diff
         );
-        assert!(nuc_diff < 1e-3, "H2S Core repulsion deviated: {}", nuc_diff);
+        assert!(nuc_diff < 1e-4, "H2S Core repulsion deviated: {}", nuc_diff);
     }
     if let Some(oracle_etot) = oracle.total_energy_ev {
         let rel_err = ((scf_res.total_energy_ev - oracle_etot) / oracle_etot).abs();
         println!(
-            "[ORACLE PARITY] H2S Total Energy: MOPAC_RS = {:.6}, Oracle = {:.6}, rel_err = {:.4}%",
+            "[ORACLE PARITY] H2S Total Energy: MOPAC_RS = {:.6}, Oracle = {:.6}, rel_err = {:.6}%",
             scf_res.total_energy_ev,
             oracle_etot,
             rel_err * 100.0
         );
         assert!(
-            rel_err < 0.002,
+            rel_err < 1e-5,
             "H2S Total energy relative error: {}",
             rel_err
         );
@@ -738,10 +768,24 @@ fn test_golden_parity_water_cosmo_pm6() {
         "[ORACLE PARITY] H2O PM6 COSMO (EPS=78.4): MOPAC_RS = {:.5} kcal/mol, OpenMOPAC = {:.5} kcal/mol, diff = {:.4} kcal/mol",
         hof_mopacrs, oracle.heat_of_formation_kcal, hof_diff
     );
+    println!(
+        "DEBUG: E_tot = {:.5} eV, E_elec = {:.5} eV, E_nuc = {:.5} eV, E_diel = {:?}",
+        scf_res.total_energy_ev,
+        scf_res.electronic_energy_ev,
+        scf_res.nuclear_repulsion_ev,
+        scf_res.dielectric_energy_ev
+    );
+    let cav = mopac_core::solvation::cavity::CosmoCavity::construct(&batch, 1.30005);
+    println!(
+        "DEBUG CAVITY: area = {:.2} A^2, vol = {:.2} A^3, nseg = {}",
+        cav.total_area_angstrom2,
+        cav.total_volume_angstrom3,
+        cav.num_segments()
+    );
 
-    // Assert heat of formation parity within 2.0 kcal/mol for COSMO implicit solvation
+    // Assert heat of formation parity within 0.20 kcal/mol for COSMO implicit solvation
     assert!(
-        hof_diff < 2.0,
+        hof_diff < 0.20,
         "COSMO Heat of formation difference too large: {:.4} kcal/mol",
         hof_diff
     );
@@ -1061,8 +1105,11 @@ fn test_golden_parity_ammonium_cosmo_am1() {
         hof_mopacrs, oracle.heat_of_formation_kcal, hof_diff
     );
 
+    // In net charged ions like NH4+, the large monopole solvation term (~-80 kcal/mol)
+    // with exact Klamt cavity construction and surclo crevice closure matches OpenMOPAC
+    // to within 0.85 kcal/mol (< 1.1% of solvation free energy).
     assert!(
-        hof_diff < 1.5,
+        hof_diff < 1.0,
         "Ammonium COSMO AM1 HoF parity error: got diff {:.4} kcal/mol",
         hof_diff
     );

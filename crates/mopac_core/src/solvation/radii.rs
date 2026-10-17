@@ -41,48 +41,47 @@ pub const BONDI_VDW_RADII: [f64; 86] = [
     1.66, 1.55, 1.96, 2.02, 2.26, 2.26, 2.25, 2.30,
 ];
 
-/// Andreas Klamt's canonical COSMO cavity radii in Angstroms from OpenMOPAC `atomradii_C.F90`.
+/// Andreas Klamt's canonical COSMO cavity van der Waals radii in Angstroms for elements Z=1..107.
 ///
-/// For elements with specific optimized parameters:
-/// - H: 1.30 Å
-/// - B: 2.0475 Å
-/// - C: 2.00 Å
-/// - N: 1.83 Å
-/// - O: 1.72 Å
-/// - F: 1.72 Å
-/// - Si: 2.457 Å
-/// - P: 2.106 Å
-/// - S: 2.16 Å
-/// - Cl: 2.05 Å
-/// - As: 2.223 Å
-/// - Se: 2.223 Å
-/// - Br: 2.16 Å
-/// - I: 2.32 Å
-///
-/// For other elements, scales the Bondi van der Waals radius by $1.17\times$ (or $1.20\times$) matching Klamt's standard rule.
+/// Verbatim transcription from OpenMOPAC v23.2.5 `cosmo.F90:1738-1752` (`rvdw` data array).
+#[rustfmt::skip]
+pub const OPENMOPAC_COSMO_VDW_RADII: [f64; 107] = [
+    // 1..8: H, He, Li, Be, B, C, N, O
+    1.30, 1.64, 2.13, 2.19, 2.05, 2.00, 1.83, 1.72,
+    // 9..16: F, Ne, Na, Mg, Al, Si, P, S
+    1.72, 1.80, 2.66, 2.02, 2.41, 2.46, 2.11, 2.16,
+    // 17..24: Cl, Ar, K, Ca, Sc, Ti, V, Cr
+    2.05, 2.20, 3.22, 2.54, 2.64, 2.64, 2.52, 2.40,
+    // 25..32: Mn, Fe, Co, Ni, Cu, Zn, Ga, Ge
+    2.46, 2.41, 2.40, 1.91, 1.64, 1.63, 2.19, 2.46,
+    // 33..40: As, Se, Br, Kr, Rb, Sr, Y, Zr
+    2.22, 2.22, 2.16, 2.36, 3.78, 3.44, 3.39, 3.33,
+    // 41..48: Nb, Mo, Tc, Ru, Rh, Pd, Ag, Cd
+    3.28, 2.57, 2.57, 2.57, 2.57, 1.91, 2.01, 1.85,
+    // 49..56: In, Sn, Sb, Te, I, Xe, Cs, Ba
+    2.26, 2.54, 2.53, 2.41, 2.32, 2.53, 4.00, 3.47,
+    // 57..64: La..Gd
+    2.81, 2.81, 2.81, 2.81, 2.81, 2.81, 2.81, 2.81,
+    // 65..72: Tb..Hf
+    2.81, 2.81, 2.81, 2.81, 2.81, 2.81, 2.81, 2.57,
+    // 73..80: Ta..Hg
+    2.57, 2.57, 2.57, 2.57, 2.57, 2.05, 1.94, 1.81,
+    // 81..88: Tl..Ra
+    2.29, 2.36, 2.64, 2.64, 2.63, 2.69, 2.57, 2.57,
+    // 89..96: Ac..Cm
+    2.57, 2.57, 2.57, 2.18, 2.57, 2.57, 2.57, 2.57,
+    // 97..102: Bk..No
+    2.57, 2.57, 2.57, 2.57, 2.57, 2.57,
+    // 103..107: Lr..Bh
+    2.00, 2.00, 2.00, 2.00, 2.00,
+];
+
+/// Returns the Andreas Klamt canonical COSMO cavity solute radius for element `z` in Angstroms.
 #[inline]
 pub fn cosmo_atomic_radius(z: u8) -> f64 {
-    match z {
-        1 => 1.30,
-        5 => 2.0475,
-        6 => 2.00,
-        7 => 1.83,
-        8 => 1.72,
-        9 => 1.72,
-        14 => 2.457,
-        15 => 2.106,
-        16 => 2.16,
-        17 => 2.05,
-        33 => 2.223,
-        34 => 2.223,
-        35 => 2.16,
-        53 => 2.32,
-        _ => {
-            if z >= 1 && (z as usize) <= BONDI_VDW_RADII.len() {
-                BONDI_VDW_RADII[z as usize - 1] * 1.17
-            } else {
-                2.00 // standard default radius
-            }
-        }
+    if z >= 1 && (z as usize) <= OPENMOPAC_COSMO_VDW_RADII.len() {
+        OPENMOPAC_COSMO_VDW_RADII[z as usize - 1]
+    } else {
+        2.00
     }
 }

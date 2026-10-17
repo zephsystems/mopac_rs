@@ -2855,6 +2855,26 @@ impl MopacCalculator {
             Some(self.use_nddo),
             Some(self.max_iter),
             band_points,
+            None,
+        )
+    }
+
+    /// Calculate canonical Born-von Kármán Periodic Boundary Conditions SCF (solrot.F90).
+    #[pyo3(signature = (atomic_numbers, coordinates, translation_vectors))]
+    fn pbc_solrot(
+        &self,
+        atomic_numbers: Vec<u8>,
+        coordinates: Vec<[f64; 3]>,
+        translation_vectors: Vec<[f64; 3]>,
+    ) -> PyResult<PbcResultPy> {
+        pbc_solrot(
+            atomic_numbers,
+            coordinates,
+            translation_vectors,
+            Some(&self.method),
+            Some(self.max_iter),
+            Some(1e-6),
+            Some(1e-5),
         )
     }
 }
@@ -2888,7 +2908,8 @@ pub struct PbcResultPy {
     k_grid = None,
     use_nddo = true,
     max_iter = 100,
-    band_points = 40
+    band_points = 40,
+    engine = None
 ))]
 pub fn pbc(
     atomic_numbers: Vec<u8>,
@@ -2900,6 +2921,7 @@ pub fn pbc(
     use_nddo: Option<bool>,
     max_iter: Option<usize>,
     band_points: Option<usize>,
+    engine: Option<&str>,
 ) -> PyResult<PbcResultPy> {
     if atomic_numbers.is_empty() {
         return Err(PyValueError::new_err("atomic_numbers must not be empty"));
@@ -2920,6 +2942,42 @@ pub fn pbc(
     let unit_cell =
         UnitCell::from_translation_vectors(&translation_vectors).map_err(PyValueError::new_err)?;
 
+    let batch = MolecularBatch::new_for_model(atomic_numbers, &coordinates, model.as_ref());
+
+    let use_solrot = match engine {
+        Some("solrot") => true,
+        Some("bloch") => false,
+        _ => k_grid.is_none(),
+    };
+
+    if use_solrot {
+        let res = mopac_core::pbc::solrot::run_solrot_pbc_scf(
+            &batch,
+            model.as_ref(),
+            &unit_cell,
+            max_iter.unwrap_or(100),
+            1e-6,
+            1e-5,
+        )
+        .map_err(PyValueError::new_err)?;
+
+        return Ok(PbcResultPy {
+            converged: res.converged,
+            iterations: res.iterations,
+            total_energy_per_cell_ev: res.total_energy_per_cell_ev,
+            electronic_energy_per_cell_ev: res.electronic_energy_per_cell_ev,
+            nuclear_repulsion_per_cell_ev: res.nuclear_repulsion_per_cell_ev,
+            heat_of_formation_kcal_mol: res.heat_of_formation_kcal_mol,
+            vbm_energy_ev: res.vbm_energy_ev,
+            cbm_energy_ev: res.cbm_energy_ev,
+            direct_bandgap_ev: res.direct_bandgap_ev,
+            indirect_bandgap_ev: res.indirect_bandgap_ev,
+            band_energies_ev: res.band_energies_ev,
+            dos_energies_ev: res.dos_energies_ev,
+            dos_values: res.dos_values,
+        });
+    }
+
     let mut pbc_opts = PbcOptions::new(unit_cell);
     if let Some(m) = mers {
         pbc_opts.mers = m;
@@ -2937,13 +2995,79 @@ pub fn pbc(
         pbc_opts.band_path_points = bp;
     }
 
-    let batch = MolecularBatch::new_for_model(atomic_numbers, &coordinates, model.as_ref());
     let n_trans = pbc_opts.mers[0] * pbc_opts.mers[1] * pbc_opts.mers[2];
     let n_k = pbc_opts.k_grid[0] * pbc_opts.k_grid[1] * pbc_opts.k_grid[2];
     let mut ws = PbcWorkspace::allocate(batch.norbs, n_trans, n_k);
 
     let res =
         run_pbc_scf(&batch, model.as_ref(), &pbc_opts, &mut ws).map_err(PyValueError::new_err)?;
+
+    Ok(PbcResultPy {
+        converged: res.converged,
+        iterations: res.iterations,
+        total_energy_per_cell_ev: res.total_energy_per_cell_ev,
+        electronic_energy_per_cell_ev: res.electronic_energy_per_cell_ev,
+        nuclear_repulsion_per_cell_ev: res.nuclear_repulsion_per_cell_ev,
+        heat_of_formation_kcal_mol: res.heat_of_formation_kcal_mol,
+        vbm_energy_ev: res.vbm_energy_ev,
+        cbm_energy_ev: res.cbm_energy_ev,
+        direct_bandgap_ev: res.direct_bandgap_ev,
+        indirect_bandgap_ev: res.indirect_bandgap_ev,
+        band_energies_ev: res.band_energies_ev,
+        dos_energies_ev: res.dos_energies_ev,
+        dos_values: res.dos_values,
+    })
+}
+
+/// Canonical OpenMOPAC Born-von Kármán Periodic Boundary Conditions SCF (`solrot.F90`).
+#[pyfunction]
+#[pyo3(signature = (
+    atomic_numbers,
+    coordinates,
+    translation_vectors,
+    method = "PM6",
+    max_iter = 100,
+    energy_tol = 1e-6,
+    density_tol = 1e-5
+))]
+pub fn pbc_solrot(
+    atomic_numbers: Vec<u8>,
+    coordinates: Vec<[f64; 3]>,
+    translation_vectors: Vec<[f64; 3]>,
+    method: Option<&str>,
+    max_iter: Option<usize>,
+    energy_tol: Option<f64>,
+    density_tol: Option<f64>,
+) -> PyResult<PbcResultPy> {
+    if atomic_numbers.is_empty() {
+        return Err(PyValueError::new_err("atomic_numbers must not be empty"));
+    }
+    if atomic_numbers.len() != coordinates.len() {
+        return Err(PyValueError::new_err(
+            "atomic_numbers and coordinates must have same length",
+        ));
+    }
+    if translation_vectors.is_empty() || translation_vectors.len() > 3 {
+        return Err(PyValueError::new_err(
+            "translation_vectors must have 1, 2, or 3 vectors",
+        ));
+    }
+
+    let model_str = method.unwrap_or("PM6");
+    let model = get_model(model_str)?;
+    let unit_cell =
+        UnitCell::from_translation_vectors(&translation_vectors).map_err(PyValueError::new_err)?;
+    let batch = MolecularBatch::new_for_model(atomic_numbers, &coordinates, model.as_ref());
+
+    let res = mopac_core::pbc::solrot::run_solrot_pbc_scf(
+        &batch,
+        model.as_ref(),
+        &unit_cell,
+        max_iter.unwrap_or(100),
+        energy_tol.unwrap_or(1e-6),
+        density_tol.unwrap_or(1e-5),
+    )
+    .map_err(PyValueError::new_err)?;
 
     Ok(PbcResultPy {
         converged: res.converged,
@@ -3352,8 +3476,8 @@ pub fn am1_bcc(
         coords_slice.push([row[0], row[1], row[2]]);
     }
 
-    let batch = MolecularBatch::new(atomic_numbers, &coords_slice);
     let model = get_model(method)?;
+    let batch = MolecularBatch::new_for_model(atomic_numbers, &coords_slice, model.as_ref());
     let mut ws = ScfWorkspace::allocate(batch.norbs);
     let scf_opts = ScfOptions {
         max_iter: 100,
@@ -4050,6 +4174,95 @@ pub fn bond_orders(
     })
 }
 
+/// Check whether a compatible Vulkan GPU compute device is available for hardware acceleration.
+#[pyfunction]
+pub fn is_gpu_available() -> bool {
+    mopac_gpu::VulkanContext::new().is_ok()
+}
+
+/// Retrieve diagnostic information about the detected Vulkan GPU device (or None if unavailable).
+#[pyfunction]
+pub fn gpu_device_info(py: Python<'_>) -> PyResult<Option<PyObject>> {
+    match mopac_gpu::VulkanContext::new() {
+        Ok(ctx) => {
+            let dict = pyo3::types::PyDict::new_bound(py);
+            dict.set_item("device_name", &ctx.device_info.device_name)?;
+            dict.set_item("is_discrete", ctx.device_info.is_discrete)?;
+            dict.set_item("supports_float64", ctx.device_info.supports_float64)?;
+            let api_ver_str = format!(
+                "{}.{}.{}",
+                ctx.device_info.api_version.0,
+                ctx.device_info.api_version.1,
+                ctx.device_info.api_version.2
+            );
+            dict.set_item("api_version", api_ver_str)?;
+            Ok(Some(dict.into()))
+        }
+        Err(_) => Ok(None),
+    }
+}
+
+/// Evaluates NxN pairwise Coulomb repulsion matrix on Vulkan GPU in FP64 or FP32.
+#[pyfunction]
+#[pyo3(signature = (atomic_numbers, coordinates, method = "AM1", fp32 = false))]
+pub fn compute_coulomb_matrix_gpu(
+    atomic_numbers: Vec<u8>,
+    coordinates: Vec<[f64; 3]>,
+    method: Option<&str>,
+    fp32: Option<bool>,
+) -> PyResult<Vec<Vec<f64>>> {
+    if atomic_numbers.is_empty() {
+        return Ok(vec![]);
+    }
+    if atomic_numbers.len() != coordinates.len() {
+        return Err(PyValueError::new_err(
+            "atomic_numbers and coordinates must have same length",
+        ));
+    }
+    let ctx = std::sync::Arc::new(
+        mopac_gpu::VulkanContext::new()
+            .map_err(|e| PyValueError::new_err(format!("Vulkan GPU unavailable: {}", e)))?,
+    );
+    let model_str = method.unwrap_or("AM1");
+    let model = get_model(model_str)?;
+    let batch = MolecularBatch::new_for_model(atomic_numbers, &coordinates, model.as_ref());
+    let n = batch.natoms;
+
+    let use_fp32 = fp32.unwrap_or(false);
+    if use_fp32 {
+        let calc = mopac_gpu::GpuCoulombCalculatorFP32::new(ctx)
+            .map_err(|e| PyValueError::new_err(format!("FP32 calculator failed: {}", e)))?;
+        let mat_f32 = calc
+            .compute_batch(&batch, model.as_ref())
+            .map_err(|e| PyValueError::new_err(format!("GPU compute failed: {}", e)))?;
+        let mut res = vec![vec![0.0f64; n]; n];
+        for (i, row) in res.iter_mut().enumerate().take(n) {
+            for (j, val) in row.iter_mut().enumerate().take(n) {
+                *val = mat_f32.get(i, j) as f64;
+            }
+        }
+        Ok(res)
+    } else {
+        if !ctx.device_info.supports_float64 {
+            return Err(PyValueError::new_err(
+                "GPU device does not support native Float64 precision (use fp32=True)",
+            ));
+        }
+        let calc = mopac_gpu::GpuCoulombCalculator::new(ctx)
+            .map_err(|e| PyValueError::new_err(format!("FP64 calculator failed: {}", e)))?;
+        let mat = calc
+            .compute_batch(&batch, model.as_ref())
+            .map_err(|e| PyValueError::new_err(format!("GPU compute failed: {}", e)))?;
+        let mut res = vec![vec![0.0f64; n]; n];
+        for (i, row) in res.iter_mut().enumerate().take(n) {
+            for (j, val) in row.iter_mut().enumerate().take(n) {
+                *val = mat.get(i, j);
+            }
+        }
+        Ok(res)
+    }
+}
+
 /// MOPAC_RS Python Module
 #[pymodule]
 fn mopac_py(m: &Bound<'_, PyModule>) -> PyResult<()> {
@@ -4086,6 +4299,10 @@ fn mopac_py(m: &Bound<'_, PyModule>) -> PyResult<()> {
     m.add_function(wrap_pyfunction!(meci, m)?)?;
     m.add_function(wrap_pyfunction!(uv_vis_spectrum, m)?)?;
     m.add_function(wrap_pyfunction!(pbc, m)?)?;
+    m.add_function(wrap_pyfunction!(pbc_solrot, m)?)?;
+    m.add_function(wrap_pyfunction!(is_gpu_available, m)?)?;
+    m.add_function(wrap_pyfunction!(gpu_device_info, m)?)?;
+    m.add_function(wrap_pyfunction!(compute_coulomb_matrix_gpu, m)?)?;
     m.add_function(wrap_pyfunction!(polarizability, m)?)?;
     m.add_function(wrap_pyfunction!(mozyme, m)?)?;
     m.add_function(wrap_pyfunction!(am1_bcc, m)?)?;

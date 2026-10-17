@@ -27,35 +27,23 @@ def run():
     print("MOPAC_PY v0.1.1: TIERS 2, 3, 4, 5 BENCHMARK EXECUTION")
     print("=" * 80)
 
-    # Load existing Tier 1 results
-    tier1_am1_bcc = {
-        "total_molecules": 1000,
-        "succeeded": 822,
-        "skipped_salts_inorganic": 68,
-        "scf_unconverged": 110,
-        "success_rate_pct": 82.2,
-        "wall_time_s": 739.60,
-        "throughput_mol_per_s": 1.11,
-        "mean_time_per_mol_ms": 7345.81,
-    }
+    # Load existing Tier 1 results from actual benchmark output if available
+    tier1_am1_bcc = None
+    tier1_pm6_cosmo = None
+    if os.path.exists(RESULTS_FILE):
+        try:
+            with open(RESULTS_FILE, "r") as f:
+                existing = json.load(f)
+                tier1_am1_bcc = existing.get("tier1_am1_bcc")
+                tier1_pm6_cosmo = existing.get("tier1_pm6_cosmo")
+        except Exception as e:
+            print(f"  [Warning] Could not load previous Tier 1 results from {RESULTS_FILE}: {e}")
 
-    tier1_pm6_cosmo = {
-        "sample_size": 250,
-        "succeeded": 228,
-        "success_rate_pct": 91.2,
-        "wall_time_s": 105.06,
-        "throughput_mol_per_s": 2.17,
-        "mean_time_per_mol_ms": 5903.59,
-        "mean_heat_of_formation_kcal": -1059.95,
-        "mean_gap_ev": 8.38,
-        "min_gap_ev": 2.07,
-        "max_gap_ev": 9.07,
-    }
-
-    bench_output = {
-        "tier1_am1_bcc": tier1_am1_bcc,
-        "tier1_pm6_cosmo": tier1_pm6_cosmo,
-    }
+    bench_output = {}
+    if tier1_am1_bcc is not None:
+        bench_output["tier1_am1_bcc"] = tier1_am1_bcc
+    if tier1_pm6_cosmo is not None:
+        bench_output["tier1_pm6_cosmo"] = tier1_pm6_cosmo
 
     # -------------------------------------------------------------------------
     # TIER 2: MULTI-HAMILTONIAN QUANTUM COMPARISON (ASPIRIN CID 2244)

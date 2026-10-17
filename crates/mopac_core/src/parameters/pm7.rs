@@ -1203,6 +1203,17 @@ impl Pm7Model {
     pub const V_PAR2: f64 = 6.024265; // C-C triple bond exponent
     pub const V_PAR3: f64 = -0.012037; // O-H scalar
     pub const V_PAR4: f64 = 0.701333; // O-H exponent
+
+    /// Retrieve Klopman-Ohno core radius override ($pocord$) in Bohr.
+    #[inline(always)]
+    pub fn get_pocord(z: u8) -> f64 {
+        for entry in PM7_D_ELEMENTS {
+            if entry.0 == z {
+                return entry.6;
+            }
+        }
+        0.0
+    }
 }
 
 /// PM7 d-orbital internal exponents and overrides: (z, zsn, zpn, zdn, f0sd, g2sd, pocord)
@@ -1353,6 +1364,16 @@ impl ParameterModel for Pm7Model {
         ))
     }
 
+    fn get_pocord(&self, z: u8) -> f64 {
+        Pm7Model::get_pocord(z)
+    }
+
+    /// Retrieve fundamental element parameters for PM7.
+    ///
+    /// Note on Gaussian Core Corrections in PM7:
+    /// In OpenMOPAC `parameters_for_PM7_C.F90`, Stewart parameterized core Gaussian corrections (`gues71`)
+    /// exclusively for elements H (1), C (6), N (7), O (8), and Bk (97). All other elements have 0 core
+    /// Gaussians by design in authentic PM7.
     fn get_element(&self, z: u8) -> Option<SemiEmpiricalElementParams> {
         match z {
             1 => Some(SemiEmpiricalElementParams {
@@ -4427,90 +4448,12 @@ impl ParameterModel for Pm7Model {
 }
 
 /// Compute pairwise core-core nuclear repulsion energy using PM7 formulation.
-/// Direct port of OpenMOPAC `ccrep.F90` lines 57-110.
+/// Direct port of OpenMOPAC `ccrep.F90` lines 57-121, 246-263.
+#[inline(always)]
 pub fn compute_pair_core_repulsion_pm7(
     r_angstrom: f64,
     elem_a: &SemiEmpiricalElementParams,
     elem_b: &SemiEmpiricalElementParams,
 ) -> f64 {
-    if r_angstrom < 1e-10 {
-        return 0.0;
-    }
-    let gab_base =
-        crate::integrals::two_electron::dewar_klopman_monopole(r_angstrom, elem_a.gss, elem_b.gss);
-
-    // PM7 feathering: smooth transition to exact point charge (OpenMOPAC to_point subroutine)
-    const TRUNC_1: f64 = 7.0;
-    const TRUNC_2: f64 = 0.22;
-    let gab = if r_angstrom < TRUNC_1 {
-        let dr = r_angstrom - TRUNC_1;
-        let c = 1.0 - (-dr * dr * TRUNC_2).exp();
-        let point = crate::constants::codata2018::EV_ANGSTROM_FACTOR / r_angstrom;
-        gab_base * c + (1.0 - c) * point
-    } else {
-        crate::constants::codata2018::EV_ANGSTROM_FACTOR / r_angstrom
-    };
-
-    let (mut abond, mut fff) = get_pm7_pair_params(elem_a.z, elem_b.z);
-
-    if fff < 1e-5 {
-        fff = 0.0;
-    }
-    if abond < 1e-6 {
-        abond = 1.2;
-    }
-
-    let z_min = elem_a.z.min(elem_b.z);
-    let z_max = elem_a.z.max(elem_b.z);
-
-    let scale = if z_min == 1 && (z_max == 6 || z_max == 7) {
-        // C-H, N-H interaction uses r^2
-        1.0 + 2.0 * fff * (-abond * r_angstrom * r_angstrom).exp()
-    } else if z_min == 1 && z_max == 8 {
-        // O-H interaction with par3 and par4 PM7 terms
-        1.0 + 2.0 * fff * (-abond * r_angstrom * r_angstrom).exp()
-            - Pm7Model::V_PAR3 * (-Pm7Model::V_PAR4 * r_angstrom * 2.0).exp()
-    } else if z_min == 6 && z_max == 6 {
-        // C-C interaction with triple bond correction
-        1.0 + 2.0 * fff * (-abond * (r_angstrom + 0.0003 * r_angstrom.powi(6))).exp()
-            + Pm7Model::V_PAR1 * (-Pm7Model::V_PAR2 * r_angstrom).exp()
-    } else if fff > 1e-5 {
-        1.0 + 2.0 * fff * (-abond * (r_angstrom + 0.0003 * r_angstrom.powi(6))).exp()
-    } else {
-        1.0 + 10.0 * (-2.18 * r_angstrom).exp()
-    };
-
-    let base_repulsion = elem_a.core_charge * elem_b.core_charge * gab * scale;
-
-    // PM7 Gaussian core corrections (if present)
-    let mut gaussian_sum = 0.0;
-    for k in 0..elem_a.num_gaussians {
-        let g = &elem_a.gaussians[k];
-        let dr = r_angstrom - g.c;
-        let exponent = g.b * dr * dr;
-        if exponent < 25.0 {
-            gaussian_sum += g.a * (-exponent).exp();
-        }
-    }
-    for k in 0..elem_b.num_gaussians {
-        let g = &elem_b.gaussians[k];
-        let dr = r_angstrom - g.c;
-        let exponent = g.b * dr * dr;
-        if exponent < 25.0 {
-            gaussian_sum += g.a * (-exponent).exp();
-        }
-    }
-
-    let gaussian_repulsion = (elem_a.core_charge * elem_b.core_charge / r_angstrom) * gaussian_sum;
-
-    // OpenMOPAC ccrep.F90 lines 246-263: unpolarizable core-core Lennard-Jones 12 term
-    let ax = r_angstrom / ((elem_a.z as f64).cbrt() + (elem_b.z as f64).cbrt());
-    let lj_core = if ax < 3.0 {
-        let val = 1e-8 / ax.powi(12);
-        val.min(1e5)
-    } else {
-        0.0
-    };
-
-    base_repulsion + gaussian_repulsion + lj_core
+    crate::integrals::core_repulsion::compute_pair_core_repulsion_pm7(r_angstrom, elem_a, elem_b)
 }

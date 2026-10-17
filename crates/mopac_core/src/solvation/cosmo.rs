@@ -120,22 +120,73 @@ impl CosmoState {
         let nseg = cavity.num_segments();
         assert!(nseg > 0, "COSMO cavity must contain at least one segment");
 
-        // 1. Construct electrostatic interaction matrix A
+        // 1. Construct electrostatic interaction matrix A with canonical fine element integration
         let mut a_mat = AlignedMatrix::zeroed(nseg, nseg);
         let fdiagr = 2.1 * PI.sqrt(); // 1.07 * sqrt(4*pi)
+        let disex2 = 4.0 * (1.7 * 4.0f64).powi(2) / 42.0; // 4.4038 A^2
 
         for i in 0..nseg {
             let si = &cavity.segments[i];
-            // Diagonal self-energy: A_ii = 2.1 * sqrt(pi) / sqrt(S_i)
-            a_mat.set(i, i, fdiagr / si.area.sqrt());
+            let nfl_i = si.fine_elements.len();
+
+            // Diagonal self-energy with fine element pairwise integration (mfinel / coscav)
+            let mut aa_diag = 0.0f64;
+            for k in 0..nfl_i {
+                let sk = si.fine_elements[k].area;
+                aa_diag += fdiagr * sk.powf(1.5);
+                let xk = si.fine_elements[k].position;
+                for l in 0..k {
+                    let sl = si.fine_elements[l].area;
+                    let xl = si.fine_elements[l].position;
+                    let dist = ((xk[0] - xl[0]).powi(2)
+                        + (xk[1] - xl[1]).powi(2)
+                        + (xk[2] - xl[2]).powi(2))
+                    .sqrt();
+                    if dist > 1e-12 {
+                        aa_diag += 2.0 * sk * sl / dist;
+                    }
+                }
+            }
+            let a_ii = if si.area > 1e-12 && aa_diag > 0.0 {
+                aa_diag / (si.area * si.area)
+            } else {
+                fdiagr / si.area.max(1e-6).sqrt()
+            };
+            a_mat.set(i, i, a_ii);
 
             for j in 0..i {
                 let sj = &cavity.segments[j];
                 let dx = si.position[0] - sj.position[0];
                 let dy = si.position[1] - sj.position[1];
                 let dz = si.position[2] - sj.position[2];
-                let dist = (dx * dx + dy * dy + dz * dz).sqrt();
-                let a_val = if dist > 1e-12 { 1.0 / dist } else { 0.0 };
+                let d2 = dx * dx + dy * dy + dz * dz;
+
+                let a_val = if d2 > disex2 {
+                    1.0 / d2.sqrt()
+                } else {
+                    let nfl_j = sj.fine_elements.len();
+                    if nfl_i > 0 && nfl_j > 0 {
+                        let mut aa_near = 0.0f64;
+                        for fk in &si.fine_elements {
+                            for fl in &sj.fine_elements {
+                                let dist = ((fk.position[0] - fl.position[0]).powi(2)
+                                    + (fk.position[1] - fl.position[1]).powi(2)
+                                    + (fk.position[2] - fl.position[2]).powi(2))
+                                .sqrt();
+                                if dist > 1e-12 {
+                                    aa_near += fk.area * fl.area / dist;
+                                }
+                            }
+                        }
+                        if si.area > 1e-12 && sj.area > 1e-12 {
+                            aa_near / (si.area * sj.area)
+                        } else {
+                            1.0 / d2.max(1e-6).sqrt()
+                        }
+                    } else {
+                        1.0 / d2.max(1e-6).sqrt()
+                    }
+                };
                 a_mat.set(i, j, a_val);
                 a_mat.set(j, i, a_val);
             }
@@ -390,10 +441,36 @@ impl CosmoState {
 
         let nseg = self.cavity.num_segments();
         let natoms = batch.natoms;
+        let norbs = batch.norbs;
         assert_eq!(gradients.len(), natoms);
+
+        // 0. Compute actual electronic screening charges corresponding to the provided density matrix
+        let mut phi_elec = vec![0.0f64; nseg];
+        for (k, phi_k) in phi_elec.iter_mut().enumerate().take(nseg) {
+            let mut phi = 0.0f64;
+            for mu in 0..norbs {
+                for nu in 0..norbs {
+                    let p_val = density.get(mu, nu);
+                    if p_val.abs() > 1e-12 {
+                        let b_val = self.b_matrix.get(mu * norbs + nu, k);
+                        phi -= b_val * p_val;
+                    }
+                }
+            }
+            *phi_k = phi;
+        }
+        let mut q_star = vec![0.0f64; nseg];
+        let mut scratch = vec![0.0f64; nseg];
+        solve_cholesky_system(&self.l_cholesky, &phi_elec, &mut q_star, &mut scratch);
+        let mut q_elec = vec![0.0f64; nseg];
+        for k in 0..nseg {
+            q_elec[k] = -fepsi * q_star[k];
+        }
 
         // Precompute solute net atomic charges: Q_A = Z_core_A - sum_{mu in A} P_{mu, mu}
         let mut net_charges = vec![0.0f64; natoms];
+        // Precompute solute atomic dipoles from sp hybridization
+        let mut atomic_dipoles = vec![[0.0f64; 3]; natoms];
         for (a, net_charge) in net_charges.iter_mut().enumerate() {
             let z = batch.atomic_numbers[a];
             let z_core = model.get_element(z).map(|p| p.core_charge).unwrap_or(0.0);
@@ -404,19 +481,31 @@ impl CosmoState {
                 p_pop += density.get(orb_offset + mu, orb_offset + mu);
             }
             *net_charge = z_core - p_pop;
+
+            if num_ao >= 4 {
+                if let Some(elem) = model.get_element(z) {
+                    let mp =
+                        crate::integrals::multipoles::DerivedMultipoleParams::from_element(&elem);
+                    let d1 = mp.dd * crate::constants::codata2018::BOHR_RADIUS_ANGSTROMS;
+                    let mux = 2.0 * density.get(orb_offset, orb_offset + 1) * d1;
+                    let muy = 2.0 * density.get(orb_offset, orb_offset + 2) * d1;
+                    let muz = 2.0 * density.get(orb_offset, orb_offset + 3) * d1;
+                    atomic_dipoles[a] = [mux, muy, muz];
+                }
+            }
         }
 
         // 1. Conductor screening charge segment-segment forces
-        for k in 0..nseg {
+        for (k, &q_elec_k) in q_elec.iter().enumerate().take(nseg) {
             let iak = self.cavity.segments[k].atom_index;
             let xk = self.cavity.segments[k].position;
-            let qsk = self.q_nuc[k] + self.q_elec[k];
+            let qsk = self.q_nuc[k] + q_elec_k;
 
-            for l in 0..k {
+            for (l, &q_elec_l) in q_elec.iter().enumerate().take(k) {
                 let ial = self.cavity.segments[l].atom_index;
                 if ial != iak {
                     let xl = self.cavity.segments[l].position;
-                    let qsl = self.q_nuc[l] + self.q_elec[l];
+                    let qsl = self.q_nuc[l] + q_elec_l;
 
                     let dx = xl[0] - xk[0];
                     let dy = xl[1] - xk[1];
@@ -439,11 +528,11 @@ impl CosmoState {
             }
         }
 
-        // 2. Segment-atom electrostatic forces
-        for k in 0..nseg {
+        // 2. Segment-atom electrostatic forces (monopole + multipolar dB derivatives)
+        for (k, &q_elec_k) in q_elec.iter().enumerate().take(nseg) {
             let iak = self.cavity.segments[k].atom_index;
             let xk = self.cavity.segments[k].position;
-            let qsk = self.q_nuc[k] + self.q_elec[k];
+            let qsk = self.q_nuc[k] + q_elec_k;
 
             for j in 0..natoms {
                 if j != iak {
@@ -455,9 +544,11 @@ impl CosmoState {
 
                     if dist2 > 1e-10 {
                         let dist3 = dist2 * dist2.sqrt();
+                        let dist5 = dist3 * dist2;
                         let ff0 = -qsk * (-A0_EV) / dist3;
                         let ff = -ff0 * net_charges[j];
 
+                        // Monopole force
                         gradients[iak][0] += dx * ff;
                         gradients[iak][1] += dy * ff;
                         gradients[iak][2] += dz * ff;
@@ -465,6 +556,22 @@ impl CosmoState {
                         gradients[j][0] -= dx * ff;
                         gradients[j][1] -= dy * ff;
                         gradients[j][2] -= dz * ff;
+
+                        // Multipolar dipole force (dB derivative)
+                        let mu = atomic_dipoles[j];
+                        let mu_dot_r = mu[0] * dx + mu[1] * dy + mu[2] * dz;
+                        let factor = qsk * A0_EV;
+                        let f_dip_x = factor * (mu[0] / dist3 - 3.0 * mu_dot_r * dx / dist5);
+                        let f_dip_y = factor * (mu[1] / dist3 - 3.0 * mu_dot_r * dy / dist5);
+                        let f_dip_z = factor * (mu[2] / dist3 - 3.0 * mu_dot_r * dz / dist5);
+
+                        gradients[iak][0] += f_dip_x;
+                        gradients[iak][1] += f_dip_y;
+                        gradients[iak][2] += f_dip_z;
+
+                        gradients[j][0] -= f_dip_x;
+                        gradients[j][1] -= f_dip_y;
+                        gradients[j][2] -= f_dip_z;
                     }
                 }
             }

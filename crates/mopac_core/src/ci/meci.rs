@@ -260,16 +260,25 @@ pub fn generate_microstates(
     microstates
 }
 
-/// Compute one-center two-electron integral matrix for a given atom in SP basis.
-fn get_one_center_integrals_sp(
-    gss: f64,
-    gsp: f64,
-    gpp: f64,
-    gp2: f64,
-    hsp: f64,
-) -> [[f64; 10]; 10] {
-    let mut w = [[0.0f64; 10]; 10];
+/// Compute one-center two-electron integral matrix for a given atom in S, SP, or SPD basis (up to 45 pairs).
+fn get_one_center_integrals(
+    elem: &crate::parameters::SemiEmpiricalElementParams,
+    norbs: usize,
+) -> Vec<Vec<f64>> {
+    let num_pairs = (norbs * (norbs + 1)) / 2;
+    let mut w = vec![vec![0.0f64; num_pairs]; num_pairs];
+    if norbs == 1 {
+        w[0][0] = elem.gss;
+        return w;
+    }
 
+    let gss = elem.gss;
+    let gsp = elem.gsp;
+    let gpp = elem.gpp;
+    let gp2 = elem.gp2;
+    let hsp = elem.hsp;
+
+    // Standard SP 10x10 block
     w[0][0] = gss;
 
     w[0][2] = gsp;
@@ -299,6 +308,66 @@ fn get_one_center_integrals_sp(
     w[7][7] = g_exch_p;
     w[8][8] = g_exch_p;
 
+    if norbs >= 9 {
+        // Extended 45x45 block for d-orbitals (SPD)
+        let gdd = gpp;
+        let gd2 = gp2;
+        let g_exch_d = 0.5 * (gdd - gd2);
+
+        // Diagonal d-d Coulomb (d_k d_k | d_k d_k)
+        let d_diag_indices = [14, 20, 27, 35, 44];
+        for &idx in &d_diag_indices {
+            w[idx][idx] = gdd;
+        }
+
+        // Off-diagonal d-d Coulomb (d_k d_k | d_l d_l)
+        for i in 0..5 {
+            for j in 0..i {
+                let idx1 = d_diag_indices[i];
+                let idx2 = d_diag_indices[j];
+                w[idx1][idx2] = gd2;
+                w[idx2][idx1] = gd2;
+            }
+        }
+
+        // s-d Coulomb: (s s | d_k d_k)
+        for &idx in &d_diag_indices {
+            w[0][idx] = gsp;
+            w[idx][0] = gsp;
+        }
+
+        // p-d Coulomb: (p_k p_k | d_l d_l)
+        let p_diag_indices = [2, 5, 9];
+        for &pidx in &p_diag_indices {
+            for &didx in &d_diag_indices {
+                w[pidx][didx] = gp2;
+                w[didx][pidx] = gp2;
+            }
+        }
+
+        // Exchange terms (d_k d_l | d_k d_l)
+        for r in 4..9 {
+            for c in 4..r {
+                let idx = (r * (r + 1)) / 2 + c;
+                w[idx][idx] = g_exch_d;
+            }
+        }
+
+        // s-d exchange (s d_k | s d_k)
+        for r in 4..9 {
+            let idx = (r * (r + 1)) / 2;
+            w[idx][idx] = hsp;
+        }
+
+        // p-d exchange (p_k d_l | p_k d_l)
+        for r in 4..9 {
+            for c in 1..=3 {
+                let idx = (r * (r + 1)) / 2 + c;
+                w[idx][idx] = g_exch_p;
+            }
+        }
+    }
+
     w
 }
 
@@ -318,21 +387,21 @@ pub fn compute_active_mo_two_electron_integrals(
     let natoms = batch.natoms;
     let num_pairs = (m * (m + 1)) / 2;
 
-    // Precompute one-center integral matrices for all atoms
+    // Precompute one-center integral matrices for all atoms (S: 1, SP: 10, SPD: 45 pairs)
     let mut one_center_w = Vec::with_capacity(natoms);
     for a in 0..natoms {
         let z = batch.atomic_numbers[a];
+        let norbs = batch.basis_types[a].num_orbitals();
         if let Some(p) = model.get_element(z) {
-            one_center_w.push(get_one_center_integrals_sp(
-                p.gss, p.gsp, p.gpp, p.gp2, p.hsp,
-            ));
+            one_center_w.push(get_one_center_integrals(&p, norbs));
         } else {
-            one_center_w.push([[0.0; 10]; 10]);
+            let num_ao_pairs = (norbs * (norbs + 1)) / 2;
+            one_center_w.push(vec![vec![0.0; num_ao_pairs]; num_ao_pairs]);
         }
     }
 
     // Precompute atomic transition pair densities C_A^{ij}(r, c) for each active MO pair (i, j) with i >= j
-    // For atom A: if SP, length is 10; if H (S), length is 1.
+    // For atom A: if SP, length is 10; if H (S), length is 1; if SPD, length is 45.
     // Length per atom: (norb_A * (norb_A + 1)) / 2.
     let mut mo_pair_densities: Vec<Vec<Vec<f64>>> = Vec::with_capacity(num_pairs);
 
@@ -406,28 +475,21 @@ pub fn compute_active_mo_two_electron_integrals(
 
                     let mut val = 0.0f64;
 
-                    // 1. One-center contributions: sum over all atoms A
+                    // 1. One-center contributions: sum over all atoms A (S: 1, SP: 10, SPD: 45 pairs)
                     for a in 0..natoms {
                         let norb_a = batch.basis_types[a].num_orbitals();
                         let cp_a = &dens_p[a];
                         let cq_a = &dens_q[a];
 
-                        if norb_a == 1 {
-                            // S-orbital (Hydrogen): (ss|ss) = gss
-                            let z = batch.atomic_numbers[a];
-                            let gss = model.get_element(z).map(|p| p.gss).unwrap_or(0.0);
-                            val += cp_a[0] * cq_a[0] * gss;
-                        } else if norb_a >= 4 {
-                            // SP basis: 10x10 matrix contraction
-                            let w_aa = &one_center_w[a];
-                            for r in 0..10 {
-                                let cp_r = cp_a[r];
-                                if cp_r.abs() < 1e-15 {
-                                    continue;
-                                }
-                                for c in 0..10 {
-                                    val += cp_r * w_aa[r][c] * cq_a[c];
-                                }
+                        let num_ao_pairs = (norb_a * (norb_a + 1)) / 2;
+                        let w_aa = &one_center_w[a];
+                        for r in 0..num_ao_pairs {
+                            let cp_r = cp_a[r];
+                            if cp_r.abs() < 1e-15 {
+                                continue;
+                            }
+                            for c in 0..num_ao_pairs {
+                                val += cp_r * w_aa[r][c] * cq_a[c];
                             }
                         }
                     }
@@ -1139,12 +1201,27 @@ pub fn run_meci(
         });
     }
 
-    // Filter by spin target if requested
-    let target_root_clamped = options.target_root.clamp(1, states.len());
-    let target_state = &states[target_root_clamped - 1];
-
-    // CI electronic energy correction = E_CI(target_root) (since E_CI is already relative to ground ref)
-    let ci_energy_corr_ev = target_state.energy_ev;
+    // Filter by spin target if requested (e.g. Some(1) = Singlets, Some(3) = Triplets)
+    let (target_root, ci_energy_corr_ev, target_eigenvector) =
+        if let Some(target_mult) = options.spin_target {
+            let matching: Vec<&CiState> = states
+                .iter()
+                .filter(|s| s.spin.multiplicity == target_mult)
+                .collect();
+            if !matching.is_empty() {
+                let idx = (options.target_root.max(1) - 1).min(matching.len() - 1);
+                let s = matching[idx];
+                (s.root, s.energy_ev, s.eigenvector.clone())
+            } else {
+                let root_idx = options.target_root.clamp(1, states.len()) - 1;
+                let s = &states[root_idx];
+                (s.root, s.energy_ev, s.eigenvector.clone())
+            }
+        } else {
+            let root_idx = options.target_root.clamp(1, states.len()) - 1;
+            let s = &states[root_idx];
+            (s.root, s.energy_ev, s.eigenvector.clone())
+        };
     let final_elec_energy_ev = scf_electronic_energy_ev + ci_energy_corr_ev;
     let final_total_energy_ev = scf_total_energy_ev + ci_energy_corr_ev;
 
@@ -1173,7 +1250,7 @@ pub fn run_meci(
         eigenvectors,
         &active_mo_indices,
         &microstates,
-        &target_state.eigenvector,
+        &target_eigenvector,
         &workspace.occa[..m],
         Some(&scf_density),
     );
@@ -1181,7 +1258,7 @@ pub fn run_meci(
     MeciResult {
         states,
         microstates,
-        target_root: target_root_clamped,
+        target_root,
         ci_energy_correction_ev: ci_energy_corr_ev,
         electronic_energy_ev: final_elec_energy_ev,
         total_energy_ev: final_total_energy_ev,

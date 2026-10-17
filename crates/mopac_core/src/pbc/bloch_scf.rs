@@ -447,9 +447,9 @@ pub fn run_pbc_scf(
             let mut p_k_re = vec![0.0f64; norbs_cell * norbs_cell];
             let mut p_k_im = vec![0.0f64; norbs_cell * norbs_cell];
 
-            for occ_idx in 0..n_occ {
-                let col = 2 * occ_idx;
-
+            // Symplectic pairing for degenerate bands: sum over all 2 * n_occ eigenvectors of the 2N x 2N embedding.
+            // Closed-shell occupancy factor of 2.0 divided by 2 symplectic copies yields a factor of 1.0.
+            for col in 0..(2 * n_occ) {
                 for mu in 0..norbs_cell {
                     let u_mu = workspace.embed_eigenvectors.get(mu, col);
                     let v_mu = workspace.embed_eigenvectors.get(norbs_cell + mu, col);
@@ -461,8 +461,8 @@ pub fn run_pbc_scf(
                         // c_mu * conj(c_nu) = (u_mu + i v_mu) * (u_nu - i v_nu)
                         // Real part: u_mu * u_nu + v_mu * v_nu
                         // Imag part: v_mu * u_nu - u_mu * v_nu
-                        let re_term = 2.0 * (u_mu * u_nu + v_mu * v_nu);
-                        let im_term = 2.0 * (v_mu * u_nu - u_mu * v_nu);
+                        let re_term = u_mu * u_nu + v_mu * v_nu;
+                        let im_term = v_mu * u_nu - u_mu * v_nu;
 
                         p_k_re[mu * norbs_cell + nu] += re_term;
                         p_k_im[mu * norbs_cell + nu] += im_term;

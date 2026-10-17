@@ -274,6 +274,18 @@ fn test_core_hamiltonian_ch3cl_pm6() {
         0.0,
     );
     println!("[CH3Cl PM6 Hf] = {:.5} kcal/mol", hof);
+    assert!(scf_res.converged, "CH3Cl PM6 SCF must converge");
+    // Canonical OpenMOPAC v23.2.5 reference: Total Energy = -417.94788 eV, Hf = -14.99767 kcal/mol
+    assert!(
+        (scf_res.total_energy_ev - (-417.94788)).abs() < 1e-4,
+        "CH3Cl PM6 total energy mismatch: got {}",
+        scf_res.total_energy_ev
+    );
+    assert!(
+        (hof - (-14.99767)).abs() < 1e-3,
+        "CH3Cl PM6 Heat of formation mismatch: got {}",
+        hof
+    );
 }
 
 #[test]
@@ -319,6 +331,22 @@ fn test_core_hamiltonian_cc61_pm3() {
         ws.h_core.get(6, 4)
     );
 
+    assert!(
+        (ws.h_core.get(6, 0) - (-1.160351)).abs() < 1e-5,
+        "H_core(C 2s, Br 4s) deviated from OpenMOPAC: {}",
+        ws.h_core.get(6, 0)
+    );
+    assert!(
+        (ws.h_core.get(6, 3) - 0.624075).abs() < 1e-5,
+        "H_core(C 2pz, Br 4s) deviated from OpenMOPAC: {}",
+        ws.h_core.get(6, 3)
+    );
+    assert!(
+        (ws.h_core.get(6, 4) - (-0.444908)).abs() < 1e-5,
+        "H_core(H 1s, Br 4s) deviated from OpenMOPAC: {}",
+        ws.h_core.get(6, 4)
+    );
+
     let opts = ScfOptions {
         use_nddo: true,
         reuse_density: true,
@@ -358,6 +386,12 @@ fn test_core_hamiltonian_cc61_pm3() {
     );
     println!(
         "[cc-61 PM3 Hf with atomic guess] = {:.5} kcal/mol (OpenMOPAC = 12.16934 kcal/mol)",
+        hof
+    );
+    assert!(res.converged, "cc-61 PM3 SCF must converge");
+    assert!(
+        (hof - 12.16934).abs() < 1e-4,
+        "cc-61 PM3 HoF deviated from OpenMOPAC: {}",
         hof
     );
 }

@@ -148,6 +148,9 @@ pub fn optimize_geometry_lbfgs(
     let initial_energy = current_energy;
 
     let mut gradients_3d = vec![[0.0f64; 3]; natoms];
+    let initial_cosmo_state = options
+        .cosmo
+        .and_then(|p| crate::solvation::CosmoState::initialize(batch, model, p).ok());
     compute_cartesian_gradients_full(
         batch,
         model,
@@ -155,7 +158,7 @@ pub fn optimize_geometry_lbfgs(
         grad_ws,
         &mut gradients_3d,
         options.use_nddo,
-        None,
+        initial_cosmo_state.as_ref(),
     );
 
     // Apply optimization mask: zero out gradients on frozen degrees of freedom
@@ -311,6 +314,9 @@ pub fn optimize_geometry_lbfgs(
         let new_energy = scf_res.total_energy_ev;
         last_scf = scf_res;
 
+        let iter_cosmo_state = options
+            .cosmo
+            .and_then(|p| crate::solvation::CosmoState::initialize(batch, model, p).ok());
         compute_cartesian_gradients_full(
             batch,
             model,
@@ -318,7 +324,7 @@ pub fn optimize_geometry_lbfgs(
             grad_ws,
             &mut gradients_3d,
             options.use_nddo,
-            None,
+            iter_cosmo_state.as_ref(),
         );
 
         // Apply optimization mask to trial gradients

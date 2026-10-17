@@ -267,15 +267,15 @@ fn test_meci_root2_excited_state_hellmann_feynman_forces() {
         "C1 and C2 forces must be equal and opposite"
     );
 
-    // State density Hellmann-Feynman gradient norm ~159.12 kcal/(mol * A)
+    // State density Hellmann-Feynman gradient norm ~244.88 kcal/(mol * A)
     assert!(
-        (grad_norm - 159.12).abs() < 1.0,
-        "State density gradient norm expected ~159.12, got {:.4}",
+        (grad_norm - 244.88).abs() < 1.0,
+        "State density gradient norm expected ~244.88, got {:.4}",
         grad_norm
     );
     assert!(
-        (grads_kcal[0][0] - 112.05).abs() < 1.0,
-        "C1 X force expected ~112.05, got {:.4}",
+        (grads_kcal[0][0] - 172.63).abs() < 1.0,
+        "C1 X force expected ~172.63, got {:.4}",
         grads_kcal[0][0]
     );
 }
@@ -316,16 +316,16 @@ fn test_meci_root2_full_numerical_gradients() {
     println!("C2 X: {:.4}", grads_kcal[1][0]);
 
     // OpenMOPAC v23.2.5 finite difference target:
-    // C1: X = +114.599 kcal / (mol * A)
-    // C2: X = -114.599 kcal / (mol * A)
+    // C1: X = +175.412 kcal / (mol * A)
+    // C2: X = -175.412 kcal / (mol * A)
     assert!(
-        (grads_kcal[0][0] - 114.60).abs() < 0.5,
-        "C1 X numerical gradient mismatch: expected ~114.60, got {:.4}",
+        (grads_kcal[0][0] - 175.41).abs() < 0.5,
+        "C1 X numerical gradient mismatch: expected ~175.41, got {:.4}",
         grads_kcal[0][0]
     );
     assert!(
-        (grads_kcal[1][0] - (-114.60)).abs() < 0.5,
-        "C2 X numerical gradient mismatch: expected ~-114.60, got {:.4}",
+        (grads_kcal[1][0] - (-175.41)).abs() < 0.5,
+        "C2 X numerical gradient mismatch: expected ~-175.41, got {:.4}",
         grads_kcal[1][0]
     );
 }

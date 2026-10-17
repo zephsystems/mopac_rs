@@ -46,6 +46,7 @@ pub fn evaluate_fock_elements(
 
 /// Perform a 2x2 unitary Jacobi rotation between occupied LMO phi_i and virtual LMO phi_a.
 pub fn rotate_lmo_pair(
+    batch: &MolecularBatch,
     lmo_i: &mut Lmo,
     lmo_a: &mut Lmo,
     f_ii: f64,
@@ -124,21 +125,64 @@ pub fn rotate_lmo_pair(
         *val /= norm_a;
     }
 
-    // Exact 2D unitary rotation
-    let mut c_i_new = Vec::with_capacity(all_aos.len());
-    let mut c_a_new = Vec::with_capacity(all_aos.len());
+    // Exact 2D unitary rotation with insignificant coefficient pruning (< 1e-6)
+    let mut pruned_i_aos = Vec::new();
+    let mut pruned_i_coeffs = Vec::new();
+    let mut pruned_a_aos = Vec::new();
+    let mut pruned_a_coeffs = Vec::new();
+
     for k in 0..all_aos.len() {
-        let ci = c_i_full[k];
-        let ca = c_a_full[k];
-        c_i_new.push(cos_t * ci + sin_t * ca);
-        c_a_new.push(-sin_t * ci + cos_t * ca);
+        let ci = cos_t * c_i_full[k] + sin_t * c_a_full[k];
+        let ca = -sin_t * c_i_full[k] + cos_t * c_a_full[k];
+        if ci.abs() >= 1e-6 {
+            pruned_i_aos.push(all_aos[k]);
+            pruned_i_coeffs.push(ci);
+        }
+        if ca.abs() >= 1e-6 {
+            pruned_a_aos.push(all_aos[k]);
+            pruned_a_coeffs.push(ca);
+        }
     }
 
-    lmo_i.ao_indices = all_aos.clone();
-    lmo_i.coeffs = c_i_new;
+    if pruned_i_aos.is_empty() {
+        let (max_k, &max_val) = c_i_full
+            .iter()
+            .enumerate()
+            .max_by(|a, b| a.1.abs().partial_cmp(&b.1.abs()).unwrap())
+            .unwrap();
+        pruned_i_aos.push(all_aos[max_k]);
+        pruned_i_coeffs.push(max_val);
+    }
+    if pruned_a_aos.is_empty() {
+        let (max_k, &max_val) = c_a_full
+            .iter()
+            .enumerate()
+            .max_by(|a, b| a.1.abs().partial_cmp(&b.1.abs()).unwrap())
+            .unwrap();
+        pruned_a_aos.push(all_aos[max_k]);
+        pruned_a_coeffs.push(max_val);
+    }
 
-    lmo_a.ao_indices = all_aos;
-    lmo_a.coeffs = c_a_new;
+    let norm_i_pruned: f64 = pruned_i_coeffs.iter().map(|&x| x * x).sum::<f64>().sqrt();
+    if norm_i_pruned > 1e-14 {
+        for val in &mut pruned_i_coeffs {
+            *val /= norm_i_pruned;
+        }
+    }
+    let norm_a_pruned: f64 = pruned_a_coeffs.iter().map(|&x| x * x).sum::<f64>().sqrt();
+    if norm_a_pruned > 1e-14 {
+        for val in &mut pruned_a_coeffs {
+            *val /= norm_a_pruned;
+        }
+    }
+
+    lmo_i.ao_indices = pruned_i_aos;
+    lmo_i.coeffs = pruned_i_coeffs;
+    lmo_i.update_atom_indices_from_aos(batch);
+
+    lmo_a.ao_indices = pruned_a_aos;
+    lmo_a.coeffs = pruned_a_coeffs;
+    lmo_a.update_atom_indices_from_aos(batch);
 }
 
 /// Execute one complete 2x2 Jacobi rotation sweep across all interacting (occ, virt) LMO pairs.
@@ -167,7 +211,7 @@ pub fn execute_jacobi_sweep(
             }
 
             if grad > options.jacobi_tol {
-                rotate_lmo_pair(occ, virt, f_ii, f_aa, f_ia, options.damping);
+                rotate_lmo_pair(batch, occ, virt, f_ii, f_aa, f_ia, options.damping);
                 rotation_count += 1;
             }
         }

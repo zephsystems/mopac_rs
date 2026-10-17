@@ -6,7 +6,7 @@
 //!
 //! Also directly cross-referenced with MOPAC Fortran `src/matrix/interp.F90`.
 
-use crate::scf::eigensolver::diagonalize_symmetric;
+use crate::scf::eigensolver::diagonalize_symmetric_submatrix_with_work;
 use crate::types::{AlignedMatrix, AlignedVec64};
 
 /// Pre-allocated workspace for the Camp-King line search interpolator.
@@ -181,26 +181,29 @@ pub fn interpolate_camp_king(
 
     // 2. Form occupied-virtual metric H = U_occ,virt * U_occ,virt^T
     // Dim: nocc x nocc. Element H_ij = sum_{a = nocc..norbs} U_ia * U_ja
-    let mut h_mat = AlignedMatrix::zeroed(nocc, nocc);
     for i in 0..nocc {
         for j in 0..nocc {
             let mut sum = 0.0;
             for a in nocc..norbs {
                 sum += ws.u.get(i, a) * ws.u.get(j, a);
             }
-            h_mat.set(i, j, sum);
+            ws.h.set(i, j, sum);
         }
     }
 
-    // 3. Diagonalize H to determine principal orbital rotation angles theta_k
-    let mut h_evals = AlignedVec64::zeroed(nocc);
-    let mut h_evecs = AlignedMatrix::zeroed(nocc, nocc);
-    diagonalize_symmetric(&h_mat, &mut h_evals, &mut h_evecs);
+    // 3. Diagonalize H submatrix using preallocated workspace to determine principal orbital rotation angles theta_k
+    diagonalize_symmetric_submatrix_with_work(
+        &ws.h,
+        nocc,
+        &mut ws.tmp,
+        &mut ws.h_evals[..nocc],
+        &mut ws.h_evecs,
+    );
 
     // Sorted in ascending order by diagonalize_symmetric: largest eigenvalues are at the end
     // Reverse so theta_0 is the maximum rotation angle
     for k in 0..min_pq {
-        let val = h_evals[nocc - 1 - k].clamp(0.0, 1.0);
+        let val = ws.h_evals[nocc - 1 - k].clamp(0.0, 1.0);
         ws.theta[k] = val.sqrt().asin();
     }
 
@@ -223,7 +226,7 @@ pub fn interpolate_camp_king(
             let orig_idx = nocc - 1 - k;
             let mut sum = 0.0;
             for i in 0..nocc {
-                sum += c_curr.get(mu, i) * h_evecs.get(i, orig_idx);
+                sum += c_curr.get(mu, i) * ws.h_evecs.get(i, orig_idx);
             }
             ws.c_corr.set(mu, k, sum);
         }
@@ -243,7 +246,7 @@ pub fn interpolate_camp_king(
                 for a in 0..nvirt {
                     let mut u_proj = 0.0;
                     for i in 0..nocc {
-                        u_proj += ws.u.get(i, nocc + a) * h_evecs.get(i, orig_idx);
+                        u_proj += ws.u.get(i, nocc + a) * ws.h_evecs.get(i, orig_idx);
                     }
                     sum += c_curr.get(mu, nocc + a) * u_proj;
                 }

@@ -34,20 +34,20 @@ pub fn compute_coulomb_ri(
             let p_val = density.get(lam, sig);
             if p_val.abs() > 1e-15 {
                 let slice = b.pair_slice(lam, sig);
-                for q in 0..naux {
-                    d_aux[q] += slice[q] * p_val;
+                for (dq, &sq) in d_aux.iter_mut().zip(slice.iter()) {
+                    *dq += sq * p_val;
                 }
             }
         }
     }
 
-    // 2. Compute J_mu_nu = sum_Q B_mu_nu^Q d_Q
+    // 2. Compute J_mu_nu = sum_Q B_mu_nu^Q d_Q via SIMD vector dot product
     for mu in 0..norbs {
         for nu in 0..norbs {
             let slice = b.pair_slice(mu, nu);
             let mut sum = 0.0;
-            for q in 0..naux {
-                sum += slice[q] * d_aux[q];
+            for (&sq, &dq) in slice.iter().zip(d_aux.iter()) {
+                sum += sq * dq;
             }
             j_matrix.set(mu, nu, sum);
         }
@@ -58,7 +58,7 @@ pub fn compute_coulomb_ri(
 /// using RI-V tensor contraction in $O(M^3 N_{\text{aux}})$ time.
 ///
 /// Steps for each auxiliary index $Q \in 1..N_{\text{aux}}$:
-/// 1. $W^Q = B^Q P$ (Matrix Multiplication GEMM)
+/// 1. $W^Q = B^Q P$ (Matrix Multiplication GEMM with contiguous row streaming)
 /// 2. $K = \sum_Q W^Q (B^Q)^T$ (Matrix Multiplication GEMM)
 pub fn compute_exchange_ri(
     b: &ThreeCenterTensorB,
@@ -78,25 +78,31 @@ pub fn compute_exchange_ri(
     k_matrix.fill_zero();
 
     for q in 0..naux {
-        // Step 1: W^Q = B^Q * P
+        // Step 1: W^Q = B^Q * P with cache-friendly row-major accumulation
+        w_mat.fill_zero();
         for mu in 0..norbs {
-            for sig in 0..norbs {
-                let mut sum = 0.0;
-                for lam in 0..norbs {
-                    sum += b.get(mu, lam, q) * density.get(lam, sig);
+            for lam in 0..norbs {
+                let b_val = b.get(mu, lam, q);
+                if b_val.abs() > 1e-15 {
+                    let p_row = density.row(lam);
+                    let w_row = w_mat.row_mut(mu);
+                    for sig in 0..norbs {
+                        w_row[sig] += b_val * p_row[sig];
+                    }
                 }
-                w_mat.set(mu, sig, sum);
             }
         }
 
         // Step 2: Accumulate into K: K_mu_nu += sum_sigma W_mu_sigma^Q * B_nu_sigma^Q
         for mu in 0..norbs {
+            let w_row = w_mat.row(mu);
             for nu in 0..norbs {
                 let mut sum = 0.0;
-                for sig in 0..norbs {
-                    sum += w_mat.get(mu, sig) * b.get(nu, sig, q);
+                for (sig, &w) in w_row.iter().enumerate().take(norbs) {
+                    sum += w * b.get(nu, sig, q);
                 }
-                k_matrix.set(mu, nu, k_matrix.get(mu, nu) + sum);
+                let cur = k_matrix.get(mu, nu);
+                k_matrix.set(mu, nu, cur + sum);
             }
         }
     }

@@ -87,6 +87,19 @@ impl Lmo {
         }
         false
     }
+
+    /// Update atom_indices based on current ao_indices and MolecularBatch.
+    pub fn update_atom_indices_from_aos(&mut self, batch: &crate::types::MolecularBatch) {
+        let mut atoms = Vec::new();
+        for &ao in &self.ao_indices {
+            let at = batch.atom_of_orbital(ao);
+            if !atoms.contains(&at) {
+                atoms.push(at);
+            }
+        }
+        atoms.sort_unstable();
+        self.atom_indices = atoms;
+    }
 }
 
 /// A covalent bond detected between two atoms.
