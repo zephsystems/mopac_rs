@@ -151,7 +151,7 @@ pub fn run_uhf_scf_with_options(
         msdel
     );
     assert!(
-        (nelecs - msdel).is_multiple_of(2),
+        (nelecs - msdel) % 2 == 0,
         "Electron count ({}) is incompatible with spin multiplicity ({})",
         nelecs,
         mult

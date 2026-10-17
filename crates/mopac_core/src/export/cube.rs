@@ -482,7 +482,7 @@ pub fn generate_molecular_orbital_cube(
                     out.push('\n');
                 }
             }
-            if !nz.is_multiple_of(6) {
+            if nz % 6 != 0 {
                 out.push('\n');
             }
         }
@@ -686,7 +686,7 @@ pub fn generate_density_cube(
                     out.push('\n');
                 }
             }
-            if !nz.is_multiple_of(6) {
+            if nz % 6 != 0 {
                 out.push('\n');
             }
         }

@@ -1,5 +1,7 @@
 //! Empirical unit tests for Molstar export formats (SDF, Multi-Model XYZ, Gaussian Cube).
 
+#![allow(clippy::manual_is_multiple_of)]
+
 use mopac_core::export::*;
 use mopac_core::parameters::Pm6Model;
 use mopac_core::scf::scf_loop::run_rhf_scf_adaptive_with_nddo;
@@ -248,7 +250,7 @@ fn test_cube_line_length_exact_6_and_z_ray_delimiters() {
                 line_idx
             );
         } else {
-            let remainder = if nz.is_multiple_of(6) { 6 } else { nz % 6 };
+            let remainder = if nz % 6 == 0 { 6 } else { nz % 6 };
             assert_eq!(
                 tokens.len(),
                 remainder,

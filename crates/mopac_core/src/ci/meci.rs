@@ -1327,7 +1327,7 @@ pub fn compute_ci_state_density(
                     }
                     ij += (microstates[id].alpha[j] + microstates[id].beta[j]) as usize;
                 }
-                let phase = if ij.is_multiple_of(2) { 1.0 } else { -1.0 };
+                let phase = if ij % 2 == 0 { 1.0 } else { -1.0 };
                 let coeff_prod = ci_eigenvector[id] * ci_eigenvector[jd];
                 delta_p_mo[second_diff][first_diff] += coeff_prod * phase;
             } else if iy == 2 && ix == 0 {
@@ -1349,7 +1349,7 @@ pub fn compute_ci_state_density(
                     ij += (microstates[id].alpha[j] + microstates[id].beta[j]) as usize;
                 }
                 ij += microstates[id].alpha[first_diff] as usize;
-                let phase = if ij.is_multiple_of(2) { 1.0 } else { -1.0 };
+                let phase = if ij % 2 == 0 { 1.0 } else { -1.0 };
                 let coeff_prod = ci_eigenvector[id] * ci_eigenvector[jd];
                 delta_p_mo[second_diff][first_diff] += coeff_prod * phase;
             } else if ix == 0 && iy == 0 {

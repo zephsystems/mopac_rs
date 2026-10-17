@@ -381,7 +381,7 @@ mod tests {
         coords.push([-0.89, -0.45, 0.0]);
         z.push(1);
         let last_x = ((n - 1) as f64) * 1.26;
-        let last_y = if (n - 1).is_multiple_of(2) { 0.0 } else { 0.89 };
+        let last_y = if (n - 1) % 2 == 0 { 0.0 } else { 0.89 };
         coords.push([last_x + 0.89, last_y - 0.45, 0.0]);
 
         (z, coords)

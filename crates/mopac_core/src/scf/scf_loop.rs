@@ -130,7 +130,7 @@ pub fn run_rhf_scf_with_options(
     );
     let nelecs = nelecs_signed as usize;
     assert!(
-        nelecs.is_multiple_of(2),
+        nelecs % 2 == 0,
         "Closed-shell RHF requires an even number of valence electrons (got {} with charge {}). Use UHF for open-shell systems.",
         nelecs,
         options.charge

@@ -3,6 +3,8 @@
 //! Modern high-performance Data-Oriented Semi-Empirical Quantum Chemistry Engine in Rust.
 //! Licensed under the Apache License, Version 2.0 (the "License").
 
+#![allow(clippy::manual_is_multiple_of)]
+
 pub mod ci;
 pub mod constants;
 pub mod corrections;

@@ -3,6 +3,8 @@
 //! Licensed under the Apache License, Version 2.0 (the "License").
 //! Provides drop-in MOPAC CLI compatibility with CPU AVX2 and Vulkan GPU FP32/FP64 backends.
 
+#![allow(clippy::manual_is_multiple_of)]
+
 use clap::Parser;
 use mopac_core::ci::meci::{run_meci, CiActiveSpace, MeciOptions, MeciWorkspace};
 use mopac_core::ci::spectrum::{
@@ -1706,7 +1708,7 @@ fn main() -> Result<(), Box<dyn std::error::Error>> {
             }
         }
         let nelec = total_val_elecs.round().max(0.0) as usize;
-        let is_open_shell = !nelec.is_multiple_of(2);
+        let is_open_shell = nelec % 2 != 0;
         let is_uhf = cli.uhf
             || cli.doublet
             || cli.triplet
@@ -1820,7 +1822,7 @@ fn main() -> Result<(), Box<dyn std::error::Error>> {
             }
         }
         let nelec = total_val_elecs.round().max(0.0) as usize;
-        let is_open_shell = !nelec.is_multiple_of(2);
+        let is_open_shell = nelec % 2 != 0;
         let is_uhf = cli.uhf
             || cli.doublet
             || cli.triplet

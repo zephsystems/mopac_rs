@@ -7,6 +7,7 @@
 
 #![allow(clippy::useless_conversion)]
 #![allow(clippy::too_many_arguments)]
+#![allow(clippy::manual_is_multiple_of)]
 
 use pyo3::exceptions::PyValueError;
 use pyo3::prelude::*;
@@ -1214,7 +1215,7 @@ pub fn optimize(
     }
 
     let nelec = total_valence_elecs.round() as usize;
-    let is_open_shell = !nelec.is_multiple_of(2);
+    let is_open_shell = nelec % 2 != 0;
     let run_as_uhf = uhf.unwrap_or(false) || is_open_shell;
 
     let mut batch =
@@ -1406,7 +1407,7 @@ pub fn transition_state(
     }
 
     let nelec = total_valence_elecs.round() as usize;
-    if !nelec.is_multiple_of(2) {
+    if nelec % 2 != 0 {
         return Err(PyValueError::new_err(format!(
             "Open-shell radical detected ({} valence electrons). Closed-shell RHF requires an even number of valence electrons (requires UHF/ROHF).",
             nelec
@@ -1555,7 +1556,7 @@ pub fn frequencies(
     }
 
     let nelec = total_valence_elecs.round() as usize;
-    if !nelec.is_multiple_of(2) {
+    if nelec % 2 != 0 {
         return Err(PyValueError::new_err(format!(
             "Open-shell radical detected ({} valence electrons). Closed-shell RHF requires an even number of valence electrons (requires UHF/ROHF).",
             nelec
