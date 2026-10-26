@@ -589,10 +589,14 @@ pub struct BatchMoleculeDescriptor {
     pub matrix_offset: u32,
 }
 
-/// Dedicated GDDR6 Device-Local VRAM Memory & Batch Manager.
+/// Dedicated Universal Device-Local Memory & Batch Manager (HBM / UMA / GDDR).
 ///
 /// Stores multiple molecular systems or large coordinate sets directly in high-speed
-/// VRAM (192 GB/s on RTX 4050 GDDR6), avoiding per-iteration PCIe bus transfers.
+/// device memory (HBM3/HBM3e in HPC datacenter GPUs, Unified LPDDR5X in APUs/SoCs,
+/// or GDDR6/GDDR6X in desktop workstations), bypassing per-iteration PCIe bus transfers.
+///
+/// Automatically enables zero-copy direct memory writes when PCIe Resizable BAR (ReBAR / SAM)
+/// or Unified Memory Architecture (UMA) is detected on the platform.
 pub struct GpuBatchVramManager {
     ctx: Arc<VulkanContext>,
     pub vram_capacity_atoms: usize,
@@ -606,10 +610,19 @@ pub struct GpuBatchVramManager {
     matrix_staging_buf: vk::Buffer,
     matrix_staging_mem: vk::DeviceMemory,
     pub mapped_matrix_staging: *const f32,
+    pub is_direct_host_mapped: bool,
+    direct_mapped_atom: Option<*mut AtomGpuFP32>,
 }
 
+/// Type alias for modern hardware nomenclature across High-Performance Computing (HPC) nodes.
+pub type GpuBatchDeviceMemoryManager = GpuBatchVramManager;
+
 impl GpuBatchVramManager {
-    /// Allocate dedicated GDDR6 VRAM buffers for storing up to `vram_capacity_atoms`.
+    /// Allocate dedicated device-local VRAM/HBM buffers for storing up to `vram_capacity_atoms`.
+    ///
+    /// Automatically interrogates the hardware architecture: if direct host-accessible
+    /// device memory is supported (e.g. PCIe ReBAR or Grace Hopper/Apple UMA), direct mapping
+    /// is established for true zero-copy uploads.
     pub fn allocate(
         ctx: Arc<VulkanContext>,
         vram_capacity_atoms: usize,
@@ -619,16 +632,15 @@ impl GpuBatchVramManager {
         let matrix_size =
             (vram_capacity_atoms * vram_capacity_atoms * std::mem::size_of::<f32>()) as u64;
 
-        // 1. Device-Local (GDDR6 VRAM) atom buffer
+        // 1. Device-Local (HBM/VRAM) atom buffer with automatic ReBAR/UMA detection
         let vram_atom_info = vk::BufferCreateInfo::default()
             .size(atom_size)
             .usage(vk::BufferUsageFlags::STORAGE_BUFFER | vk::BufferUsageFlags::TRANSFER_DST);
         let vram_atom_buf = unsafe { device.create_buffer(&vram_atom_info, None)? };
         let req_atom = unsafe { device.get_buffer_memory_requirements(vram_atom_buf) };
-        let mem_type_vram = ctx.find_memory_type(
-            req_atom.memory_type_bits,
-            vk::MemoryPropertyFlags::DEVICE_LOCAL,
-        )?;
+        let (mem_type_vram, is_direct_host_mapped) =
+            ctx.find_optimal_device_memory_type(req_atom.memory_type_bits, true)?;
+
         let vram_atom_mem = unsafe {
             device.allocate_memory(
                 &vk::MemoryAllocateInfo::default()
@@ -639,32 +651,42 @@ impl GpuBatchVramManager {
         };
         unsafe { device.bind_buffer_memory(vram_atom_buf, vram_atom_mem, 0)? };
 
-        // 2. Device-Local (GDDR6 VRAM) matrix output buffer
+        let direct_mapped_atom = if is_direct_host_mapped {
+            let ptr = unsafe {
+                device.map_memory(vram_atom_mem, 0, atom_size, vk::MemoryMapFlags::empty())?
+                    as *mut AtomGpuFP32
+            };
+            Some(ptr)
+        } else {
+            None
+        };
+
+        // 2. Device-Local (HBM/VRAM) matrix output buffer
         let vram_mat_info = vk::BufferCreateInfo::default()
             .size(matrix_size)
             .usage(vk::BufferUsageFlags::STORAGE_BUFFER | vk::BufferUsageFlags::TRANSFER_SRC);
         let vram_matrix_buf = unsafe { device.create_buffer(&vram_mat_info, None)? };
         let req_mat = unsafe { device.get_buffer_memory_requirements(vram_matrix_buf) };
+        let (mem_type_mat, _) =
+            ctx.find_optimal_device_memory_type(req_mat.memory_type_bits, false)?;
         let vram_matrix_mem = unsafe {
             device.allocate_memory(
                 &vk::MemoryAllocateInfo::default()
                     .allocation_size(req_mat.size)
-                    .memory_type_index(mem_type_vram),
+                    .memory_type_index(mem_type_mat),
                 None,
             )?
         };
         unsafe { device.bind_buffer_memory(vram_matrix_buf, vram_matrix_mem, 0)? };
 
-        // 3. Host-visible staging buffer for PCIe upload to GDDR6
+        // 3. Host-visible staging buffer for PCIe upload (used when memory is discrete-staged)
         let staging_info = vk::BufferCreateInfo::default()
             .size(atom_size)
             .usage(vk::BufferUsageFlags::TRANSFER_SRC);
         let staging_buf = unsafe { device.create_buffer(&staging_info, None)? };
         let req_staging = unsafe { device.get_buffer_memory_requirements(staging_buf) };
-        let mem_type_staging = ctx.find_memory_type(
-            req_staging.memory_type_bits,
-            vk::MemoryPropertyFlags::HOST_VISIBLE | vk::MemoryPropertyFlags::HOST_COHERENT,
-        )?;
+        let mem_type_staging =
+            ctx.find_optimal_staging_memory_type(req_staging.memory_type_bits)?;
         let staging_mem = unsafe {
             device.allocate_memory(
                 &vk::MemoryAllocateInfo::default()
@@ -685,10 +707,8 @@ impl GpuBatchVramManager {
             .usage(vk::BufferUsageFlags::TRANSFER_DST);
         let matrix_staging_buf = unsafe { device.create_buffer(&mat_staging_info, None)? };
         let req_mat_staging = unsafe { device.get_buffer_memory_requirements(matrix_staging_buf) };
-        let mem_type_mat_staging = ctx.find_memory_type(
-            req_mat_staging.memory_type_bits,
-            vk::MemoryPropertyFlags::HOST_VISIBLE | vk::MemoryPropertyFlags::HOST_COHERENT,
-        )?;
+        let mem_type_mat_staging =
+            ctx.find_optimal_staging_memory_type(req_mat_staging.memory_type_bits)?;
         let matrix_staging_mem = unsafe {
             device.allocate_memory(
                 &vk::MemoryAllocateInfo::default()
@@ -720,17 +740,36 @@ impl GpuBatchVramManager {
             matrix_staging_buf,
             matrix_staging_mem,
             mapped_matrix_staging,
+            is_direct_host_mapped,
+            direct_mapped_atom,
         })
     }
 
-    /// Upload a molecular batch to GDDR6 VRAM via DMA copy.
-    pub fn upload_batch_to_gddr6(
+    /// Upload a molecular batch to device memory (HBM/VRAM), using direct zero-copy write
+    /// if supported (ReBAR/UMA) or fallback to DMA copy staging.
+    pub fn upload_batch_to_device(
         &mut self,
         atoms: &[AtomGpuFP32],
         vram_offset_atoms: usize,
     ) -> Result<(), VulkanError> {
         let count = atoms.len();
         assert!(vram_offset_atoms + count <= self.vram_capacity_atoms);
+
+        // Fast Path: Direct Zero-Copy write on Resizable BAR (ReBAR) or Unified Memory (UMA)
+        if self.is_direct_host_mapped {
+            if let Some(direct_ptr) = self.direct_mapped_atom {
+                unsafe {
+                    std::ptr::copy_nonoverlapping(
+                        atoms.as_ptr(),
+                        direct_ptr.add(vram_offset_atoms),
+                        count,
+                    );
+                }
+                return Ok(());
+            }
+        }
+
+        // Standard Path: Discrete GPU DMA copy via PCIe staging buffer
         let byte_size = std::mem::size_of_val(atoms) as u64;
         let dst_offset = (vram_offset_atoms * std::mem::size_of::<AtomGpuFP32>()) as u64;
 
@@ -763,11 +802,22 @@ impl GpuBatchVramManager {
             let submit_info = vk::SubmitInfo::default().command_buffers(&cmd_slice);
             device.queue_submit(self.ctx.compute_queue, &[submit_info], fence)?;
             device.wait_for_fences(&[fence], true, u64::MAX)?;
+
             device.destroy_fence(fence, None);
             device.free_command_buffers(self.ctx.command_pool, &[cmd]);
         }
 
         Ok(())
+    }
+
+    /// Upload a molecular batch to device-local memory (alias for backward compatibility).
+    #[inline]
+    pub fn upload_batch_to_gddr6(
+        &mut self,
+        atoms: &[AtomGpuFP32],
+        vram_offset_atoms: usize,
+    ) -> Result<(), VulkanError> {
+        self.upload_batch_to_device(atoms, vram_offset_atoms)
     }
 
     /// Executes the FP32 compute shader on multiple molecular geometries in GDDR6 VRAM in a single dispatch batch,
@@ -889,8 +939,8 @@ impl GpuBatchVramManager {
         Ok(())
     }
 
-    /// Downloads an evaluated pairwise Coulomb matrix from GDDR6 VRAM to host memory.
-    pub fn download_matrix_from_gddr6(
+    /// Downloads an evaluated pairwise Coulomb matrix from device memory (VRAM/HBM) to host memory.
+    pub fn download_matrix_from_device(
         &mut self,
         matrix_offset: u32,
         num_atoms: usize,
@@ -937,6 +987,16 @@ impl GpuBatchVramManager {
             Ok(out)
         }
     }
+
+    /// Downloads an evaluated pairwise Coulomb matrix from device memory (alias for backward compatibility).
+    #[inline]
+    pub fn download_matrix_from_gddr6(
+        &mut self,
+        matrix_offset: u32,
+        num_atoms: usize,
+    ) -> Result<AlignedMatrix<f32>, VulkanError> {
+        self.download_matrix_from_device(matrix_offset, num_atoms)
+    }
 }
 
 unsafe impl Send for GpuBatchVramManager {}
@@ -947,6 +1007,9 @@ impl Drop for GpuBatchVramManager {
         unsafe {
             let device = &self.ctx.device;
             let _ = device.device_wait_idle();
+            if self.direct_mapped_atom.is_some() {
+                device.unmap_memory(self.vram_atom_mem);
+            }
             device.unmap_memory(self.staging_mem);
             device.destroy_buffer(self.staging_buf, None);
             device.free_memory(self.staging_mem, None);

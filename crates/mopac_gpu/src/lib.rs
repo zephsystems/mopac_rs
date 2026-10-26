@@ -12,11 +12,13 @@ pub mod coulomb;
 pub mod coulomb_fp32;
 pub mod cube;
 
-pub use context::{VulkanContext, VulkanDeviceInfo, VulkanError};
+pub use context::{
+    GpuMemoryArchitecture, GpuMemoryInfo, VulkanContext, VulkanDeviceInfo, VulkanError,
+};
 pub use core_repulsion::{ElementGpuParams, GaussianParamGpu, GpuCoreRepulsionCalculator};
 pub use coulomb::{AtomGpu, GpuCoulombCalculator, GpuWorkspace};
 pub use coulomb_fp32::{
-    AtomGpuFP32, BatchMoleculeDescriptor, GpuBatchVramManager, GpuCoulombCalculatorFP32,
-    GpuWorkspaceFP32,
+    AtomGpuFP32, BatchMoleculeDescriptor, GpuBatchDeviceMemoryManager, GpuBatchVramManager,
+    GpuCoulombCalculatorFP32, GpuWorkspaceFP32,
 };
 pub use cube::{AtomDataGpu, GpuCubeEvaluator};

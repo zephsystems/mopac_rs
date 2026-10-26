@@ -1436,13 +1436,17 @@ fn main() -> Result<(), Box<dyn std::error::Error>> {
 
     // If GPU is requested, warm up and verify device acceleration
     if use_gpu {
-        println!(" [Vulkan GPU] Initializing PCIe DMA buffers & GDDR6 device memory...");
         match VulkanContext::new() {
             Ok(c) => {
                 let ctx = Arc::new(c);
+                let mem_gb = (ctx.device_info.memory_info.total_device_memory as f64)
+                    / (1024.0 * 1024.0 * 1024.0);
                 println!(
-                    " [Vulkan GPU] Device: {} (Discrete: {})",
-                    ctx.device_info.device_name, ctx.device_info.is_discrete
+                    " [Vulkan GPU] Device: {} (Architecture: {}, VRAM/HBM: {:.2} GB, Float64: {})",
+                    ctx.device_info.device_name,
+                    ctx.device_info.memory_info.architecture,
+                    mem_gb,
+                    ctx.device_info.supports_float64
                 );
                 if use_fp32 {
                     match GpuCoulombCalculatorFP32::new(Arc::clone(&ctx)) {
