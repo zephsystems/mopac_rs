@@ -8,10 +8,10 @@
 //! 3. Parity with OpenMOPAC v23.2.5 dielectric gradient implementation (`diegrd`).
 
 use mopac_core::gradients::nuclear_gradients::{
-    compute_cartesian_gradients_full, compute_gradient_norms, GradientWorkspace,
+    GradientWorkspace, compute_cartesian_gradients_full, compute_gradient_norms,
 };
 use mopac_core::parameters::am1::Am1Model;
-use mopac_core::scf::scf_loop::{run_rhf_scf_with_options, ScfOptions};
+use mopac_core::scf::scf_loop::{ScfOptions, run_rhf_scf_with_options};
 use mopac_core::solvation::cosmo::{CosmoParams, CosmoState};
 use mopac_core::types::{MolecularBatch, ScfWorkspace};
 
@@ -135,8 +135,10 @@ fn test_cosmo_dielectric_gradients_finite_difference() {
     );
 
     let (rms_kcal, max_kcal) = compute_gradient_norms(&full_grads);
-    println!("[COSMO] Total gradient with dielectric reaction field: RMS = {:.3} kcal/(mol A), Max = {:.3} kcal/(mol A)",
-        rms_kcal, max_kcal);
+    println!(
+        "[COSMO] Total gradient with dielectric reaction field: RMS = {:.3} kcal/(mol A), Max = {:.3} kcal/(mol A)",
+        rms_kcal, max_kcal
+    );
     assert!(rms_kcal.is_finite());
     assert!(max_kcal.is_finite());
     assert!(rms_kcal > 1.0, "Total gradient RMS must be non-zero");

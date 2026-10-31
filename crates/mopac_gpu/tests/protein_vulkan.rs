@@ -6,8 +6,8 @@
 //! with quantum partial charges mapped to the B-factor column.
 
 use mopac_core::constants::codata2018::EV_TO_KCAL_MOL;
-use mopac_core::parameters::pm6::Pm6Model;
 use mopac_core::parameters::ParameterModel;
+use mopac_core::parameters::pm6::Pm6Model;
 use mopac_core::types::MolecularBatch;
 use mopac_gpu::{GpuCoulombCalculator, VulkanContext};
 use std::fs::File;

@@ -7,9 +7,9 @@
 
 use super::two_electron::dewar_klopman_monopole;
 use crate::constants::codata2018::{BOHR_RADIUS_ANGSTROMS, EV_ANGSTROM_FACTOR};
+use crate::parameters::SemiEmpiricalElementParams;
 use crate::parameters::pm6::Pm6Model;
 use crate::parameters::pm7::Pm7Model;
-use crate::parameters::SemiEmpiricalElementParams;
 
 /// Unpolarizable core-core Lennard-Jones 12 term from OpenMOPAC `ccrep.F90` lines 246-263.
 ///
@@ -415,7 +415,11 @@ mod tests {
 
         println!(
             "[CORE REPULSION BENCHMARK] Evaluated {} pairwise repulsions in {:.3} ms ({:.2} M evals/sec, {:.2} ns/eval, sink={:.2})",
-            n_evals, elapsed.as_secs_f64() * 1000.0, evals_per_sec / 1e6, ns_per_eval, sink
+            n_evals,
+            elapsed.as_secs_f64() * 1000.0,
+            evals_per_sec / 1e6,
+            ns_per_eval,
+            sink
         );
 
         let min_evals_per_sec = if cfg!(debug_assertions) {

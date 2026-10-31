@@ -32,7 +32,7 @@
 
 use crate::constants::codata2018::BOHR_RADIUS_ANGSTROMS as A0_BOHR;
 use crate::parameters::ParameterModel;
-use crate::properties::dipole::{compute_dipole_moment, DipoleResult};
+use crate::properties::dipole::{DipoleResult, compute_dipole_moment};
 use crate::scf::eigensolver::diagonalize_symmetric;
 use crate::scf::scf_loop::run_rhf_scf_adaptive_with_field;
 use crate::types::{AlignedMatrix, AlignedVec64, MolecularBatch, ScfWorkspace};

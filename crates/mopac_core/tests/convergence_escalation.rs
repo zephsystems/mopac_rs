@@ -18,7 +18,7 @@
 use mopac_core::parameters::pm3::Pm3Model;
 use mopac_core::properties::heat::compute_heat_of_formation;
 use mopac_core::scf::scf_loop::{
-    run_rhf_scf_adaptive_with_nddo_cosmo_and_charge, run_rhf_scf_with_options, ScfOptions,
+    ScfOptions, run_rhf_scf_adaptive_with_nddo_cosmo_and_charge, run_rhf_scf_with_options,
 };
 use mopac_core::types::{MolecularBatch, ScfWorkspace};
 

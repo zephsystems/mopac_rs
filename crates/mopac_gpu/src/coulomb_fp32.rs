@@ -756,17 +756,17 @@ impl GpuBatchVramManager {
         assert!(vram_offset_atoms + count <= self.vram_capacity_atoms);
 
         // Fast Path: Direct Zero-Copy write on Resizable BAR (ReBAR) or Unified Memory (UMA)
-        if self.is_direct_host_mapped {
-            if let Some(direct_ptr) = self.direct_mapped_atom {
-                unsafe {
-                    std::ptr::copy_nonoverlapping(
-                        atoms.as_ptr(),
-                        direct_ptr.add(vram_offset_atoms),
-                        count,
-                    );
-                }
-                return Ok(());
+        if self.is_direct_host_mapped
+            && let Some(direct_ptr) = self.direct_mapped_atom
+        {
+            unsafe {
+                std::ptr::copy_nonoverlapping(
+                    atoms.as_ptr(),
+                    direct_ptr.add(vram_offset_atoms),
+                    count,
+                );
             }
+            return Ok(());
         }
 
         // Standard Path: Discrete GPU DMA copy via PCIe staging buffer

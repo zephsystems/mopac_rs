@@ -6,47 +6,47 @@
 #![allow(clippy::manual_is_multiple_of)]
 
 use clap::Parser;
-use mopac_core::ci::meci::{run_meci, CiActiveSpace, MeciOptions, MeciWorkspace};
+use mopac_core::ci::meci::{CiActiveSpace, MeciOptions, MeciWorkspace, run_meci};
 use mopac_core::ci::spectrum::{
     compute_transition_dipoles_and_oscillator_strengths, simulate_uv_vis_spectrum,
 };
 use mopac_core::constants::codata2018::EV_TO_KCAL_MOL;
 use mopac_core::corrections::{
-    compute_dispersion_energy, compute_h4_energy, compute_hh_repulsion_energy_and_gradients,
-    DispersionModel, H4Parameters,
+    DispersionModel, H4Parameters, compute_dispersion_energy, compute_h4_energy,
+    compute_hh_repulsion_energy_and_gradients,
 };
-use mopac_core::geometry::zmatrix::{zmatrix_to_cartesian, ZMatrixAtom};
+use mopac_core::geometry::zmatrix::{ZMatrixAtom, zmatrix_to_cartesian};
 use mopac_core::gradients::GradientWorkspace;
-use mopac_core::mozyme::{run_mozyme_scf, MozymeOptions};
+use mopac_core::mozyme::{MozymeOptions, run_mozyme_scf};
 use mopac_core::opt::{
-    optimize_geometry_lbfgs, optimize_geometry_lbfgs_uhf, optimize_transition_state,
     EigenvectorFollowingWorkspace, HessianUpdateScheme, OptimizationOptions,
-    TransitionStateOptions,
+    TransitionStateOptions, optimize_geometry_lbfgs, optimize_geometry_lbfgs_uhf,
+    optimize_transition_state,
 };
+use mopac_core::parameters::ParameterModel;
 use mopac_core::parameters::am1::Am1Model;
 use mopac_core::parameters::mndo::MndoModel;
 use mopac_core::parameters::pm3::Pm3Model;
 use mopac_core::parameters::pm6::Pm6Model;
 use mopac_core::parameters::pm7::Pm7Model;
 use mopac_core::parameters::rm1::Rm1Model;
-use mopac_core::parameters::ParameterModel;
-use mopac_core::pbc::{run_pbc_scf, PbcOptions, PbcWorkspace, UnitCell};
+use mopac_core::pbc::{PbcOptions, PbcWorkspace, UnitCell, run_pbc_scf};
 use mopac_core::properties::{
-    compute_bond_orders, compute_dipole_moment, compute_mulliken_population,
-    compute_nsp2_correction, compute_polarizability, DipoleResult, PolarizabilityOptions,
+    DipoleResult, PolarizabilityOptions, compute_bond_orders, compute_dipole_moment,
+    compute_mulliken_population, compute_nsp2_correction, compute_polarizability,
 };
 use mopac_core::reactions::{
-    run_dynamic_reaction_coordinate, trace_intrinsic_reaction_coordinate, DrcEnsemble, DrcOptions,
-    DrcWorkspace, InitialVelocities, IrcDirection, IrcOptions, IrcWorkspace,
+    DrcEnsemble, DrcOptions, DrcWorkspace, InitialVelocities, IrcDirection, IrcOptions,
+    IrcWorkspace, run_dynamic_reaction_coordinate, trace_intrinsic_reaction_coordinate,
 };
 use mopac_core::scf::scf_loop::{
-    run_rhf_scf_adaptive_with_nddo, run_rhf_scf_adaptive_with_nddo_cosmo_and_charge, ScfOptions,
-    ScfResult,
+    ScfOptions, ScfResult, run_rhf_scf_adaptive_with_nddo,
+    run_rhf_scf_adaptive_with_nddo_cosmo_and_charge,
 };
-use mopac_core::scf::uhf_loop::{run_uhf_scf_with_options, UhfOptions, UhfWorkspace};
+use mopac_core::scf::uhf_loop::{UhfOptions, UhfWorkspace, run_uhf_scf_with_options};
 use mopac_core::solvation::{CosmoCavity, CosmoParams};
 use mopac_core::types::{AlignedMatrix, MolecularBatch, ScfWorkspace};
-use mopac_core::vibrations::{compute_hessian_and_frequencies, HessianOptions};
+use mopac_core::vibrations::{HessianOptions, compute_hessian_and_frequencies};
 use mopac_gpu::coulomb_fp32::GpuCoulombCalculatorFP32;
 use mopac_gpu::{GpuCoulombCalculator, VulkanContext};
 use std::fs::{self, File};
@@ -1093,7 +1093,9 @@ fn main() -> Result<(), Box<dyn std::error::Error>> {
 
         let is_solrot = cli.solrot || (cli.k_grid.is_none() && parsed.k_grid.is_none());
         let pbc_res = if is_solrot {
-            println!(" [PBC] Using Canonical OpenMOPAC Born-von Kármán Direct-Space Engine (solrot.F90)...");
+            println!(
+                " [PBC] Using Canonical OpenMOPAC Born-von Kármán Direct-Space Engine (solrot.F90)..."
+            );
             println!(
                 " [PBC] Periodic System : {:?}",
                 pbc_opts.unit_cell.dimension
@@ -1473,11 +1475,17 @@ fn main() -> Result<(), Box<dyn std::error::Error>> {
                                 );
                             }
                             Err(e) => {
-                                eprintln!(" [Vulkan GPU Warning] Kernel dispatch failed: {}. Continuing on CPU.", e);
+                                eprintln!(
+                                    " [Vulkan GPU Warning] Kernel dispatch failed: {}. Continuing on CPU.",
+                                    e
+                                );
                             }
                         },
                         Err(e) => {
-                            eprintln!(" [Vulkan GPU Warning] Failed to initialize FP32 pipeline: {}. Continuing on CPU.", e);
+                            eprintln!(
+                                " [Vulkan GPU Warning] Failed to initialize FP32 pipeline: {}. Continuing on CPU.",
+                                e
+                            );
                         }
                     }
                 } else {
@@ -1490,11 +1498,17 @@ fn main() -> Result<(), Box<dyn std::error::Error>> {
                                 );
                             }
                             Err(e) => {
-                                eprintln!(" [Vulkan GPU Warning] Kernel dispatch failed: {}. Continuing on CPU.", e);
+                                eprintln!(
+                                    " [Vulkan GPU Warning] Kernel dispatch failed: {}. Continuing on CPU.",
+                                    e
+                                );
                             }
                         },
                         Err(e) => {
-                            eprintln!(" [Vulkan GPU Warning] Failed to initialize FP64 pipeline: {}. Continuing on CPU.", e);
+                            eprintln!(
+                                " [Vulkan GPU Warning] Failed to initialize FP64 pipeline: {}. Continuing on CPU.",
+                                e
+                            );
                         }
                     }
                 }
@@ -2786,30 +2800,28 @@ fn main() -> Result<(), Box<dyn std::error::Error>> {
         writeln!(out)?;
     }
 
-    if is_uv_vis {
-        if let Some((ref meci_res, _)) = meci_result {
-            let spectrum = simulate_uv_vis_spectrum(&meci_res.states, 100.0, 800.0, 1.0, 20.0);
-            writeln!(out, "           UV-VIS ABSORPTION SPECTRUM")?;
-            writeln!(out)?;
-            writeln!(
-                out,
-                " LAMBDA_MAX = {:.1} NM,  EPSILON_MAX = {:.1} L/(MOL*CM)",
-                spectrum.lambda_max_nm, spectrum.epsilon_max
-            )?;
-            writeln!(out)?;
-            writeln!(out, "   WAVELENGTH (NM)     EPSILON (L/MOL/CM)")?;
-            for (i, (&wl, &eps)) in spectrum
-                .wavelengths_nm
-                .iter()
-                .zip(spectrum.extinction_coefficients.iter())
-                .enumerate()
-            {
-                if eps > 1.0 || i % 50 == 0 {
-                    writeln!(out, "     {:7.1}             {:12.1}", wl, eps)?;
-                }
+    if is_uv_vis && let Some((ref meci_res, _)) = meci_result {
+        let spectrum = simulate_uv_vis_spectrum(&meci_res.states, 100.0, 800.0, 1.0, 20.0);
+        writeln!(out, "           UV-VIS ABSORPTION SPECTRUM")?;
+        writeln!(out)?;
+        writeln!(
+            out,
+            " LAMBDA_MAX = {:.1} NM,  EPSILON_MAX = {:.1} L/(MOL*CM)",
+            spectrum.lambda_max_nm, spectrum.epsilon_max
+        )?;
+        writeln!(out)?;
+        writeln!(out, "   WAVELENGTH (NM)     EPSILON (L/MOL/CM)")?;
+        for (i, (&wl, &eps)) in spectrum
+            .wavelengths_nm
+            .iter()
+            .zip(spectrum.extinction_coefficients.iter())
+            .enumerate()
+        {
+            if eps > 1.0 || i % 50 == 0 {
+                writeln!(out, "     {:7.1}             {:12.1}", wl, eps)?;
             }
-            writeln!(out)?;
         }
+        writeln!(out)?;
     }
 
     writeln!(out, " == MOPAC_RS DONE ==")?;

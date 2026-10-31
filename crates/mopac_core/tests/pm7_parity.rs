@@ -7,7 +7,7 @@
 
 use mopac_core::parameters::pm7::Pm7Model;
 use mopac_core::properties::heat::compute_heat_of_formation;
-use mopac_core::scf::scf_loop::{run_rhf_scf_with_options, ScfOptions};
+use mopac_core::scf::scf_loop::{ScfOptions, run_rhf_scf_with_options};
 use mopac_core::types::{MolecularBatch, ScfWorkspace};
 use std::fs;
 use std::path::{Path, PathBuf};
@@ -262,7 +262,10 @@ fn test_pm7_organic_set_parity() {
 
         println!(
             "[PM7 PARITY] {:6} | NucDiff = {:.6} eV | Etot RelErr = {:.4}% | HoF Diff = {:.4} kcal/mol",
-            name, nuc_diff, total_rel_err * 100.0, hof_diff
+            name,
+            nuc_diff,
+            total_rel_err * 100.0,
+            hof_diff
         );
 
         assert!(
@@ -276,12 +279,18 @@ fn test_pm7_organic_set_parity() {
         assert!(
             total_rel_err < 0.001,
             "Total energy relative error exceeded 0.1% for {}: mopac_rs={:.6}, oracle={:.6}, err={:.4}%",
-            name, scf_res.total_energy_ev, oracle.total_energy_ev, total_rel_err * 100.0
+            name,
+            scf_res.total_energy_ev,
+            oracle.total_energy_ev,
+            total_rel_err * 100.0
         );
         assert!(
             hof_diff < 0.5,
             "Heat of formation difference exceeded 0.5 kcal/mol for {}: mopac_rs={:.4}, oracle={:.4}, diff={:.4}",
-            name, hof_mopacrs, oracle.heat_of_formation_kcal, hof_diff
+            name,
+            hof_mopacrs,
+            oracle.heat_of_formation_kcal,
+            hof_diff
         );
     }
 }
@@ -330,7 +339,9 @@ fn test_zinc_complex_parity() {
 
         println!(
             "[PM7 ZINC PARITY] ZnH2 | NucDiff = {:.6} eV | Etot RelErr = {:.4}% | HoF Diff = {:.4} kcal/mol",
-            nuc_diff, total_rel_err * 100.0, hof_diff
+            nuc_diff,
+            total_rel_err * 100.0,
+            hof_diff
         );
 
         assert!(
@@ -350,7 +361,9 @@ fn test_zinc_complex_parity() {
         assert!(
             hof_diff < 0.5,
             "ZnH2 heat of formation diff exceeded 0.5 kcal/mol: mopac_rs={:.4}, oracle={:.4}, diff={:.4}",
-            hof_mopacrs, oracle.heat_of_formation_kcal, hof_diff
+            hof_mopacrs,
+            oracle.heat_of_formation_kcal,
+            hof_diff
         );
     }
 

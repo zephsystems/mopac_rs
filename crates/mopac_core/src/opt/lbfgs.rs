@@ -8,11 +8,11 @@
 
 use crate::constants::codata2018::EV_TO_KCAL_MOL;
 use crate::gradients::nuclear_gradients::{
-    compute_cartesian_gradients_full, compute_cartesian_gradients_uhf, compute_gradient_norms,
-    GradientWorkspace,
+    GradientWorkspace, compute_cartesian_gradients_full, compute_cartesian_gradients_uhf,
+    compute_gradient_norms,
 };
 use crate::parameters::ParameterModel;
-use crate::scf::scf_loop::{run_rhf_scf_adaptive_with_nddo_and_cosmo, ScfResult};
+use crate::scf::scf_loop::{ScfResult, run_rhf_scf_adaptive_with_nddo_and_cosmo};
 use crate::types::{MolecularBatch, ScfWorkspace};
 
 /// Configuration options for molecular geometry optimization.
@@ -228,11 +228,7 @@ pub fn optimize_geometry_lbfgs(
             let y_last = &y_hist[k - 1];
             let sy = dot(s_last, y_last);
             let yy = dot(y_last, y_last);
-            if yy.abs() > 1e-12 {
-                sy / yy
-            } else {
-                1.0
-            }
+            if yy.abs() > 1e-12 { sy / yy } else { 1.0 }
         } else {
             1.0
         };
@@ -518,11 +514,7 @@ pub fn optimize_geometry_lbfgs_uhf(
             let y_last = &y_hist[k - 1];
             let sy = dot(s_last, y_last);
             let yy = dot(y_last, y_last);
-            if yy.abs() > 1e-12 {
-                sy / yy
-            } else {
-                1.0
-            }
+            if yy.abs() > 1e-12 { sy / yy } else { 1.0 }
         } else {
             1.0
         };
@@ -708,8 +700,14 @@ mod tests {
         };
 
         let res = optimize_geometry_lbfgs(&mut batch, &model, &mut scf_ws, &mut grad_ws, &options);
-        println!("[L-BFGS COSMO] cycles = {}, init E = {:.6} eV, final E = {:.6} eV, init RMS g = {:.3}, final RMS g = {:.3}",
-            res.cycles, res.initial_energy_ev, res.final_energy_ev, res.initial_grad_rms, res.final_grad_rms);
+        println!(
+            "[L-BFGS COSMO] cycles = {}, init E = {:.6} eV, final E = {:.6} eV, init RMS g = {:.3}, final RMS g = {:.3}",
+            res.cycles,
+            res.initial_energy_ev,
+            res.final_energy_ev,
+            res.initial_grad_rms,
+            res.final_grad_rms
+        );
         assert!(res.cycles > 0);
         assert!(res.final_grad_rms <= res.initial_grad_rms + 1e-2);
     }
@@ -761,8 +759,10 @@ mod tests {
             &opt_opts,
         );
 
-        println!("[L-BFGS UHF] Methyl radical: cycles = {}, init E = {:.6} eV, final E = {:.6} eV, final RMS g = {:.3}",
-            res.cycles, res.initial_energy_ev, res.final_energy_ev, res.final_grad_rms);
+        println!(
+            "[L-BFGS UHF] Methyl radical: cycles = {}, init E = {:.6} eV, final E = {:.6} eV, final RMS g = {:.3}",
+            res.cycles, res.initial_energy_ev, res.final_energy_ev, res.final_grad_rms
+        );
         assert!(
             res.converged,
             "UHF geometry optimization of methyl radical must converge"

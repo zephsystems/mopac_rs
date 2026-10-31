@@ -3,7 +3,7 @@
 //! Licensed under the Apache License, Version 2.0 (the "License").
 //! Employs strict 64-byte alignment matching modern cache lines and SIMD registers.
 
-use std::alloc::{alloc_zeroed, dealloc, Layout};
+use std::alloc::{Layout, alloc_zeroed, dealloc};
 use std::ops::{Deref, DerefMut};
 
 /// Cache line alignment boundary in bytes (AVX-512 and standard x86_64 cache line)

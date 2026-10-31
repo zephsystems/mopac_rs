@@ -10,12 +10,12 @@
 //!   matching canonical OpenMOPAC v23.2.5 finite difference within 0.05 kcal/(mol * A).
 
 use mopac_core::ci::meci::{
-    compute_meci_nuclear_gradients, compute_meci_numerical_gradients, run_meci, CiActiveSpace,
-    MeciOptions, MeciWorkspace,
+    CiActiveSpace, MeciOptions, MeciWorkspace, compute_meci_nuclear_gradients,
+    compute_meci_numerical_gradients, run_meci,
 };
 use mopac_core::constants::codata2018::EV_TO_KCAL_MOL;
 use mopac_core::gradients::nuclear_gradients::{
-    compute_cartesian_gradients_with_options, GradientWorkspace,
+    GradientWorkspace, compute_cartesian_gradients_with_options,
 };
 use mopac_core::parameters::pm6::Pm6Model;
 use mopac_core::scf::scf_loop::run_rhf_scf_adaptive_with_nddo;

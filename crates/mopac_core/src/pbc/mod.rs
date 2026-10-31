@@ -7,9 +7,9 @@ pub mod bloch_scf;
 pub mod solrot;
 pub mod unit_cell;
 
-pub use bloch_scf::{run_pbc_scf, PbcOptions, PbcResult, PbcWorkspace};
+pub use bloch_scf::{PbcOptions, PbcResult, PbcWorkspace, run_pbc_scf};
 pub use solrot::{
-    build_solrot_fock, build_solrot_hcore, compute_lattice_bounds,
-    compute_solrot_lattice_integrals, run_solrot_pbc_scf, trunk, SolrotPairIntegrals,
+    SolrotPairIntegrals, build_solrot_fock, build_solrot_hcore, compute_lattice_bounds,
+    compute_solrot_lattice_integrals, run_solrot_pbc_scf, trunk,
 };
 pub use unit_cell::{KPoint, PeriodicDimension, TranslationIndex, UnitCell};

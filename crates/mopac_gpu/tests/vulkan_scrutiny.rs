@@ -5,8 +5,8 @@
 //! and bit-level mathematical parity between CPU and GPU.
 
 use mopac_core::integrals::two_electron::dewar_klopman_monopole;
-use mopac_core::parameters::am1::Am1Model;
 use mopac_core::parameters::ParameterModel;
+use mopac_core::parameters::am1::Am1Model;
 use mopac_core::types::MolecularBatch;
 use mopac_gpu::{GpuCoulombCalculator, VulkanContext};
 use std::sync::Arc;
@@ -99,7 +99,11 @@ fn test_scrutiny_vulkan_gpu_coulomb_matrix_parity() {
             assert!(
                 diff < 1e-12,
                 "GPU vs CPU Coulomb mismatch at pair ({}, {}): GPU = {:.12}, CPU = {:.12}, diff = {:e}",
-                i, j, gpu_val, cpu_val, diff
+                i,
+                j,
+                gpu_val,
+                cpu_val,
+                diff
             );
         }
     }
@@ -246,12 +250,19 @@ fn test_scrutiny_vulkan_gpu_coulomb_matrix_fp32_parity() {
             assert!(
                 diff < 1e-4,
                 "FP32 GPU vs CPU Coulomb mismatch at pair ({}, {}): GPU = {:.7}, CPU = {:.7}, diff = {:e}",
-                i, j, gpu_val, cpu_val, diff
+                i,
+                j,
+                gpu_val,
+                cpu_val,
+                diff
             );
         }
     }
 
-    println!("[OK] Benzene FP32 GPU vs CPU 144 interaction pairs verified: max diff = {:e} eV (< 1e-4 eV single precision bound)", max_diff);
+    println!(
+        "[OK] Benzene FP32 GPU vs CPU 144 interaction pairs verified: max diff = {:e} eV (< 1e-4 eV single precision bound)",
+        max_diff
+    );
 }
 
 /// Scrutiny Test: GDDR6 Dedicated Device-Local VRAM Manager DMA Transfer.
@@ -452,7 +463,9 @@ fn test_scrutiny_vulkan_gpu_gddr6_batch_pipelining_parity() {
         }
     }
 
-    println!("[OK] GDDR6 VRAM batch pipelining verified for 2 concurrent geometries with zero per-molecule CPU sync!");
+    println!(
+        "[OK] GDDR6 VRAM batch pipelining verified for 2 concurrent geometries with zero per-molecule CPU sync!"
+    );
 }
 
 /// Task GPU-1 / Test 1: Performance & Throughput Benchmark for GPU Transition-Metal Evaluation.
@@ -523,9 +536,9 @@ fn test_gpu_pocord_transition_metal_throughput_benchmark() {
 #[test]
 fn test_gpu_pocord_exact_mathematical_parity_against_openmopac() {
     use mopac_core::integrals::core_repulsion::core_monopole;
+    use mopac_core::parameters::ParameterModel;
     use mopac_core::parameters::pm6::Pm6Model;
     use mopac_core::parameters::pm7::Pm7Model;
-    use mopac_core::parameters::ParameterModel;
     use mopac_core::types::MolecularBatch;
 
     let ctx = match VulkanContext::new() {
@@ -578,7 +591,11 @@ fn test_gpu_pocord_exact_mathematical_parity_against_openmopac() {
             assert!(
                 diff < 1e-12,
                 "GPU vs Canonical CPU mismatch on PM6 pair ({}, {}): GPU={:.12}, CPU={:.12}, diff={:e}",
-                i, j, gpu_val, canonical_cpu, diff
+                i,
+                j,
+                gpu_val,
+                canonical_cpu,
+                diff
             );
         }
     }
@@ -615,12 +632,18 @@ fn test_gpu_pocord_exact_mathematical_parity_against_openmopac() {
             assert!(
                 diff < 1e-12,
                 "GPU vs Canonical CPU mismatch on PM7 pair ({}, {}): GPU={:.12}, CPU={:.12}, diff={:e}",
-                i, j, gpu_val, canonical_cpu, diff
+                i,
+                j,
+                gpu_val,
+                canonical_cpu,
+                diff
             );
         }
     }
 
-    println!("[OK] GPU FP64 exact mathematical parity against OpenMOPAC pocord core_monopole verified (< 1e-12 eV)!");
+    println!(
+        "[OK] GPU FP64 exact mathematical parity against OpenMOPAC pocord core_monopole verified (< 1e-12 eV)!"
+    );
 }
 
 /// Task GPU-2 / Test 1: Performance & Throughput Benchmark for GPU Core Repulsion Evaluation.
@@ -752,7 +775,11 @@ fn test_gpu_core_repulsion_exact_mathematical_parity() {
             assert!(
                 diff < 1e-10,
                 "GPU vs Canonical CPU Core Repulsion mismatch on H2O pair ({}, {}): GPU={:.12}, CPU={:.12}, diff={:e}",
-                i, j, gpu_val, expected_cpu, diff
+                i,
+                j,
+                gpu_val,
+                expected_cpu,
+                diff
             );
         }
     }

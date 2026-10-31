@@ -4,7 +4,7 @@
 //! and direct Vulkan compute shader kernels for Molecular Orbitals and Total Density.
 
 use mopac_core::export::cube::{
-    generate_density_cube, generate_molecular_orbital_cube, CubeGridConfig,
+    CubeGridConfig, generate_density_cube, generate_molecular_orbital_cube,
 };
 use mopac_core::parameters::{Pm6Model, Pm7Model};
 use mopac_core::scf::scf_loop::run_rhf_scf;

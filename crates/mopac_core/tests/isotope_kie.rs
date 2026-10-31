@@ -9,7 +9,7 @@
 use mopac_core::parameters::pm6::Pm6Model;
 use mopac_core::scf::scf_loop::ScfOptions;
 use mopac_core::types::{MolecularBatch, ScfWorkspace};
-use mopac_core::vibrations::{compute_hessian_and_frequencies, HessianOptions};
+use mopac_core::vibrations::{HessianOptions, compute_hessian_and_frequencies};
 
 #[test]
 fn test_water_deuteration_isotope_shifts() {

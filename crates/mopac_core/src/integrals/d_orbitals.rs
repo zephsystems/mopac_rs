@@ -1004,7 +1004,7 @@ pub fn compute_reppd2(
 
         if has_d_b {
             let ij = INDEXD[0][0]; // (s, s) on center A
-                                   // <S S | D S>
+            // <S S | D S>
             let mut kl = INDEXD[4][0];
             core[4][1] =
                 -rijkl(po_a, ddp_a, po_b, ddp_b, ij, kl, 0, 0, 2, 0, 1, r_bohr) * ev * tore_a;
@@ -1032,7 +1032,7 @@ pub fn compute_reppd2(
 
         if has_d_a {
             let ij = INDEXD[0][0]; // (s, s) on center B
-                                   // <D S | S S>
+            // <D S | S S>
             let mut kl = INDEXD[4][0];
             core[4][0] =
                 -rijkl(po_a, ddp_a, po_b, ddp_b, kl, ij, 2, 0, 0, 0, 2, r_bohr) * ev * tore_b;
@@ -2087,14 +2087,14 @@ pub fn wstore(
         w[idx(8, 8)] = 0.5 * (gpp - gp2);
         w[idx(9, 9)] = 0.5 * (gpp - gp2);
 
-        if ilim > 10 {
-            if let Some(rep) = repd {
-                for i in 0..243 {
-                    let ij = INTIJ[i];
-                    let kl = INTKL[i];
-                    let int_rep = INTREP[i];
-                    w[idx(ij, kl)] = rep[int_rep];
-                }
+        if ilim > 10
+            && let Some(rep) = repd
+        {
+            for i in 0..243 {
+                let ij = INTIJ[i];
+                let kl = INTKL[i];
+                let int_rep = INTREP[i];
+                w[idx(ij, kl)] = rep[int_rep];
             }
         }
     }
@@ -2257,7 +2257,11 @@ mod tests {
 
         println!(
             "[D-ORBITAL CORRECTION BENCHMARK] Evaluated {} PM7 d-orbital operations in {:.3} ms ({:.2} M ops/sec, {:.2} ns/op, sink={:.2})",
-            n_ops, elapsed.as_secs_f64() * 1000.0, ops_per_sec / 1e6, ns_per_op, sink
+            n_ops,
+            elapsed.as_secs_f64() * 1000.0,
+            ops_per_sec / 1e6,
+            ns_per_op,
+            sink
         );
 
         let min_ops = if cfg!(debug_assertions) {
@@ -2268,7 +2272,8 @@ mod tests {
         assert!(
             ops_per_sec > min_ops,
             "d-orbital PM7 correction throughput below threshold: {:.2} M ops/sec (min: {:.2} M ops/sec)",
-            ops_per_sec / 1e6, min_ops / 1e6
+            ops_per_sec / 1e6,
+            min_ops / 1e6
         );
         assert!(!sink.is_nan() && sink.is_finite());
     }

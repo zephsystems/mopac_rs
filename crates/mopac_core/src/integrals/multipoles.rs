@@ -1743,8 +1743,8 @@ pub fn apply_electron_nuclear_attractions(
 #[cfg(test)]
 mod tests {
     use super::*;
-    use crate::parameters::am1::Am1Model;
     use crate::parameters::ParameterModel;
+    use crate::parameters::am1::Am1Model;
 
     #[test]
     fn test_derived_multipole_params_am1() {

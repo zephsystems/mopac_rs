@@ -9,11 +9,11 @@
 //! 5. Extreme Atomic Clashes (R -> 0): Near-zero distances (0.1 A) testing numerical divergence and NaN immunity.
 //! 6. Triplet Ground State: Molecular oxygen (O2) with open-shell UHF triplet <S^2> ~ 2.0.
 
+use mopac_core::parameters::ParameterModel;
 use mopac_core::parameters::am1::Am1Model;
 use mopac_core::parameters::pm6::Pm6Model;
-use mopac_core::parameters::ParameterModel;
-use mopac_core::scf::scf_loop::{run_rhf_scf_adaptive, run_rhf_scf_with_options, ScfOptions};
-use mopac_core::scf::uhf_loop::{run_uhf_scf_with_options, UhfOptions, UhfWorkspace};
+use mopac_core::scf::scf_loop::{ScfOptions, run_rhf_scf_adaptive, run_rhf_scf_with_options};
+use mopac_core::scf::uhf_loop::{UhfOptions, UhfWorkspace, run_uhf_scf_with_options};
 use mopac_core::types::{MolecularBatch, ScfWorkspace};
 
 /// Domain 1: Permutational Invariance.

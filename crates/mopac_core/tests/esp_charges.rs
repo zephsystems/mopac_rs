@@ -9,8 +9,8 @@
 //! 4. Ionic systems with net charges (cations Q = +1, anions Q = -1).
 
 use mopac_core::parameters::pm6::Pm6Model;
-use mopac_core::properties::{compute_dipole_moment, compute_esp_charges, EspOptions};
-use mopac_core::scf::scf_loop::{run_rhf_scf_with_options, ScfOptions};
+use mopac_core::properties::{EspOptions, compute_dipole_moment, compute_esp_charges};
+use mopac_core::scf::scf_loop::{ScfOptions, run_rhf_scf_with_options};
 use mopac_core::types::{MolecularBatch, ScfWorkspace};
 
 #[test]

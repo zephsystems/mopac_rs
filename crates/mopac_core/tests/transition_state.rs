@@ -10,12 +10,12 @@
 
 use mopac_core::gradients::nuclear_gradients::GradientWorkspace;
 use mopac_core::opt::eigenvector_following::{
-    optimize_transition_state, EigenvectorFollowingWorkspace, TransitionStateOptions,
+    EigenvectorFollowingWorkspace, TransitionStateOptions, optimize_transition_state,
 };
 use mopac_core::opt::hessian_update::HessianUpdateScheme;
 use mopac_core::parameters::pm6::Pm6Model;
 use mopac_core::types::{MolecularBatch, ScfWorkspace};
-use mopac_core::vibrations::hessian::{compute_hessian_and_frequencies, HessianOptions};
+use mopac_core::vibrations::hessian::{HessianOptions, compute_hessian_and_frequencies};
 use std::fs;
 use std::path::{Path, PathBuf};
 use std::process::Command;
@@ -239,7 +239,7 @@ fn test_nh3_umbrella_inversion_ts() {
 fn test_hcn_hnc_isomerization_ts() {
     let model = Pm6Model;
     let atomic_numbers = vec![6, 7, 1]; // C, N, H
-                                        // Initial geometry near cyclic saddle point
+    // Initial geometry near cyclic saddle point
     let coords = vec![
         [0.005, 0.016, 0.0],
         [1.205, -0.042, 0.0],

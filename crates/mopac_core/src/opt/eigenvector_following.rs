@@ -11,15 +11,15 @@
 
 use crate::constants::codata2018::EV_TO_KCAL_MOL;
 use crate::gradients::nuclear_gradients::{
-    compute_cartesian_gradients_with_options, compute_gradient_norms, GradientWorkspace,
+    GradientWorkspace, compute_cartesian_gradients_with_options, compute_gradient_norms,
 };
 use crate::opt::hessian_update::{
-    update_cartesian_hessian, HessianUpdateScheme, HessianUpdateWorkspace,
+    HessianUpdateScheme, HessianUpdateWorkspace, update_cartesian_hessian,
 };
 use crate::parameters::ParameterModel;
 use crate::properties::heat::compute_heat_of_formation;
 use crate::scf::eigensolver::diagonalize_symmetric_with_work;
-use crate::scf::scf_loop::{run_rhf_scf_adaptive_with_nddo, ScfResult};
+use crate::scf::scf_loop::{ScfResult, run_rhf_scf_adaptive_with_nddo};
 use crate::types::{AlignedMatrix, AlignedVec64, MolecularBatch, ScfWorkspace};
 
 /// Configuration options for Eigenvector Following (EF) transition state search.
@@ -163,12 +163,12 @@ pub fn compute_initial_cartesian_hessian(
     for a in 0..natoms {
         for alpha in 0..3 {
             let col = 3 * a + alpha;
-            if let Some(m) = mask {
-                if !m[col] {
-                    // Frozen coordinate: set large positive curvature on diagonal
-                    hess.set(col, col, 500.0);
-                    continue;
-                }
+            if let Some(m) = mask
+                && !m[col]
+            {
+                // Frozen coordinate: set large positive curvature on diagonal
+                hess.set(col, col, 500.0);
+                continue;
             }
 
             // +delta displacement
@@ -504,10 +504,10 @@ pub fn optimize_transition_state(
                 sum += ef_ws.eigenvectors.get(j, i) * ef_ws.s_basis[i];
             }
             // Enforce frozen mask
-            if let Some(ref m) = options.opt_mask {
-                if !m[j] {
-                    sum = 0.0;
-                }
+            if let Some(ref m) = options.opt_mask
+                && !m[j]
+            {
+                sum = 0.0;
             }
             ef_ws.step_cart[j] = sum;
         }

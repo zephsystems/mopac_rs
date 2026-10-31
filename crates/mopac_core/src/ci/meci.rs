@@ -13,7 +13,7 @@
 //! * Symmetric diagonalization yielding electronic ground and excited state energies.
 //! * 0-malloc memory invariant during hot iterative sweeps with preallocated `MeciWorkspace`.
 
-use crate::integrals::multipoles::{precompute_diatomic_pairs, DiatomicPairIntegrals};
+use crate::integrals::multipoles::{DiatomicPairIntegrals, precompute_diatomic_pairs};
 use crate::integrals::two_electron::dewar_klopman_monopole;
 use crate::parameters::ParameterModel;
 use crate::types::{AlignedMatrix, AlignedVec64, MolecularBatch, ScfWorkspace};

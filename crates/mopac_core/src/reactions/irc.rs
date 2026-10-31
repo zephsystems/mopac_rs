@@ -16,13 +16,13 @@
 use crate::constants::codata2018::EV_TO_KCAL_MOL;
 use crate::constants::standard_atomic_mass;
 use crate::gradients::nuclear_gradients::{
-    compute_cartesian_gradients_with_options, GradientWorkspace,
+    GradientWorkspace, compute_cartesian_gradients_with_options,
 };
 use crate::parameters::ParameterModel;
 use crate::properties::heat::compute_heat_of_formation;
-use crate::scf::scf_loop::{run_rhf_scf_adaptive_with_nddo, ScfOptions};
+use crate::scf::scf_loop::{ScfOptions, run_rhf_scf_adaptive_with_nddo};
 use crate::types::{MolecularBatch, ScfWorkspace};
-use crate::vibrations::hessian::{compute_hessian_and_frequencies, HessianOptions};
+use crate::vibrations::hessian::{HessianOptions, compute_hessian_and_frequencies};
 
 /// Direction of IRC integration from the transition state.
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
@@ -271,24 +271,24 @@ pub fn trace_intrinsic_reaction_coordinate(
         let vib_res = compute_hessian_and_frequencies(batch, model, scf_ws, &scf_opts, &hess_opts);
 
         let mut found_mode = false;
-        if let Some(first_mode) = vib_res.normal_modes.first() {
-            if first_mode.frequency_cm1 < 0.0 {
-                // Mass-weight normal mode displacements
-                let mut norm_sq = 0.0;
-                for a in 0..natoms {
-                    let sm = irc_ws.sqrt_masses[a];
-                    for c in 0..3 {
-                        let val = sm * first_mode.displacements[a][c];
-                        irc_ws.ts_vector[3 * a + c] = val;
-                        norm_sq += val * val;
-                    }
+        if let Some(first_mode) = vib_res.normal_modes.first()
+            && first_mode.frequency_cm1 < 0.0
+        {
+            // Mass-weight normal mode displacements
+            let mut norm_sq = 0.0;
+            for a in 0..natoms {
+                let sm = irc_ws.sqrt_masses[a];
+                for c in 0..3 {
+                    let val = sm * first_mode.displacements[a][c];
+                    irc_ws.ts_vector[3 * a + c] = val;
+                    norm_sq += val * val;
                 }
-                let inv_norm = 1.0 / norm_sq.sqrt().max(1e-15);
-                for i in 0..n3 {
-                    irc_ws.ts_vector[i] *= inv_norm;
-                }
-                found_mode = true;
             }
+            let inv_norm = 1.0 / norm_sq.sqrt().max(1e-15);
+            for i in 0..n3 {
+                irc_ws.ts_vector[i] *= inv_norm;
+            }
+            found_mode = true;
         }
 
         if !found_mode {

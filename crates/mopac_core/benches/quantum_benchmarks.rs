@@ -7,14 +7,14 @@
 //! 3. Open-shell UHF SCF on Methyl Radical (AM1 doublet).
 //! 4. COSMO dielectric analytical gradients on Solvated Water.
 
-use criterion::{criterion_group, criterion_main, Criterion};
+use criterion::{Criterion, criterion_group, criterion_main};
 use mopac_core::gradients::nuclear_gradients::{
-    compute_cartesian_gradients_full, GradientWorkspace,
+    GradientWorkspace, compute_cartesian_gradients_full,
 };
 use mopac_core::parameters::am1::Am1Model;
 use mopac_core::parameters::pm6::Pm6Model;
-use mopac_core::scf::scf_loop::{run_rhf_scf_with_options, ScfOptions};
-use mopac_core::scf::uhf_loop::{run_uhf_scf_with_options, UhfOptions, UhfWorkspace};
+use mopac_core::scf::scf_loop::{ScfOptions, run_rhf_scf_with_options};
+use mopac_core::scf::uhf_loop::{UhfOptions, UhfWorkspace, run_uhf_scf_with_options};
 use mopac_core::solvation::cosmo::{CosmoParams, CosmoState};
 use mopac_core::types::{MolecularBatch, ScfWorkspace};
 use std::hint::black_box;

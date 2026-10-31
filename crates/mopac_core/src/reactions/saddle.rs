@@ -17,11 +17,11 @@
 
 use crate::constants::codata2018::EV_TO_KCAL_MOL;
 use crate::gradients::nuclear_gradients::{
-    compute_cartesian_gradients_with_options, GradientWorkspace,
+    GradientWorkspace, compute_cartesian_gradients_with_options,
 };
 use crate::opt::eigenvector_following::{
-    optimize_transition_state, EigenvectorFollowingWorkspace, TransitionStateOptions,
-    TransitionStateResult,
+    EigenvectorFollowingWorkspace, TransitionStateOptions, TransitionStateResult,
+    optimize_transition_state,
 };
 use crate::parameters::ParameterModel;
 use crate::properties::heat::compute_heat_of_formation;

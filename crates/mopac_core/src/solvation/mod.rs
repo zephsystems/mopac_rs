@@ -15,6 +15,6 @@ pub mod radii;
 pub mod tessellation;
 
 pub use cavity::{CavitySegment, CosmoCavity};
-pub use cosmo::{CosmoParams, CosmoState, A0_EV};
-pub use radii::{cosmo_atomic_radius, BONDI_VDW_RADII};
-pub use tessellation::{generate_sphere_tessellation, SpherePoint};
+pub use cosmo::{A0_EV, CosmoParams, CosmoState};
+pub use radii::{BONDI_VDW_RADII, cosmo_atomic_radius};
+pub use tessellation::{SpherePoint, generate_sphere_tessellation};

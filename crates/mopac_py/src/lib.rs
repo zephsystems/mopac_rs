@@ -8,49 +8,50 @@
 #![allow(clippy::useless_conversion)]
 #![allow(clippy::too_many_arguments)]
 #![allow(clippy::manual_is_multiple_of)]
+#![allow(unsafe_op_in_unsafe_fn)]
 
 use pyo3::exceptions::PyValueError;
 use pyo3::prelude::*;
 use pyo3::types::{PyDict, PyList};
 
-use mopac_core::ci::meci::{run_meci, CiActiveSpace, MeciOptions, MeciWorkspace};
+use mopac_core::ci::meci::{CiActiveSpace, MeciOptions, MeciWorkspace, run_meci};
 use mopac_core::ci::spectrum::{
     compute_transition_dipoles_and_oscillator_strengths, simulate_uv_vis_spectrum,
 };
 use mopac_core::constants::codata2018::EV_TO_KCAL_MOL;
 use mopac_core::corrections::dispersion::{
-    compute_dispersion_energy_and_gradients, DispersionModel,
+    DispersionModel, compute_dispersion_energy_and_gradients,
 };
 use mopac_core::corrections::h_bonds4::{
-    compute_h4_energy, compute_hh_repulsion_energy_and_gradients, H4Parameters,
+    H4Parameters, compute_h4_energy, compute_hh_repulsion_energy_and_gradients,
 };
 use mopac_core::gradients::nuclear_gradients::{
-    compute_cartesian_gradients_with_options, GradientWorkspace,
+    GradientWorkspace, compute_cartesian_gradients_with_options,
 };
-use mopac_core::mozyme::{run_mozyme_scf, MozymeOptions};
+use mopac_core::mozyme::{MozymeOptions, run_mozyme_scf};
 use mopac_core::opt::eigenvector_following::{
-    optimize_transition_state, EigenvectorFollowingWorkspace, TransitionStateOptions,
+    EigenvectorFollowingWorkspace, TransitionStateOptions, optimize_transition_state,
 };
 use mopac_core::opt::hessian_update::HessianUpdateScheme;
-use mopac_core::opt::lbfgs::{optimize_geometry_lbfgs, OptimizationOptions};
+use mopac_core::opt::lbfgs::{OptimizationOptions, optimize_geometry_lbfgs};
 use mopac_core::parameters::{
     Am1Model, MndoModel, ParameterModel, Pm3Model, Pm6Model, Pm7Model, Rm1Model,
 };
-use mopac_core::pbc::{run_pbc_scf, PbcOptions, PbcWorkspace, UnitCell};
+use mopac_core::pbc::{PbcOptions, PbcWorkspace, UnitCell, run_pbc_scf};
 use mopac_core::properties::{
-    compute_c_triple_bond_c_correction, compute_dipole_moment, compute_esp_charges,
-    compute_heat_of_formation, compute_mulliken_population, compute_nsp2_correction,
-    compute_polarizability, EspOptions, PolarizabilityOptions,
+    EspOptions, PolarizabilityOptions, compute_c_triple_bond_c_correction, compute_dipole_moment,
+    compute_esp_charges, compute_heat_of_formation, compute_mulliken_population,
+    compute_nsp2_correction, compute_polarizability,
 };
 use mopac_core::reactions::{
-    run_dynamic_reaction_coordinate, run_saddle, trace_intrinsic_reaction_coordinate, DrcEnsemble,
-    DrcOptions, DrcWorkspace, InitialVelocities, IrcDirection, IrcOptions, IrcWorkspace,
-    SaddleOptions,
+    DrcEnsemble, DrcOptions, DrcWorkspace, InitialVelocities, IrcDirection, IrcOptions,
+    IrcWorkspace, SaddleOptions, run_dynamic_reaction_coordinate, run_saddle,
+    trace_intrinsic_reaction_coordinate,
 };
-use mopac_core::scf::scf_loop::{run_rhf_scf_with_options, ScfOptions};
+use mopac_core::scf::scf_loop::{ScfOptions, run_rhf_scf_with_options};
 use mopac_core::solvation::CosmoParams;
 use mopac_core::types::{MolecularBatch, ScfWorkspace};
-use mopac_core::vibrations::{compute_hessian_and_frequencies, HessianOptions};
+use mopac_core::vibrations::{HessianOptions, compute_hessian_and_frequencies};
 use std::sync::atomic::{AtomicUsize, Ordering};
 
 static GLOBAL_NUM_THREADS: AtomicUsize = AtomicUsize::new(0);
@@ -60,11 +61,7 @@ fn resolve_num_threads(explicit: Option<usize>) -> Option<usize> {
         explicit
     } else {
         let g = GLOBAL_NUM_THREADS.load(Ordering::Relaxed);
-        if g > 0 {
-            Some(g)
-        } else {
-            None
-        }
+        if g > 0 { Some(g) } else { None }
     }
 }
 
@@ -201,7 +198,11 @@ impl OptimizationPyResult {
     fn __repr__(&self) -> String {
         format!(
             "<OptimizationPyResult converged={} cycles={} E_final={:.6} eV, dHf={:.3} kcal/mol, grad_rms={:.4}>",
-            self.converged, self.cycles, self.final_energy_ev, self.final_heat_of_formation_kcal, self.final_grad_rms
+            self.converged,
+            self.cycles,
+            self.final_energy_ev,
+            self.final_heat_of_formation_kcal,
+            self.final_grad_rms
         )
     }
 }
@@ -239,7 +240,12 @@ impl TransitionStatePyResult {
     fn __repr__(&self) -> String {
         format!(
             "<TransitionStatePyResult converged={} cycles={} E_final={:.6} eV, dHf={:.3} kcal/mol, ts_mode_val={:.3}, grad_rms={:.4}>",
-            self.converged, self.cycles, self.final_energy_ev, self.final_heat_of_formation_kcal, self.ts_mode_eigenvalue, self.final_grad_rms
+            self.converged,
+            self.cycles,
+            self.final_energy_ev,
+            self.final_heat_of_formation_kcal,
+            self.ts_mode_eigenvalue,
+            self.final_grad_rms
         )
     }
 
@@ -339,7 +345,11 @@ impl ThermodynamicsPy {
     fn __repr__(&self) -> String {
         format!(
             "<Thermodynamics T={:.2} K, ZPVE={:.2} kcal/mol, S°={:.2} cal/(mol·K), H_thermal={:.2} cal/mol, G_corr={:.2} kcal/mol>",
-            self.temperature_k, self.zpve_kcal_mol, self.entropy_total_cal_k_mol, self.enthalpy_thermal_cal_mol, self.gibbs_correction_kcal_mol
+            self.temperature_k,
+            self.zpve_kcal_mol,
+            self.entropy_total_cal_k_mol,
+            self.enthalpy_thermal_cal_mol,
+            self.gibbs_correction_kcal_mol
         )
     }
 
@@ -659,7 +669,11 @@ impl SaddlePointPy {
     fn __repr__(&self) -> String {
         format!(
             "<SaddlePointPy cycle={} moving_structure={} dist={:.3} A, dHf={:.3} kcal/mol, grad_rms={:.4}>",
-            self.cycle, self.moving_structure, self.distance, self.heat_of_formation_kcal, self.grad_rms
+            self.cycle,
+            self.moving_structure,
+            self.distance,
+            self.heat_of_formation_kcal,
+            self.grad_rms
         )
     }
 
@@ -709,7 +723,11 @@ impl SaddlePyResult {
     fn __repr__(&self) -> String {
         format!(
             "<SaddlePyResult converged={} cycles={} final_dist={:.4} A, TS dHf={:.3} kcal/mol, barrier_fwd={:.3} kcal/mol>",
-            self.converged, self.num_cycles, self.final_distance, self.transition_state_heat_of_formation_kcal, self.barrier_forward_kcal
+            self.converged,
+            self.num_cycles,
+            self.final_distance,
+            self.transition_state_heat_of_formation_kcal,
+            self.barrier_forward_kcal
         )
     }
 
@@ -747,8 +765,8 @@ impl SaddlePyResult {
     }
 }
 
-fn get_cached_gpu_coulomb_calc(
-) -> Option<std::sync::Arc<std::sync::Mutex<mopac_gpu::GpuCoulombCalculator>>> {
+fn get_cached_gpu_coulomb_calc()
+-> Option<std::sync::Arc<std::sync::Mutex<mopac_gpu::GpuCoulombCalculator>>> {
     static CACHE: std::sync::OnceLock<
         Option<std::sync::Arc<std::sync::Mutex<mopac_gpu::GpuCoulombCalculator>>>,
     > = std::sync::OnceLock::new();
@@ -880,7 +898,7 @@ fn run_calculation_internal(
                     return Err(PyValueError::new_err(format!(
                         "Unknown dispersion model '{}'. Supported: 'PM6-DH+', 'PM7', 'D3-BJ'",
                         other
-                    )))
+                    )));
                 }
             };
             let mut disp_grads = vec![[0.0f64; 3]; natoms];
@@ -953,14 +971,12 @@ fn run_calculation_internal(
 
     let mut scf_ws = ScfWorkspace::allocate(batch.norbs);
 
-    if use_gpu {
-        if let Some(gpu_calc_arc) = get_cached_gpu_coulomb_calc() {
-            if let Ok(gpu_calc) = gpu_calc_arc.lock() {
-                if let Ok(gamma_matrix) = gpu_calc.compute_batch(&batch, model.as_ref()) {
-                    scf_ws.gamma = Some(gamma_matrix);
-                }
-            }
-        }
+    if use_gpu
+        && let Some(gpu_calc_arc) = get_cached_gpu_coulomb_calc()
+        && let Ok(gpu_calc) = gpu_calc_arc.lock()
+        && let Ok(gamma_matrix) = gpu_calc.compute_batch(&batch, model.as_ref())
+    {
+        scf_ws.gamma = Some(gamma_matrix);
     }
 
     let opts = ScfOptions {
@@ -1041,7 +1057,7 @@ fn run_calculation_internal(
                 return Err(PyValueError::new_err(format!(
                     "Unknown dispersion model '{}'. Supported: 'PM6-DH+', 'PM7', 'D3-BJ'",
                     other
-                )))
+                )));
             }
         };
         let mut disp_grads = vec![[0.0f64; 3]; natoms];
@@ -1803,7 +1819,7 @@ pub fn irc(
             return Err(PyValueError::new_err(format!(
                 "Unknown IRC direction '{}'. Supported: 'both', 'forward', 'reverse'",
                 other
-            )))
+            )));
         }
     };
 
@@ -1921,7 +1937,7 @@ pub fn drc(
             return Err(PyValueError::new_err(format!(
                 "Unknown DRC ensemble '{}'. Supported: 'nve', 'nvt'",
                 other
-            )))
+            )));
         }
     };
 
@@ -3760,21 +3776,21 @@ pub fn generate_orbital_cube(
             n_threads: resolve_num_threads(n_threads),
         };
 
-        if use_gpu.unwrap_or(false) {
-            if let Ok(ctx) = mopac_gpu::VulkanContext::new() {
-                let ctx = std::sync::Arc::new(ctx);
-                if let Ok(gpu_cube) = mopac_gpu::GpuCubeEvaluator::new(ctx) {
-                    if let Ok(cube_str) = gpu_cube.generate_molecular_orbital_cube(
-                        &batch,
-                        model.as_ref(),
-                        mo_coeffs,
-                        target_idx,
-                        energy_ev,
-                        &config,
-                    ) {
-                        return Ok(cube_str);
-                    }
-                }
+        if use_gpu.unwrap_or(false)
+            && let Ok(ctx) = mopac_gpu::VulkanContext::new()
+        {
+            let ctx = std::sync::Arc::new(ctx);
+            if let Ok(gpu_cube) = mopac_gpu::GpuCubeEvaluator::new(ctx)
+                && let Ok(cube_str) = gpu_cube.generate_molecular_orbital_cube(
+                    &batch,
+                    model.as_ref(),
+                    mo_coeffs,
+                    target_idx,
+                    energy_ev,
+                    &config,
+                )
+            {
+                return Ok(cube_str);
             }
         }
 
@@ -3851,16 +3867,15 @@ pub fn generate_density_cube(
             n_threads: resolve_num_threads(n_threads),
         };
 
-        if use_gpu.unwrap_or(false) {
-            if let Ok(ctx) = mopac_gpu::VulkanContext::new() {
-                let ctx = std::sync::Arc::new(ctx);
-                if let Ok(gpu_cube) = mopac_gpu::GpuCubeEvaluator::new(ctx) {
-                    if let Ok(cube_str) =
-                        gpu_cube.generate_density_cube(&batch, model.as_ref(), &ws.density, &config)
-                    {
-                        return Ok(cube_str);
-                    }
-                }
+        if use_gpu.unwrap_or(false)
+            && let Ok(ctx) = mopac_gpu::VulkanContext::new()
+        {
+            let ctx = std::sync::Arc::new(ctx);
+            if let Ok(gpu_cube) = mopac_gpu::GpuCubeEvaluator::new(ctx)
+                && let Ok(cube_str) =
+                    gpu_cube.generate_density_cube(&batch, model.as_ref(), &ws.density, &config)
+            {
+                return Ok(cube_str);
             }
         }
 

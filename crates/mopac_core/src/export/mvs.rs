@@ -29,7 +29,7 @@ pub fn export_mvs_session(
             return Err(format!(
                 "Unsupported format '{}' for MVS session (expected pdb, cif, or mmcif)",
                 format
-            ))
+            ));
         }
     };
 

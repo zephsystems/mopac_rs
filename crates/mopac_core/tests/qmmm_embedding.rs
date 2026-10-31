@@ -7,11 +7,11 @@
 //! 3. Net energy stabilization in polarizing field.
 
 use mopac_core::hamiltonian::external_charges::{
-    compute_external_charges_gradients, ExternalCharge,
+    ExternalCharge, compute_external_charges_gradients,
 };
 use mopac_core::parameters::am1::Am1Model;
 use mopac_core::properties::compute_dipole_moment;
-use mopac_core::scf::scf_loop::{run_rhf_scf_with_options, ScfOptions};
+use mopac_core::scf::scf_loop::{ScfOptions, run_rhf_scf_with_options};
 use mopac_core::types::{MolecularBatch, ScfWorkspace};
 
 #[test]
@@ -166,7 +166,11 @@ fn test_qmmm_analytical_external_gradients_vs_finite_difference() {
             assert!(
                 diff < 1e-5,
                 "Core-ext gradient deviation on atom {} axis {}: analytical {}, numerical {}, diff {}",
-                a, coord_idx, core_grad[a][coord_idx], num_core_deriv, diff
+                a,
+                coord_idx,
+                core_grad[a][coord_idx],
+                num_core_deriv,
+                diff
             );
         }
     }

@@ -7,6 +7,6 @@
 pub mod hessian;
 
 pub use hessian::{
-    compute_hessian_and_frequencies, HessianOptions, HessianResult, NormalMode,
-    ThermodynamicProperties, CM1_TO_KCAL_MOL, CM1_TO_KELVIN, KCAL_MOL_A2_AMU_TO_CM1,
+    CM1_TO_KCAL_MOL, CM1_TO_KELVIN, HessianOptions, HessianResult, KCAL_MOL_A2_AMU_TO_CM1,
+    NormalMode, ThermodynamicProperties, compute_hessian_and_frequencies,
 };

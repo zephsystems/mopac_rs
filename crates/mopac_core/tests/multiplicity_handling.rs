@@ -92,7 +92,7 @@ fn run_uhf(
     c: &[[f64; 3]],
     multiplicity: usize,
 ) -> (f64, bool, usize) {
-    use mopac_core::scf::uhf_loop::{run_uhf_scf_with_options, UhfOptions, UhfWorkspace};
+    use mopac_core::scf::uhf_loop::{UhfOptions, UhfWorkspace, run_uhf_scf_with_options};
     let batch = mopac_core::types::MolecularBatch::new_for_model(z.to_vec(), c, model);
     let mut ws = UhfWorkspace::new(batch.norbs);
     let opts = UhfOptions {

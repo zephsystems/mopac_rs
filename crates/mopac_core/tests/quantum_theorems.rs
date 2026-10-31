@@ -12,7 +12,7 @@
 
 use mopac_core::parameters::am1::Am1Model;
 use mopac_core::parameters::pm6::Pm6Model;
-use mopac_core::scf::scf_loop::{run_rhf_scf_with_options, ScfOptions};
+use mopac_core::scf::scf_loop::{ScfOptions, run_rhf_scf_with_options};
 use mopac_core::types::*;
 
 /// Quantum Invariant 1: Idempotency of the Closed-Shell Density Matrix.

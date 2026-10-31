@@ -8,8 +8,8 @@ use mopac_core::integrals::core_repulsion::*;
 use mopac_core::integrals::overlap::*;
 use mopac_core::integrals::rotation::*;
 use mopac_core::integrals::two_electron::*;
-use mopac_core::parameters::am1::Am1Model;
 use mopac_core::parameters::ParameterModel;
+use mopac_core::parameters::am1::Am1Model;
 use mopac_core::types::*;
 use std::thread;
 
@@ -423,7 +423,7 @@ fn test_scrutiny_end_to_end_h2_scf_convergence() {
 #[test]
 fn test_scrutiny_pulay_diis_error_reduction() {
     use mopac_core::scf::diis::{
-        solve_pulay_system, DiisWorkspace, DEFAULT_MAX_DIIS, MAX_DIIS_CAPACITY,
+        DEFAULT_MAX_DIIS, DiisWorkspace, MAX_DIIS_CAPACITY, solve_pulay_system,
     };
 
     let n = 4;
@@ -546,8 +546,8 @@ fn test_scrutiny_pulay_diis_error_reduction() {
 #[test]
 fn test_scrutiny_diatomic_overlap_block_invariants_and_rotation() {
     use mopac_core::integrals::overlap::compute_diatomic_overlap_block;
-    use mopac_core::parameters::am1::Am1Model;
     use mopac_core::parameters::ParameterModel;
+    use mopac_core::parameters::am1::Am1Model;
 
     let am1 = Am1Model;
     let param_c = am1.get_element(6).unwrap();
@@ -689,7 +689,7 @@ fn test_scrutiny_virtual_orbital_level_shifting_invariants() {
     use mopac_core::parameters::am1::Am1Model;
     use mopac_core::scf::density::compute_density_matrix;
     use mopac_core::scf::eigensolver::diagonalize_symmetric;
-    use mopac_core::scf::scf_loop::{apply_level_shift, run_rhf_scf_with_options, ScfOptions};
+    use mopac_core::scf::scf_loop::{ScfOptions, apply_level_shift, run_rhf_scf_with_options};
     use mopac_core::types::{AlignedMatrix, MolecularBatch, ScfWorkspace};
 
     let am1 = Am1Model;
@@ -824,7 +824,7 @@ fn test_scrutiny_virtual_orbital_level_shifting_invariants() {
 /// 3. Spline Minimization: exact analytical root recovery on known cubic potential.
 #[test]
 fn test_scrutiny_camp_king_unitary_interpolator() {
-    use mopac_core::scf::camp_king::{interpolate_camp_king, spline_minimize, CampKingWorkspace};
+    use mopac_core::scf::camp_king::{CampKingWorkspace, interpolate_camp_king, spline_minimize};
     use mopac_core::types::AlignedMatrix;
 
     // 1. Verify cubic spline minimization on known function:
@@ -965,8 +965,8 @@ fn test_scrutiny_camp_king_unitary_interpolator() {
 #[test]
 fn test_scrutiny_density_fitting_ri_v_invariants() {
     use mopac_core::ri::{
-        cholesky_decompose, compute_coulomb_ri, compute_inverse_square_root_metric,
-        ThreeCenterTensorB,
+        ThreeCenterTensorB, cholesky_decompose, compute_coulomb_ri,
+        compute_inverse_square_root_metric,
     };
     use mopac_core::types::{AlignedMatrix, AlignedVec64};
 
@@ -1106,10 +1106,10 @@ fn test_scrutiny_density_fitting_ri_v_invariants() {
 #[test]
 fn test_scrutiny_analytical_gradients_vs_finite_difference() {
     use mopac_core::gradients::{
-        compute_cartesian_gradients, compute_gradient_norms, GradientWorkspace,
+        GradientWorkspace, compute_cartesian_gradients, compute_gradient_norms,
     };
     use mopac_core::parameters::am1::Am1Model;
-    use mopac_core::scf::scf_loop::{run_rhf_scf, run_rhf_scf_with_options, ScfOptions};
+    use mopac_core::scf::scf_loop::{ScfOptions, run_rhf_scf, run_rhf_scf_with_options};
     use mopac_core::types::{MolecularBatch, ScfWorkspace};
 
     let am1 = Am1Model;
@@ -1206,7 +1206,8 @@ fn test_scrutiny_analytical_gradients_vs_finite_difference() {
         "RMS gradient must be positive for non-equilibrium geometry"
     );
     assert!(max_g > 0.0);
-    println!("[OK] H2 (R=0.85 Å) Gradient verified: anal = {:.6} eV/Å, num = {:.6} eV/Å, RMS = {:.3} kcal/(mol·Å)",
+    println!(
+        "[OK] H2 (R=0.85 Å) Gradient verified: anal = {:.6} eV/Å, num = {:.6} eV/Å, RMS = {:.3} kcal/(mol·Å)",
         anal_de_dz1, num_de_dz1, rms
     );
 }
@@ -1220,7 +1221,7 @@ fn test_scrutiny_analytical_gradients_vs_finite_difference() {
 #[test]
 fn test_scrutiny_lbfgs_geometry_optimization() {
     use mopac_core::gradients::GradientWorkspace;
-    use mopac_core::opt::{optimize_geometry_lbfgs, OptimizationOptions};
+    use mopac_core::opt::{OptimizationOptions, optimize_geometry_lbfgs};
     use mopac_core::parameters::am1::Am1Model;
     use mopac_core::types::{MolecularBatch, ScfWorkspace};
 
@@ -1266,10 +1267,12 @@ fn test_scrutiny_lbfgs_geometry_optimization() {
     assert!(
         r_err < 0.005,
         "Relaxed H2 bond length must match exact AM1 equilibrium ~0.6766 Å, got: {:.4} Å (diff = {:.6})",
-        final_r, r_err
+        final_r,
+        r_err
     );
 
-    println!("[OK] L-BFGS H2 Optimization Succeeded in {} cycles: R = 0.95 Å -> {:.4} Å, E = {:.6} -> {:.6} eV, RMS Grad = {:.3} kcal/(mol·Å)",
+    println!(
+        "[OK] L-BFGS H2 Optimization Succeeded in {} cycles: R = 0.95 Å -> {:.4} Å, E = {:.6} -> {:.6} eV, RMS Grad = {:.3} kcal/(mol·Å)",
         res.cycles, final_r, res.initial_energy_ev, res.final_energy_ev, res.final_grad_rms
     );
 }
@@ -1281,7 +1284,7 @@ fn test_scrutiny_lbfgs_geometry_optimization() {
 #[test]
 fn test_scrutiny_full_nddo_scf_water_parity() {
     use mopac_core::parameters::am1::Am1Model;
-    use mopac_core::scf::scf_loop::{run_rhf_scf_with_options, ScfOptions};
+    use mopac_core::scf::scf_loop::{ScfOptions, run_rhf_scf_with_options};
     use mopac_core::types::{MolecularBatch, ScfWorkspace};
 
     let coords = vec![[0.0, 0.0, 0.0], [0.757, 0.586, 0.0], [-0.757, 0.586, 0.0]];
@@ -1331,7 +1334,7 @@ fn test_scrutiny_full_nddo_scf_water_parity() {
 fn test_scrutiny_rm1_and_pm6_convergence() {
     use mopac_core::parameters::pm6::Pm6Model;
     use mopac_core::parameters::rm1::Rm1Model;
-    use mopac_core::scf::scf_loop::{run_rhf_scf_with_options, ScfOptions};
+    use mopac_core::scf::scf_loop::{ScfOptions, run_rhf_scf_with_options};
     use mopac_core::types::{MolecularBatch, ScfWorkspace};
 
     let coords = vec![[0.0, 0.0, 0.0], [0.0, 0.0, 0.74]];
@@ -1383,7 +1386,10 @@ fn test_scrutiny_rm1_and_pm6_convergence() {
 
     println!(
         "[OK] RM1 and PM6 Models verified: RM1 E_tot = {:.6} eV (HOMO = {:.4} eV), PM6 E_tot = {:.6} eV (HOMO = {:.4} eV)",
-        res_rm1.total_energy_ev, res_rm1.homo_energy_ev, res_pm6.total_energy_ev, res_pm6.homo_energy_ev
+        res_rm1.total_energy_ev,
+        res_rm1.homo_energy_ev,
+        res_pm6.total_energy_ev,
+        res_pm6.homo_energy_ev
     );
 }
 
@@ -1396,7 +1402,7 @@ fn test_scrutiny_pm3_and_extended_elements_convergence() {
     use mopac_core::parameters::am1::Am1Model;
     use mopac_core::parameters::pm3::Pm3Model;
     use mopac_core::parameters::pm6::Pm6Model;
-    use mopac_core::scf::scf_loop::{run_rhf_scf_with_options, ScfOptions};
+    use mopac_core::scf::scf_loop::{ScfOptions, run_rhf_scf_with_options};
     use mopac_core::types::{MolecularBatch, ScfWorkspace};
 
     let opts = ScfOptions {
@@ -1456,7 +1462,10 @@ fn test_scrutiny_pm3_and_extended_elements_convergence() {
 
     println!(
         "[OK] PM3 and Extended Elements (F, S) verified: PM3 H2O E_tot = {:.6} eV, AM1 HF E_tot = {:.6} eV, PM6 HF E_tot = {:.6} eV, AM1 H2S E_tot = {:.6} eV",
-        res_h2o_pm3.total_energy_ev, res_hf_am1.total_energy_ev, res_hf_pm6.total_energy_ev, res_h2s.total_energy_ev
+        res_h2o_pm3.total_energy_ev,
+        res_hf_am1.total_energy_ev,
+        res_hf_pm6.total_energy_ev,
+        res_h2s.total_energy_ev
     );
 }
 
@@ -1468,9 +1477,9 @@ fn test_scrutiny_pm3_and_extended_elements_convergence() {
 #[test]
 fn test_scrutiny_hybridization_dipole_exact_parity() {
     use mopac_core::integrals::multipoles::DerivedMultipoleParams;
-    use mopac_core::parameters::am1::Am1Model;
     use mopac_core::parameters::ParameterModel;
-    use mopac_core::scf::scf_loop::{run_rhf_scf_with_options, ScfOptions};
+    use mopac_core::parameters::am1::Am1Model;
+    use mopac_core::scf::scf_loop::{ScfOptions, run_rhf_scf_with_options};
     use mopac_core::types::{MolecularBatch, ScfWorkspace};
 
     let coords = vec![
@@ -1551,7 +1560,7 @@ fn test_scrutiny_hybridization_dipole_exact_parity() {
 #[test]
 fn test_scrutiny_full_nddo_lbfgs_water_relaxation() {
     use mopac_core::gradients::GradientWorkspace;
-    use mopac_core::opt::{optimize_geometry_lbfgs, OptimizationOptions};
+    use mopac_core::opt::{OptimizationOptions, optimize_geometry_lbfgs};
     use mopac_core::parameters::am1::Am1Model;
     use mopac_core::types::{MolecularBatch, ScfWorkspace};
 
@@ -1613,7 +1622,7 @@ fn test_scrutiny_full_nddo_lbfgs_water_relaxation() {
 #[test]
 fn test_scrutiny_constrained_geometry_relaxation_coordinate_pinning() {
     use mopac_core::gradients::GradientWorkspace;
-    use mopac_core::opt::{optimize_geometry_lbfgs, OptimizationOptions};
+    use mopac_core::opt::{OptimizationOptions, optimize_geometry_lbfgs};
     use mopac_core::parameters::am1::Am1Model;
     use mopac_core::types::{MolecularBatch, ScfWorkspace};
 
@@ -1672,7 +1681,11 @@ fn test_scrutiny_constrained_geometry_relaxation_coordinate_pinning() {
 
     println!(
         "[OK] Constrained Optimization Succeeded in {} cycles: Pinned Atom 0 remained at exactly ({:.9}, {:.9}, {:.9}), E dropped by {:.6} eV",
-        res.cycles, batch.x[0], batch.y[0], batch.z[0], res.initial_energy_ev - res.final_energy_ev
+        res.cycles,
+        batch.x[0],
+        batch.y[0],
+        batch.z[0],
+        res.initial_energy_ev - res.final_energy_ev
     );
 }
 
@@ -1683,7 +1696,7 @@ fn test_scrutiny_constrained_geometry_relaxation_coordinate_pinning() {
 #[test]
 fn test_scrutiny_mndo_hamiltonian_convergence() {
     use mopac_core::parameters::mndo::MndoModel;
-    use mopac_core::scf::scf_loop::{run_rhf_scf_with_options, ScfOptions};
+    use mopac_core::scf::scf_loop::{ScfOptions, run_rhf_scf_with_options};
     use mopac_core::types::{MolecularBatch, ScfWorkspace};
 
     let mndo = MndoModel;
@@ -1737,7 +1750,10 @@ fn test_scrutiny_mndo_hamiltonian_convergence() {
 
     println!(
         "[OK] MNDO Hamiltonian Verified: H2O E_tot = {:.6} eV (HOMO = {:.4} eV), CH4 E_tot = {:.6} eV (HOMO = {:.4} eV)",
-        res_h2o.total_energy_ev, res_h2o.homo_energy_ev, res_ch4.total_energy_ev, res_ch4.homo_energy_ev
+        res_h2o.total_energy_ev,
+        res_h2o.homo_energy_ev,
+        res_ch4.total_energy_ev,
+        res_ch4.homo_energy_ev
     );
 }
 
@@ -1753,7 +1769,7 @@ fn test_scrutiny_harmonic_vibrational_frequencies_and_thermodynamics() {
     use mopac_core::parameters::am1::Am1Model;
     use mopac_core::scf::scf_loop::ScfOptions;
     use mopac_core::types::{MolecularBatch, ScfWorkspace};
-    use mopac_core::vibrations::hessian::{compute_hessian_and_frequencies, HessianOptions};
+    use mopac_core::vibrations::hessian::{HessianOptions, compute_hessian_and_frequencies};
 
     let coords = vec![
         [0.000000000, 0.000000000, -0.002980424],
@@ -1941,7 +1957,7 @@ fn test_scrutiny_properties_dipole_bonds_and_mulliken_parity() {
     use mopac_core::properties::{
         compute_bond_orders, compute_dipole_moment, compute_mulliken_population,
     };
-    use mopac_core::scf::scf_loop::{run_rhf_scf_with_options, ScfOptions};
+    use mopac_core::scf::scf_loop::{ScfOptions, run_rhf_scf_with_options};
     use mopac_core::types::{MolecularBatch, ScfWorkspace};
 
     // Standard water geometry (AM1 reference coordinates)
@@ -2153,7 +2169,9 @@ fn test_scrutiny_properties_dipole_bonds_and_mulliken_parity() {
         "Sum of Mulliken charges must be identically zero for neutral molecule"
     );
 
-    println!("[OK] Scrutiny Test 24 Passed: Dipole moments, Mayer bond orders, and Mulliken populations confirmed with exact OpenMOPAC parity.");
+    println!(
+        "[OK] Scrutiny Test 24 Passed: Dipole moments, Mayer bond orders, and Mulliken populations confirmed with exact OpenMOPAC parity."
+    );
 }
 
 /// Scrutiny Test 25: Empirical Dispersion Corrections (PM6-DH+, PM7) and Analytical Gradients Parity.
@@ -2172,9 +2190,8 @@ fn test_scrutiny_properties_dipole_bonds_and_mulliken_parity() {
 #[test]
 fn test_scrutiny_empirical_dispersion_and_analytical_gradients() {
     use mopac_core::corrections::{
-        compute_dispersion_energy, compute_dispersion_energy_and_gradients,
-        diatomic_dispersion_parameters, DispersionModel, DISPERSION_C6, DISPERSION_NEFF,
-        DISPERSION_R0,
+        DISPERSION_C6, DISPERSION_NEFF, DISPERSION_R0, DispersionModel, compute_dispersion_energy,
+        compute_dispersion_energy_and_gradients, diatomic_dispersion_parameters,
     };
     use mopac_core::types::MolecularBatch;
 
@@ -2341,7 +2358,9 @@ fn test_scrutiny_empirical_dispersion_and_analytical_gradients() {
         max_d3_grad_diff
     );
 
-    println!("[OK] Scrutiny Test 25 Passed: Empirical dispersion energies (PM6-DH+, D3-BJ) and analytical gradients match OpenMOPAC to < 1e-4 kcal/mol and < 1e-6 gradient error.");
+    println!(
+        "[OK] Scrutiny Test 25 Passed: Empirical dispersion energies (PM6-DH+, D3-BJ) and analytical gradients match OpenMOPAC to < 1e-4 kcal/mol and < 1e-6 gradient error."
+    );
 }
 
 /// Scrutiny Test 26: Empirical H4 Hydrogen Bonding & H-H Short-Range Repulsion Verification.
@@ -2354,7 +2373,7 @@ fn test_scrutiny_empirical_dispersion_and_analytical_gradients() {
 #[test]
 fn test_scrutiny_h4_hydrogen_bonds_and_hh_repulsion() {
     use mopac_core::corrections::h_bonds4::{
-        compute_h4_energy, compute_hh_repulsion_energy_and_gradients, H4Parameters,
+        H4Parameters, compute_h4_energy, compute_hh_repulsion_energy_and_gradients,
     };
     use mopac_core::types::MolecularBatch;
 
@@ -2445,7 +2464,9 @@ fn test_scrutiny_h4_hydrogen_bonds_and_hh_repulsion() {
         net_force
     );
 
-    println!("[OK] Scrutiny Test 26 Passed: Empirical H4 and H-H repulsion match OpenMOPAC references to < 1e-4 kcal/mol and strict Newton's 3rd law.");
+    println!(
+        "[OK] Scrutiny Test 26 Passed: Empirical H4 and H-H repulsion match OpenMOPAC references to < 1e-4 kcal/mol and strict Newton's 3rd law."
+    );
 }
 
 /// Scrutiny Test 27: COSMO Implicit Solvation & Solvent Reaction Field Polarization Verification.
@@ -2579,7 +2600,7 @@ fn test_scrutiny_halogens_and_heteroatoms_extension() {
     use mopac_core::gradients::GradientWorkspace;
     use mopac_core::parameters::{Am1Model, Pm6Model, Rm1Model};
     use mopac_core::properties::heat::compute_heat_of_formation;
-    use mopac_core::scf::scf_loop::{run_rhf_scf_with_options, ScfOptions};
+    use mopac_core::scf::scf_loop::{ScfOptions, run_rhf_scf_with_options};
     use mopac_core::types::{MolecularBatch, ScfWorkspace};
 
     let opts = ScfOptions {

@@ -158,8 +158,8 @@ pub fn compute_lattice_bounds(
 }
 
 use crate::integrals::multipoles::{
-    compute_22_multipoles, compute_electron_nuclear_attraction, rotate_multipoles_to_w,
-    DerivedMultipoleParams, DiatomicRotation3D,
+    DerivedMultipoleParams, DiatomicRotation3D, compute_22_multipoles,
+    compute_electron_nuclear_attraction, rotate_multipoles_to_w,
 };
 
 /// Compute rotated NDDO diatomic integrals at relative distance vector (dx, dy, dz).
@@ -880,7 +880,9 @@ mod tests {
 
         println!(
             "\n[SOLROT PERF] Periodic lattice sum: {:.1} evals/sec ({:.2} µs/eval), Pairs per cell: {}",
-            evals_per_sec, us_per_eval, total_pairs / n_iterations
+            evals_per_sec,
+            us_per_eval,
+            total_pairs / n_iterations
         );
 
         // Throughput requirement: < 100.0 ms in unoptimized debug under CI contention, < 5.0 ms in release
@@ -1002,7 +1004,12 @@ mod tests {
         let res = run_solrot_pbc_scf(&batch, &model, &unit_cell, 100, 1e-7, 1e-5).expect("PBC SCF");
         println!(
             "SOLROT SCF: converged = {}, iters = {}, E_tot = {:.5} eV, E_elec = {:.5} eV, HoF = {:.5} kcal/mol, HOMO = {:.5} eV",
-            res.converged, res.iterations, res.total_energy_per_cell_ev, res.electronic_energy_per_cell_ev, res.heat_of_formation_kcal_mol, res.vbm_energy_ev
+            res.converged,
+            res.iterations,
+            res.total_energy_per_cell_ev,
+            res.electronic_energy_per_cell_ev,
+            res.heat_of_formation_kcal_mol,
+            res.vbm_energy_ev
         );
         assert!(
             res.converged,

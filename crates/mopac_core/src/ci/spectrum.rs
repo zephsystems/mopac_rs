@@ -67,20 +67,21 @@ pub fn compute_transition_dipoles_and_oscillator_strengths(
 
                     // Intra-atomic hybridization dipole contribution: <ns | r_c | np_c> = D1 * a0
                     let z = batch.atomic_numbers[a];
-                    if z != 1 && norbs >= 4 {
-                        if let Some(p) = model.get_element(z) {
-                            let mp = DerivedMultipoleParams::from_element(&p);
-                            let d1_angstrom = mp.dd * A0_BOHR;
-                            let s_idx = orb_start;
-                            let p_idx = orb_start + 1 + c;
+                    if z != 1
+                        && norbs >= 4
+                        && let Some(p) = model.get_element(z)
+                    {
+                        let mp = DerivedMultipoleParams::from_element(&p);
+                        let d1_angstrom = mp.dd * A0_BOHR;
+                        let s_idx = orb_start;
+                        let p_idx = orb_start + 1 + c;
 
-                            let c_si = eigenvectors.get(s_idx, mo_i);
-                            let c_pi = eigenvectors.get(p_idx, mo_i);
-                            let c_sj = eigenvectors.get(s_idx, mo_j);
-                            let c_pj = eigenvectors.get(p_idx, mo_j);
+                        let c_si = eigenvectors.get(s_idx, mo_i);
+                        let c_pi = eigenvectors.get(p_idx, mo_i);
+                        let c_sj = eigenvectors.get(s_idx, mo_j);
+                        let c_pj = eigenvectors.get(p_idx, mo_j);
 
-                            val += d1_angstrom * (c_si * c_pj + c_pi * c_sj);
-                        }
+                        val += d1_angstrom * (c_si * c_pj + c_pi * c_sj);
                     }
                 }
 

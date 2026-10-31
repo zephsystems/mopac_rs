@@ -280,7 +280,9 @@ fn test_backward_compatibility_gddr6_aliases() {
         .expect("download_matrix_from_gddr6 failed");
 
     assert!((mat.get(0, 0) - 11.0).abs() < 1e-4);
-    println!("[OK] Backward compatibility aliases (upload_batch_to_gddr6 / download_matrix_from_gddr6) 100% verified!");
+    println!(
+        "[OK] Backward compatibility aliases (upload_batch_to_gddr6 / download_matrix_from_gddr6) 100% verified!"
+    );
 }
 
 #[test]

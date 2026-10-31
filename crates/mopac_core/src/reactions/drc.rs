@@ -16,7 +16,7 @@
 use crate::constants::codata2018::EV_TO_KCAL_MOL;
 use crate::constants::standard_atomic_mass;
 use crate::gradients::nuclear_gradients::{
-    compute_cartesian_gradients_with_options, GradientWorkspace,
+    GradientWorkspace, compute_cartesian_gradients_with_options,
 };
 use crate::parameters::ParameterModel;
 use crate::scf::scf_loop::run_rhf_scf_adaptive_with_nddo;

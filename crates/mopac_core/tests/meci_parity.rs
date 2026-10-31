@@ -11,7 +11,7 @@
 //!   on ethylene (C2H4) active space (C.I.=2, 2 MOs, 2 electrons) validating state energies, polarization,
 //!   transition dipole, and oscillator strength.
 
-use mopac_core::ci::meci::{run_meci, CiActiveSpace, MeciOptions, MeciWorkspace};
+use mopac_core::ci::meci::{CiActiveSpace, MeciOptions, MeciWorkspace, run_meci};
 use mopac_core::ci::spectrum::{
     compute_transition_dipoles_and_oscillator_strengths, simulate_uv_vis_spectrum,
 };

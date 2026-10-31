@@ -11,11 +11,11 @@ use crate::constants::codata2018::{
 };
 use crate::constants::standard_atomic_mass;
 use crate::gradients::nuclear_gradients::{
-    compute_cartesian_gradients_with_options, GradientWorkspace,
+    GradientWorkspace, compute_cartesian_gradients_with_options,
 };
 use crate::parameters::ParameterModel;
 use crate::scf::eigensolver::diagonalize_symmetric;
-use crate::scf::scf_loop::{run_rhf_scf_with_options, ScfOptions};
+use crate::scf::scf_loop::{ScfOptions, run_rhf_scf_with_options};
 use crate::types::{AlignedMatrix, AlignedVec64, MolecularBatch, ScfWorkspace};
 use rayon::prelude::*;
 

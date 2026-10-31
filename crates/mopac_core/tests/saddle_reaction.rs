@@ -4,7 +4,7 @@
 //! saddle point searches against canonical transition state chemistry.
 
 use mopac_core::parameters::pm6::Pm6Model;
-use mopac_core::reactions::saddle::{dock, run_saddle, SaddleOptions};
+use mopac_core::reactions::saddle::{SaddleOptions, dock, run_saddle};
 
 #[test]
 fn test_horn_dock_rigid_alignment() {
@@ -84,7 +84,11 @@ fn test_saddle_ammonia_umbrella_inversion() {
 
     println!(
         "[SADDLE RESULT] Ammonia: converged={}, cycles={}, final_dist={:.4} A, TS HoF={:.3} kcal/mol, barrier_fwd={:.3} kcal/mol",
-        result.converged, result.num_cycles, result.final_distance, result.transition_state_heat_of_formation_kcal, result.barrier_forward_kcal
+        result.converged,
+        result.num_cycles,
+        result.final_distance,
+        result.transition_state_heat_of_formation_kcal,
+        result.barrier_forward_kcal
     );
     for (i, coord) in result.transition_state_coordinates.iter().enumerate() {
         println!(
@@ -187,7 +191,12 @@ fn test_saddle_hcn_hnc_isomerization() {
 
     println!(
         "[SADDLE RESULT] HCN-HNC: converged={}, cycles={}, final_dist={:.4} A, TS HoF={:.3} kcal/mol, barrier_fwd={:.3} kcal/mol, barrier_rev={:.3} kcal/mol",
-        result.converged, result.num_cycles, result.final_distance, result.transition_state_heat_of_formation_kcal, result.barrier_forward_kcal, result.barrier_reverse_kcal
+        result.converged,
+        result.num_cycles,
+        result.final_distance,
+        result.transition_state_heat_of_formation_kcal,
+        result.barrier_forward_kcal,
+        result.barrier_reverse_kcal
     );
 
     assert!(

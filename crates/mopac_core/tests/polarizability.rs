@@ -9,7 +9,7 @@
 use mopac_core::parameters::am1::Am1Model;
 use mopac_core::parameters::pm6::Pm6Model;
 use mopac_core::parameters::pm7::Pm7Model;
-use mopac_core::properties::polarizability::{compute_polarizability, PolarizabilityOptions};
+use mopac_core::properties::polarizability::{PolarizabilityOptions, compute_polarizability};
 use mopac_core::types::MolecularBatch;
 
 #[test]
@@ -34,10 +34,16 @@ fn test_water_pm6_polarizability_openmopac_parity() {
 
     println!(
         "[POLARIZABILITY RESULT] Water PM6:\n  alpha_diag: [{:.4}, {:.4}, {:.4}] a.u.\n  alpha_iso: {:.4} a.u. ({:.4} A^3)\n  alpha_eigenvals: [{:.4}, {:.4}, {:.4}]\n  beta_tot: {:.4} a.u.\n  gamma_avg: {:.4} a.u.",
-        res.alpha_tensor[0][0], res.alpha_tensor[1][1], res.alpha_tensor[2][2],
-        res.alpha_isotropic_au, res.alpha_isotropic_angstrom3,
-        res.alpha_eigenvalues[0], res.alpha_eigenvalues[1], res.alpha_eigenvalues[2],
-        res.beta_total_au, res.gamma_average_au
+        res.alpha_tensor[0][0],
+        res.alpha_tensor[1][1],
+        res.alpha_tensor[2][2],
+        res.alpha_isotropic_au,
+        res.alpha_isotropic_angstrom3,
+        res.alpha_eigenvalues[0],
+        res.alpha_eigenvalues[1],
+        res.alpha_eigenvalues[2],
+        res.beta_total_au,
+        res.gamma_average_au
     );
 
     // Canonical OpenMOPAC v23.2.5 STATIC output for PM6 Water:

@@ -14,13 +14,13 @@ pub mod heat;
 pub mod mulliken;
 pub mod polarizability;
 
-pub use am1_bcc::{compute_am1_bcc_charges, Am1BccResult};
-pub use bonds::{compute_bond_orders, BondOrderResult};
-pub use dipole::{compute_dipole_moment, DipoleResult, E_ANGSTROM_TO_DEBYE};
-pub use esp::{bondi_vdw_radius_angstrom, compute_esp_charges, EspOptions, EspResult};
+pub use am1_bcc::{Am1BccResult, compute_am1_bcc_charges};
+pub use bonds::{BondOrderResult, compute_bond_orders};
+pub use dipole::{DipoleResult, E_ANGSTROM_TO_DEBYE, compute_dipole_moment};
+pub use esp::{EspOptions, EspResult, bondi_vdw_radius_angstrom, compute_esp_charges};
 pub use heat::{
     compute_c_triple_bond_c_correction, compute_heat_of_formation, compute_nsp2_correction,
     get_isolated_atom_energy_and_heat,
 };
-pub use mulliken::{compute_mulliken_population, MullikenResult};
-pub use polarizability::{compute_polarizability, PolarizabilityOptions, PolarizabilityResult};
+pub use mulliken::{MullikenResult, compute_mulliken_population};
+pub use polarizability::{PolarizabilityOptions, PolarizabilityResult, compute_polarizability};

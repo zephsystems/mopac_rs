@@ -8,12 +8,12 @@
 //! In accordance with user directives: ZERO mock data, ZERO synthetic fallbacks.
 //! Every single value is computed dynamically and compared directly against the reference binary.
 
+use mopac_core::parameters::ParameterModel;
 use mopac_core::parameters::am1::Am1Model;
 use mopac_core::parameters::pm7::Pm7Model;
-use mopac_core::parameters::ParameterModel;
 use mopac_core::properties::heat::compute_heat_of_formation;
-use mopac_core::scf::scf_loop::{run_rhf_scf_with_options, ScfOptions};
-use mopac_core::scf::uhf_loop::{run_uhf_scf_with_options, UhfOptions, UhfWorkspace};
+use mopac_core::scf::scf_loop::{ScfOptions, run_rhf_scf_with_options};
+use mopac_core::scf::uhf_loop::{UhfOptions, UhfWorkspace, run_uhf_scf_with_options};
 use mopac_core::types::{MolecularBatch, ScfWorkspace};
 use std::fs;
 use std::path::{Path, PathBuf};
@@ -242,8 +242,10 @@ fn test_golden_parity_water_am1() {
     };
 
     let hof_diff = (hof_mopacrs - oracle.heat_of_formation_kcal).abs();
-    println!("[ORACLE PARITY] H2O AM1: MOPAC_RS = {:.5} kcal/mol, OpenMOPAC = {:.5} kcal/mol, diff = {:.4} kcal/mol",
-        hof_mopacrs, oracle.heat_of_formation_kcal, hof_diff);
+    println!(
+        "[ORACLE PARITY] H2O AM1: MOPAC_RS = {:.5} kcal/mol, OpenMOPAC = {:.5} kcal/mol, diff = {:.4} kcal/mol",
+        hof_mopacrs, oracle.heat_of_formation_kcal, hof_diff
+    );
     assert!(
         hof_diff < 0.005,
         "H2O AM1 Heat of formation deviated from OpenMOPAC oracle: diff = {} kcal/mol",
@@ -253,8 +255,10 @@ fn test_golden_parity_water_am1() {
     // Verify core repulsion matches oracle to machine precision
     if let Some(oracle_nuc) = oracle.core_repulsion_ev {
         let nuc_diff = (scf_res.nuclear_repulsion_ev - oracle_nuc).abs();
-        println!("[ORACLE PARITY] H2O AM1 Core Repulsion: MOPAC_RS = {:.6} eV, Oracle = {:.6} eV, diff = {:.6} eV",
-            scf_res.nuclear_repulsion_ev, oracle_nuc, nuc_diff);
+        println!(
+            "[ORACLE PARITY] H2O AM1 Core Repulsion: MOPAC_RS = {:.6} eV, Oracle = {:.6} eV, diff = {:.6} eV",
+            scf_res.nuclear_repulsion_ev, oracle_nuc, nuc_diff
+        );
         assert!(
             nuc_diff < 1e-4,
             "Core repulsion deviated from oracle: diff = {}",
@@ -265,8 +269,12 @@ fn test_golden_parity_water_am1() {
     // Total energy relative parity (< 0.5%)
     if let Some(oracle_etot) = oracle.total_energy_ev {
         let rel_err = ((scf_res.total_energy_ev - oracle_etot) / oracle_etot).abs();
-        println!("[ORACLE PARITY] H2O AM1 Total Energy: MOPAC_RS = {:.6} eV, Oracle = {:.6} eV, rel_err = {:.4}%",
-            scf_res.total_energy_ev, oracle_etot, rel_err * 100.0);
+        println!(
+            "[ORACLE PARITY] H2O AM1 Total Energy: MOPAC_RS = {:.6} eV, Oracle = {:.6} eV, rel_err = {:.4}%",
+            scf_res.total_energy_ev,
+            oracle_etot,
+            rel_err * 100.0
+        );
         assert!(
             rel_err < 0.006,
             "Total energy relative error exceeded 0.6%: {}",
@@ -311,8 +319,10 @@ fn test_golden_parity_methane_am1() {
     };
 
     let hof_diff = (hof_mopacrs - oracle.heat_of_formation_kcal).abs();
-    println!("[ORACLE PARITY] CH4 AM1: MOPAC_RS = {:.5} kcal/mol, OpenMOPAC = {:.5} kcal/mol, diff = {:.4} kcal/mol",
-        hof_mopacrs, oracle.heat_of_formation_kcal, hof_diff);
+    println!(
+        "[ORACLE PARITY] CH4 AM1: MOPAC_RS = {:.5} kcal/mol, OpenMOPAC = {:.5} kcal/mol, diff = {:.4} kcal/mol",
+        hof_mopacrs, oracle.heat_of_formation_kcal, hof_diff
+    );
     assert!(
         hof_diff < 0.005,
         "CH4 AM1 Heat of formation deviated from OpenMOPAC oracle: diff = {} kcal/mol",
@@ -322,8 +332,10 @@ fn test_golden_parity_methane_am1() {
     // Verify core repulsion matches oracle to machine precision
     if let Some(oracle_nuc) = oracle.core_repulsion_ev {
         let nuc_diff = (scf_res.nuclear_repulsion_ev - oracle_nuc).abs();
-        println!("[ORACLE PARITY] CH4 AM1 Core Repulsion: MOPAC_RS = {:.6} eV, Oracle = {:.6} eV, diff = {:.6} eV",
-            scf_res.nuclear_repulsion_ev, oracle_nuc, nuc_diff);
+        println!(
+            "[ORACLE PARITY] CH4 AM1 Core Repulsion: MOPAC_RS = {:.6} eV, Oracle = {:.6} eV, diff = {:.6} eV",
+            scf_res.nuclear_repulsion_ev, oracle_nuc, nuc_diff
+        );
         assert!(
             nuc_diff < 1e-4,
             "Core repulsion deviated from oracle: diff = {}",
@@ -334,8 +346,12 @@ fn test_golden_parity_methane_am1() {
     // Total energy relative parity (< 0.1%)
     if let Some(oracle_etot) = oracle.total_energy_ev {
         let rel_err = ((scf_res.total_energy_ev - oracle_etot) / oracle_etot).abs();
-        println!("[ORACLE PARITY] CH4 AM1 Total Energy: MOPAC_RS = {:.6} eV, Oracle = {:.6} eV, rel_err = {:.4}%",
-            scf_res.total_energy_ev, oracle_etot, rel_err * 100.0);
+        println!(
+            "[ORACLE PARITY] CH4 AM1 Total Energy: MOPAC_RS = {:.6} eV, Oracle = {:.6} eV, rel_err = {:.4}%",
+            scf_res.total_energy_ev,
+            oracle_etot,
+            rel_err * 100.0
+        );
         assert!(
             rel_err < 0.0015,
             "Total energy relative error exceeded 0.15%: {}",
@@ -379,8 +395,10 @@ fn test_golden_parity_formaldehyde_am1() {
     };
 
     let hof_diff = (hof_mopacrs - oracle.heat_of_formation_kcal).abs();
-    println!("[ORACLE PARITY] H2CO AM1: MOPAC_RS = {:.5} kcal/mol, OpenMOPAC = {:.5} kcal/mol, diff = {:.4} kcal/mol",
-        hof_mopacrs, oracle.heat_of_formation_kcal, hof_diff);
+    println!(
+        "[ORACLE PARITY] H2CO AM1: MOPAC_RS = {:.5} kcal/mol, OpenMOPAC = {:.5} kcal/mol, diff = {:.4} kcal/mol",
+        hof_mopacrs, oracle.heat_of_formation_kcal, hof_diff
+    );
     assert!(
         hof_diff < 0.005,
         "H2CO AM1 Heat of formation deviated from OpenMOPAC oracle: diff = {} kcal/mol",
@@ -390,8 +408,10 @@ fn test_golden_parity_formaldehyde_am1() {
     // Verify core repulsion matches oracle to machine precision
     if let Some(oracle_nuc) = oracle.core_repulsion_ev {
         let nuc_diff = (scf_res.nuclear_repulsion_ev - oracle_nuc).abs();
-        println!("[ORACLE PARITY] H2CO AM1 Core Repulsion: MOPAC_RS = {:.6} eV, Oracle = {:.6} eV, diff = {:.6} eV",
-            scf_res.nuclear_repulsion_ev, oracle_nuc, nuc_diff);
+        println!(
+            "[ORACLE PARITY] H2CO AM1 Core Repulsion: MOPAC_RS = {:.6} eV, Oracle = {:.6} eV, diff = {:.6} eV",
+            scf_res.nuclear_repulsion_ev, oracle_nuc, nuc_diff
+        );
         assert!(
             nuc_diff < 1e-4,
             "Core repulsion deviated from oracle: diff = {}",
@@ -402,8 +422,12 @@ fn test_golden_parity_formaldehyde_am1() {
     // Total energy relative parity (< 0.1%)
     if let Some(oracle_etot) = oracle.total_energy_ev {
         let rel_err = ((scf_res.total_energy_ev - oracle_etot) / oracle_etot).abs();
-        println!("[ORACLE PARITY] H2CO AM1 Total Energy: MOPAC_RS = {:.6} eV, Oracle = {:.6} eV, rel_err = {:.4}%",
-            scf_res.total_energy_ev, oracle_etot, rel_err * 100.0);
+        println!(
+            "[ORACLE PARITY] H2CO AM1 Total Energy: MOPAC_RS = {:.6} eV, Oracle = {:.6} eV, rel_err = {:.4}%",
+            scf_res.total_energy_ev,
+            oracle_etot,
+            rel_err * 100.0
+        );
         assert!(
             rel_err < 0.0015,
             "Total energy relative error exceeded 0.15%: {}",
@@ -461,8 +485,10 @@ fn test_golden_parity_methyl_radical_uhf_am1() {
     // Verify core repulsion matches oracle to machine precision
     if let Some(oracle_nuc) = oracle.core_repulsion_ev {
         let nuc_diff = (result.nuclear_repulsion_ev - oracle_nuc).abs();
-        println!("[ORACLE PARITY] CH3* UHF AM1 Core Repulsion: MOPAC_RS = {:.6} eV, Oracle = {:.6} eV, diff = {:.6} eV",
-            result.nuclear_repulsion_ev, oracle_nuc, nuc_diff);
+        println!(
+            "[ORACLE PARITY] CH3* UHF AM1 Core Repulsion: MOPAC_RS = {:.6} eV, Oracle = {:.6} eV, diff = {:.6} eV",
+            result.nuclear_repulsion_ev, oracle_nuc, nuc_diff
+        );
         assert!(
             nuc_diff < 1e-4,
             "Core repulsion deviated from oracle: diff = {}",
@@ -473,8 +499,12 @@ fn test_golden_parity_methyl_radical_uhf_am1() {
     // Total energy relative parity (< 0.2%)
     if let Some(oracle_etot) = oracle.total_energy_ev {
         let rel_err = ((result.total_energy_ev - oracle_etot) / oracle_etot).abs();
-        println!("[ORACLE PARITY] CH3* UHF AM1 Total Energy: MOPAC_RS = {:.6} eV, Oracle = {:.6} eV, rel_err = {:.4}%",
-            result.total_energy_ev, oracle_etot, rel_err * 100.0);
+        println!(
+            "[ORACLE PARITY] CH3* UHF AM1 Total Energy: MOPAC_RS = {:.6} eV, Oracle = {:.6} eV, rel_err = {:.4}%",
+            result.total_energy_ev,
+            oracle_etot,
+            rel_err * 100.0
+        );
         assert!(
             rel_err < 0.002,
             "Total energy relative error exceeded 0.2%: {}",
@@ -532,8 +562,10 @@ fn test_golden_parity_water_pm7() {
     };
 
     let hof_diff = (hof_mopacrs - oracle.heat_of_formation_kcal).abs();
-    println!("[ORACLE PARITY] H2O PM7: MOPAC_RS = {:.5} kcal/mol, OpenMOPAC = {:.5} kcal/mol, diff = {:.4} kcal/mol",
-        hof_mopacrs, oracle.heat_of_formation_kcal, hof_diff);
+    println!(
+        "[ORACLE PARITY] H2O PM7: MOPAC_RS = {:.5} kcal/mol, OpenMOPAC = {:.5} kcal/mol, diff = {:.4} kcal/mol",
+        hof_mopacrs, oracle.heat_of_formation_kcal, hof_diff
+    );
     assert!(
         hof_diff < 0.005,
         "H2O PM7 Heat of formation deviated from OpenMOPAC oracle: diff = {} kcal/mol",
@@ -559,8 +591,10 @@ fn test_golden_parity_water_pm7() {
     // Verify core repulsion matches oracle
     if let Some(oracle_nuc) = oracle.core_repulsion_ev {
         let nuc_diff = (scf_res.nuclear_repulsion_ev - oracle_nuc).abs();
-        println!("[ORACLE PARITY] H2O PM7 Core Repulsion: MOPAC_RS = {:.6} eV, Oracle = {:.6} eV, diff = {:.6} eV",
-            scf_res.nuclear_repulsion_ev, oracle_nuc, nuc_diff);
+        println!(
+            "[ORACLE PARITY] H2O PM7 Core Repulsion: MOPAC_RS = {:.6} eV, Oracle = {:.6} eV, diff = {:.6} eV",
+            scf_res.nuclear_repulsion_ev, oracle_nuc, nuc_diff
+        );
         assert!(
             nuc_diff < 1e-4,
             "PM7 Core repulsion deviated from oracle: diff = {}",
@@ -571,8 +605,12 @@ fn test_golden_parity_water_pm7() {
     // Verify total energy parity (< 0.2%)
     if let Some(oracle_etot) = oracle.total_energy_ev {
         let rel_err = ((scf_res.total_energy_ev - oracle_etot) / oracle_etot).abs();
-        println!("[ORACLE PARITY] H2O PM7 Total Energy: MOPAC_RS = {:.6} eV, Oracle = {:.6} eV, rel_err = {:.4}%",
-            scf_res.total_energy_ev, oracle_etot, rel_err * 100.0);
+        println!(
+            "[ORACLE PARITY] H2O PM7 Total Energy: MOPAC_RS = {:.6} eV, Oracle = {:.6} eV, rel_err = {:.4}%",
+            scf_res.total_energy_ev,
+            oracle_etot,
+            rel_err * 100.0
+        );
         assert!(
             rel_err < 0.002,
             "Total energy relative error exceeded 0.2%: {}",
@@ -793,7 +831,7 @@ fn test_golden_parity_water_cosmo_pm6() {
 
 #[test]
 fn test_golden_parity_zmatrix_water_am1() {
-    use mopac_core::geometry::zmatrix::{zmatrix_to_cartesian, ZMatrixAtom};
+    use mopac_core::geometry::zmatrix::{ZMatrixAtom, zmatrix_to_cartesian};
 
     let entries = vec![
         ZMatrixAtom {

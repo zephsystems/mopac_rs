@@ -482,16 +482,15 @@ impl CosmoState {
             }
             *net_charge = z_core - p_pop;
 
-            if num_ao >= 4 {
-                if let Some(elem) = model.get_element(z) {
-                    let mp =
-                        crate::integrals::multipoles::DerivedMultipoleParams::from_element(&elem);
-                    let d1 = mp.dd * crate::constants::codata2018::BOHR_RADIUS_ANGSTROMS;
-                    let mux = 2.0 * density.get(orb_offset, orb_offset + 1) * d1;
-                    let muy = 2.0 * density.get(orb_offset, orb_offset + 2) * d1;
-                    let muz = 2.0 * density.get(orb_offset, orb_offset + 3) * d1;
-                    atomic_dipoles[a] = [mux, muy, muz];
-                }
+            if num_ao >= 4
+                && let Some(elem) = model.get_element(z)
+            {
+                let mp = crate::integrals::multipoles::DerivedMultipoleParams::from_element(&elem);
+                let d1 = mp.dd * crate::constants::codata2018::BOHR_RADIUS_ANGSTROMS;
+                let mux = 2.0 * density.get(orb_offset, orb_offset + 1) * d1;
+                let muy = 2.0 * density.get(orb_offset, orb_offset + 2) * d1;
+                let muz = 2.0 * density.get(orb_offset, orb_offset + 3) * d1;
+                atomic_dipoles[a] = [mux, muy, muz];
             }
         }
 

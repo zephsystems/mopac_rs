@@ -12,8 +12,8 @@ use mopac_core::parameters::am1::Am1Model;
 use mopac_core::parameters::mndo::MndoModel;
 use mopac_core::parameters::pm3::Pm3Model;
 use mopac_core::parameters::pm6::Pm6Model;
-use mopac_core::scf::scf_loop::{run_rhf_scf_with_options, ScfOptions};
-use mopac_core::scf::uhf_loop::{run_uhf_scf_with_options, UhfOptions, UhfWorkspace};
+use mopac_core::scf::scf_loop::{ScfOptions, run_rhf_scf_with_options};
+use mopac_core::scf::uhf_loop::{UhfOptions, UhfWorkspace, run_uhf_scf_with_options};
 use mopac_core::types::{MolecularBatch, ScfWorkspace};
 
 fn create_ch3_radical() -> MolecularBatch {
@@ -69,8 +69,10 @@ fn test_ch3_radical_uhf_am1() {
         &model,
         0.0,
     );
-    println!("Binding energy: {:.6} eV, Heat of Formation: {:.5} kcal/mol (OpenMOPAC ref = 30.01738 kcal/mol)",
-        binding_ev, hof_kcal);
+    println!(
+        "Binding energy: {:.6} eV, Heat of Formation: {:.5} kcal/mol (OpenMOPAC ref = 30.01738 kcal/mol)",
+        binding_ev, hof_kcal
+    );
     let s_sq_err = (result.s_squared - 0.760978).abs();
     println!("Alpha eigenvalues: {:?}", &ws.eigenvalues_a[..]);
     println!("Beta  eigenvalues: {:?}", &ws.eigenvalues_b[..]);

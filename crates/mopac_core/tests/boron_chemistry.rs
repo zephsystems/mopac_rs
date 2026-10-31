@@ -13,7 +13,7 @@ use mopac_core::parameters::mndo::MndoModel;
 use mopac_core::parameters::pm3::Pm3Model;
 use mopac_core::parameters::pm6::Pm6Model;
 use mopac_core::properties::heat::compute_heat_of_formation;
-use mopac_core::scf::scf_loop::{run_rhf_scf_with_options, ScfOptions};
+use mopac_core::scf::scf_loop::{ScfOptions, run_rhf_scf_with_options};
 use mopac_core::types::*;
 
 #[test]

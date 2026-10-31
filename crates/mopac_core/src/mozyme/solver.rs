@@ -7,8 +7,8 @@ use super::hybrid::construct_initial_lmos;
 use super::lewis::construct_lewis_structure;
 use super::locmin::execute_jacobi_sweep;
 use super::types::{Lmo, MozymeOptions, MozymeResult};
-use crate::corrections::dispersion::compute_dispersion_energy;
 use crate::corrections::DispersionModel;
+use crate::corrections::dispersion::compute_dispersion_energy;
 use crate::integrals::core_repulsion::compute_total_core_repulsion;
 use crate::parameters::ParameterModel;
 use crate::properties::heat::compute_heat_of_formation;
@@ -604,7 +604,12 @@ mod tests {
         let res = run_mozyme_scf(&batch, &model, None, &options);
         println!(
             "MOZYME Ac-Ala-NMe: converged = {}, iters = {}, E_tot = {:.5} eV, E_elec = {:.5} eV, E_nuc = {:.5} eV, HoF = {:.5} kcal/mol",
-            res.converged, res.iterations, res.total_energy_ev, res.electronic_energy_ev, res.core_repulsion_ev, res.heat_of_formation_kcal
+            res.converged,
+            res.iterations,
+            res.total_energy_ev,
+            res.electronic_energy_ev,
+            res.core_repulsion_ev,
+            res.heat_of_formation_kcal
         );
 
         // Verification against OpenMOPAC MOZYME oracle:

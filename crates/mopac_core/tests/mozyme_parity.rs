@@ -98,10 +98,11 @@ fn run_openmopac_mozyme(test_id: &str, method: &str, z: &[u8], coords: &[[f64; 3
             if line.contains("FINAL HEAT OF FORMATION") {
                 let parts: Vec<&str> = line.split_whitespace().collect();
                 for (i, &p) in parts.iter().enumerate() {
-                    if p == "=" && i + 1 < parts.len() {
-                        if let Ok(val) = parts[i + 1].parse::<f64>() {
-                            return Some(val);
-                        }
+                    if p == "="
+                        && i + 1 < parts.len()
+                        && let Ok(val) = parts[i + 1].parse::<f64>()
+                    {
+                        return Some(val);
                     }
                 }
             }
@@ -167,7 +168,9 @@ fn test_water_mozyme_pm6_openmopac_parity() {
     if let Some(oracle_hof) = run_openmopac_mozyme("water_pm6_mozyme", "PM6", &z, &coords) {
         println!(
             "[ORACLE PARITY] Water MOZYME PM6: MOPAC_RS = {:.5} kcal/mol, OpenMOPAC = {:.5} kcal/mol, diff = {:.4} kcal/mol",
-            res.heat_of_formation_kcal, oracle_hof, (res.heat_of_formation_kcal - oracle_hof).abs()
+            res.heat_of_formation_kcal,
+            oracle_hof,
+            (res.heat_of_formation_kcal - oracle_hof).abs()
         );
         assert!(
             (res.heat_of_formation_kcal - oracle_hof).abs() < 0.02,
@@ -262,7 +265,9 @@ fn test_mozyme_hamiltonian_consistency() {
 
     println!(
         "[HAMILTONIAN MOZYME COMPARISON] Water HoF:\n  PM6: {:.4} kcal/mol\n  AM1: {:.4} kcal/mol\n  PM7: {:.4} kcal/mol",
-        res_pm6.heat_of_formation_kcal, res_am1.heat_of_formation_kcal, res_pm7.heat_of_formation_kcal
+        res_pm6.heat_of_formation_kcal,
+        res_am1.heat_of_formation_kcal,
+        res_pm7.heat_of_formation_kcal
     );
 }
 
@@ -322,7 +327,9 @@ fn test_peptide_bond_mozyme_pm6_openmopac_parity() {
     if let Some(oracle_hof) = run_openmopac_mozyme("peptide_pm6_mozyme", "PM6", &z, &coords) {
         println!(
             "[ORACLE PARITY] Peptide MOZYME PM6: MOPAC_RS = {:.4} kcal/mol, OpenMOPAC = {:.4} kcal/mol, diff = {:.4} kcal/mol",
-            res.heat_of_formation_kcal, oracle_hof, (res.heat_of_formation_kcal - oracle_hof).abs()
+            res.heat_of_formation_kcal,
+            oracle_hof,
+            (res.heat_of_formation_kcal - oracle_hof).abs()
         );
         assert!(
             (res.heat_of_formation_kcal - oracle_hof).abs() < 0.25,

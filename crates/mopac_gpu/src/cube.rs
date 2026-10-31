@@ -5,7 +5,7 @@
 
 use crate::context::{VulkanContext, VulkanError};
 use ash::vk;
-use mopac_core::export::cube::{CubeGridConfig, ANGSTROM_TO_BOHR};
+use mopac_core::export::cube::{ANGSTROM_TO_BOHR, CubeGridConfig};
 use mopac_core::parameters::ParameterModel;
 use mopac_core::types::{AlignedMatrix, BasisType, MolecularBatch};
 use std::f64::consts::PI;

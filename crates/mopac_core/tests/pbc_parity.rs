@@ -12,7 +12,7 @@
 //!   and band edge parity.
 
 use mopac_core::parameters::pm6::Pm6Model;
-use mopac_core::pbc::bloch_scf::{run_pbc_scf, PbcOptions, PbcWorkspace};
+use mopac_core::pbc::bloch_scf::{PbcOptions, PbcWorkspace, run_pbc_scf};
 use mopac_core::pbc::unit_cell::{PeriodicDimension, UnitCell};
 use mopac_core::types::MolecularBatch;
 use std::f64::consts::PI;
@@ -233,22 +233,20 @@ Tv 2.450000 0.000000 0.000000
     for line in out_content.lines() {
         if line.contains("FINAL HEAT OF FORMATION =") {
             let parts: Vec<&str> = line.split_whitespace().collect();
-            if let Some(pos) = parts.iter().position(|&s| s == "=") {
-                if let Some(val_str) = parts.get(pos + 1) {
-                    if let Ok(v) = val_str.parse::<f64>() {
-                        oracle_hof = Some(v);
-                    }
-                }
+            if let Some(pos) = parts.iter().position(|&s| s == "=")
+                && let Some(val_str) = parts.get(pos + 1)
+                && let Ok(v) = val_str.parse::<f64>()
+            {
+                oracle_hof = Some(v);
             }
         }
         if line.contains("HOMO LUMO ENERGIES (EV) =") {
             let parts: Vec<&str> = line.split_whitespace().collect();
-            if let Some(pos) = parts.iter().position(|&s| s == "=") {
-                if let Some(val_str) = parts.get(pos + 1) {
-                    if let Ok(v) = val_str.parse::<f64>() {
-                        oracle_homo = Some(v);
-                    }
-                }
+            if let Some(pos) = parts.iter().position(|&s| s == "=")
+                && let Some(val_str) = parts.get(pos + 1)
+                && let Ok(v) = val_str.parse::<f64>()
+            {
+                oracle_homo = Some(v);
             }
         }
     }
