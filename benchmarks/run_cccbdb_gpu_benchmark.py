@@ -16,6 +16,7 @@ import argparse
 import tempfile
 import subprocess
 import numpy as np
+from provenance import stamp_metadata
 from pathlib import Path
 
 # Ensure mopac_py is available
@@ -345,6 +346,8 @@ def main():
             "sample_records": method_records[:50],  # Save representative sample to avoid huge json
             "top_discrepancies": sorted(method_records, key=lambda x: x["d_om_cpu_hf"], reverse=True)[:20]
         }
+
+    results_by_method["metadata"] = stamp_metadata()
 
     RESULTS_PATH.parent.mkdir(parents=True, exist_ok=True)
     with open(RESULTS_PATH, "w") as f:

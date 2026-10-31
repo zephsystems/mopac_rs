@@ -16,7 +16,7 @@ crate-type = ["cdylib"]
 test = false
 
 [dependencies]
-mopac_core = { path = "../mopac_core", version = "0.1.4" }
-mopac_gpu = { path = "../mopac_gpu", version = "0.1.4" }
+mopac_core = { path = "../mopac_core", version = "0.1.5" }
+mopac_gpu = { path = "../mopac_gpu", version = "0.1.5" }
 pyo3 = { version = "0.22", features = ["abi3-py38", "extension-module"] }
 

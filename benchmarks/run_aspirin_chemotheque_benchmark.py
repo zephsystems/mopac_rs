@@ -24,6 +24,7 @@ import mopac_py
 import numpy as np
 from rdkit import Chem
 from rdkit.Chem import AllChem
+from provenance import stamp_metadata
 
 SCRIPT_DIR = os.path.dirname(os.path.abspath(__file__))
 DATASET_FILE = os.path.join(SCRIPT_DIR, "data", "aspirin_1000.json")
@@ -359,6 +360,7 @@ def run_benchmarks():
     }
 
     # Save complete benchmark results
+    bench_output["metadata"] = stamp_metadata()
     with open(RESULTS_FILE, "w") as f:
         json.dump(bench_output, f, indent=2)
     print(f"\nAll benchmark results successfully saved to {RESULTS_FILE}!")

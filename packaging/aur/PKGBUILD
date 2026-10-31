@@ -1,6 +1,6 @@
 # Maintainer: zeph.sys <zeph.systems@gmail.com>
 pkgname=mopac-rs-bin
-pkgver=0.1.4
+pkgver=0.1.5
 pkgrel=1
 pkgdesc="Modern High-Performance Semi-Empirical Quantum Chemistry Engine in Rust (Precompiled binary)"
 arch=('x86_64')

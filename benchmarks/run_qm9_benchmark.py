@@ -25,6 +25,7 @@ from typing import Any, Dict, List, Optional, Tuple
 
 import mopac_py
 import numpy as np
+from provenance import stamp_metadata
 
 SCRIPT_DIR = os.path.dirname(os.path.abspath(__file__))
 DATASETS_DIR = os.path.join(SCRIPT_DIR, "datasets")
@@ -395,6 +396,8 @@ def main():
             method_summary["outliers"] = outliers
 
         overall_results["methods"][method] = method_summary
+
+    overall_results["metadata"] = stamp_metadata(overall_results.get("metadata"))
 
     os.makedirs(os.path.dirname(OUTPUT_JSON), exist_ok=True)
     with open(OUTPUT_JSON, "w", encoding="utf-8") as f:

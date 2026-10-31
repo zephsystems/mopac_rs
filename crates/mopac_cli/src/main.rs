@@ -33,7 +33,7 @@ use mopac_core::parameters::ParameterModel;
 use mopac_core::pbc::{run_pbc_scf, PbcOptions, PbcWorkspace, UnitCell};
 use mopac_core::properties::{
     compute_bond_orders, compute_dipole_moment, compute_mulliken_population,
-    compute_polarizability, DipoleResult, PolarizabilityOptions,
+    compute_nsp2_correction, compute_polarizability, DipoleResult, PolarizabilityOptions,
 };
 use mopac_core::reactions::{
     run_dynamic_reaction_coordinate, trace_intrinsic_reaction_coordinate, DrcEnsemble, DrcOptions,
@@ -211,6 +211,7 @@ struct NonCovalentBreakdown {
     dispersion_kcal: f64,
     h4_kcal: f64,
     hh_repulsion_kcal: f64,
+    nsp2_kcal: f64,
 }
 
 #[derive(Debug, Clone)]
@@ -913,7 +914,11 @@ fn compute_wavefunction_properties(
         let (e_hh, _) = compute_hh_repulsion_energy_and_gradients(batch);
         non_cov.hh_repulsion_kcal = e_hh;
     }
-    let non_cov_total = non_cov.dispersion_kcal + non_cov.h4_kcal + non_cov.hh_repulsion_kcal;
+    if model.name() == "PM6" {
+        non_cov.nsp2_kcal = compute_nsp2_correction(batch);
+    }
+    let non_cov_total =
+        non_cov.dispersion_kcal + non_cov.h4_kcal + non_cov.hh_repulsion_kcal + non_cov.nsp2_kcal;
 
     let binding_energy_ev = scf.total_energy_ev - sum_eisol;
     let heat_of_formation_kcal = binding_energy_ev * EV_TO_KCAL_MOL + sum_eheat + non_cov_total;
@@ -1265,7 +1270,12 @@ fn main() -> Result<(), Box<dyn std::error::Error>> {
             verbose: false,
         };
 
-        let disp_model = match cli.disp.as_deref() {
+        let disp_key = cli.disp.as_deref().map(|s| s.to_ascii_lowercase());
+        let disp_model = match disp_key.as_deref() {
+            Some("none") | Some("off") => None,
+            Some("d3") | Some("d3bj") | Some("d3-bj") | Some("pm6-d3") | Some("am1-d3") => {
+                Some(DispersionModel::D3Bj)
+            }
             Some("pm6-dh+") | Some("pm6-dh2") | Some("dh+") => Some(DispersionModel::Pm6DhPlus),
             Some("pm7") => Some(DispersionModel::Pm7),
             _ => parsed.dispersion,
@@ -1791,6 +1801,7 @@ fn main() -> Result<(), Box<dyn std::error::Error>> {
                 homo_energy_ev: opt_res.final_uhf.homo_a_energy_ev,
                 lumo_energy_ev: opt_res.final_uhf.lumo_a_energy_ev,
                 dielectric_energy_ev: opt_res.final_uhf.dielectric_energy_ev,
+                density_change: 0.0,
             };
             (dummy_scf, opt_res.final_uhf.iterations)
         } else {
@@ -1893,6 +1904,7 @@ fn main() -> Result<(), Box<dyn std::error::Error>> {
                 homo_energy_ev: uhf_res.homo_a_energy_ev,
                 lumo_energy_ev: uhf_res.lumo_a_energy_ev,
                 dielectric_energy_ev: uhf_res.dielectric_energy_ev,
+                density_change: 0.0,
             };
             (dummy_scf, uhf_res.iterations)
         } else {
@@ -2038,7 +2050,12 @@ fn main() -> Result<(), Box<dyn std::error::Error>> {
     };
 
     let elapsed = start_time.elapsed();
-    let disp_model = match cli.disp.as_deref() {
+    let disp_key = cli.disp.as_deref().map(|s| s.to_ascii_lowercase());
+    let disp_model = match disp_key.as_deref() {
+        Some("none") | Some("off") => None,
+        Some("d3") | Some("d3bj") | Some("d3-bj") | Some("pm6-d3") | Some("am1-d3") => {
+            Some(DispersionModel::D3Bj)
+        }
         Some("pm6-dh+") | Some("pm6-dh2") | Some("dh+") => Some(DispersionModel::Pm6DhPlus),
         Some("pm7") => Some(DispersionModel::Pm7),
         _ => parsed.dispersion,

@@ -11,6 +11,7 @@ import os
 import numpy as np
 from rdkit import Chem
 from rdkit.Chem import AllChem
+from provenance import stamp_metadata
 
 SCRIPT_DIR = os.path.dirname(os.path.abspath(__file__))
 RESULTS_FILE = os.path.join(SCRIPT_DIR, "data", "benchmark_results.json")
@@ -208,6 +209,7 @@ def run():
         "meci_time_ms": (t1 - t0) * 1000.0,
     }
 
+    bench_output["metadata"] = stamp_metadata()
     with open(RESULTS_FILE, "w") as f:
         json.dump(bench_output, f, indent=2)
     print(f"\nAll benchmark results successfully written to {RESULTS_FILE}!")

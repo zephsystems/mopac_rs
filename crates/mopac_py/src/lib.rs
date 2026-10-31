@@ -39,8 +39,8 @@ use mopac_core::parameters::{
 use mopac_core::pbc::{run_pbc_scf, PbcOptions, PbcWorkspace, UnitCell};
 use mopac_core::properties::{
     compute_c_triple_bond_c_correction, compute_dipole_moment, compute_esp_charges,
-    compute_heat_of_formation, compute_mulliken_population, compute_polarizability, EspOptions,
-    PolarizabilityOptions,
+    compute_heat_of_formation, compute_mulliken_population, compute_nsp2_correction,
+    compute_polarizability, EspOptions, PolarizabilityOptions,
 };
 use mopac_core::reactions::{
     run_dynamic_reaction_coordinate, run_saddle, trace_intrinsic_reaction_coordinate, DrcEnsemble,
@@ -897,6 +897,9 @@ fn run_calculation_internal(
         if method.eq_ignore_ascii_case("PM7") || method.eq_ignore_ascii_case("PM6") {
             non_cov_kcal += compute_c_triple_bond_c_correction(&batch);
         }
+        if method.eq_ignore_ascii_case("PM6") {
+            non_cov_kcal += compute_nsp2_correction(&batch);
+        }
 
         if h_bonds {
             let h4_params = H4Parameters::default();
@@ -972,7 +975,16 @@ fn run_calculation_internal(
         ..Default::default()
     };
 
-    let mut scf_res = run_rhf_scf_with_options(&batch, model.as_ref(), &mut scf_ws, &opts);
+    let mut scf_res = if level_shift_ev > 0.0 {
+        mopac_core::scf::scf_loop::run_rhf_scf_shift_safe(
+            &batch,
+            model.as_ref(),
+            &mut scf_ws,
+            &opts,
+        )
+    } else {
+        run_rhf_scf_with_options(&batch, model.as_ref(), &mut scf_ws, &opts)
+    };
     if !scf_res.converged {
         scf_res = mopac_core::scf::scf_loop::run_rhf_scf_adaptive_with_nddo_cosmo_and_charge(
             &batch,
@@ -1045,6 +1057,9 @@ fn run_calculation_internal(
 
     if method.eq_ignore_ascii_case("PM7") || method.eq_ignore_ascii_case("PM6") {
         non_cov_kcal += compute_c_triple_bond_c_correction(&batch);
+    }
+    if method.eq_ignore_ascii_case("PM6") {
+        non_cov_kcal += compute_nsp2_correction(&batch);
     }
 
     if h_bonds {
@@ -4267,6 +4282,7 @@ pub fn compute_coulomb_matrix_gpu(
 /// MOPAC_RS Python Module
 #[pymodule]
 fn mopac_py(m: &Bound<'_, PyModule>) -> PyResult<()> {
+    m.add("__version__", env!("CARGO_PKG_VERSION"))?;
     m.add_class::<Am1BccPyResult>()?;
     m.add_class::<CalculationResult>()?;
     m.add_class::<OptimizationPyResult>()?;

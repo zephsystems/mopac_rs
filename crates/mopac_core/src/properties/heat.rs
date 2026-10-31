@@ -103,6 +103,57 @@ pub fn compute_c_triple_bond_c_correction(batch: &crate::types::MolecularBatch) 
     sum * 12.0
 }
 
+/// Molecular-mechanics correction for sp2 (trigonal-planar) nitrogen.
+///
+/// Direct port of OpenMOPAC `nsp2_correction` and `nsp2_atom_correction`
+/// (`corrections/set_up_dentate.F90` lines 139-210), applied to PM6 only
+/// (compfg.F90 line 371: `if (method_pm6 .and. N_3_present)`):
+/// for every N with exactly three ligands of which fewer than two are H, add
+/// `-0.5 * exp(-10 * tot)` kcal/mol, where `tot` is the deviation of the sum of
+/// the three angles at N from 2π (radians) — zero for a planar sp2 nitrogen.
+pub fn compute_nsp2_correction(batch: &crate::types::MolecularBatch) -> f64 {
+    let lewis = crate::mozyme::lewis::construct_lewis_structure(batch);
+    let mut nbonds = vec![0usize; batch.natoms];
+    let mut ligands: Vec<Vec<usize>> = vec![Vec::new(); batch.natoms];
+    for bond in &lewis.bonds {
+        let (a, b) = (bond.atom1, bond.atom2);
+        nbonds[a] += 1;
+        nbonds[b] += 1;
+        ligands[a].push(b);
+        ligands[b].push(a);
+    }
+    let d = |u: usize, v: usize| {
+        ((batch.x[u] - batch.x[v]).powi(2)
+            + (batch.y[u] - batch.y[v]).powi(2)
+            + (batch.z[u] - batch.z[v]).powi(2))
+        .sqrt()
+    };
+    let mut correction = 0.0;
+    for i in 0..batch.natoms {
+        if batch.atomic_numbers[i] != 7 || nbonds[i] != 3 {
+            continue;
+        }
+        let ls = &ligands[i];
+        let n_h = ls.iter().filter(|&&k| batch.atomic_numbers[k] == 1).count();
+        if n_h >= 2 {
+            continue;
+        }
+        let (l0, l1, l2) = (ls[0], ls[1], ls[2]);
+        let a = d(i, l0);
+        let b = d(i, l1);
+        let c = d(i, l2);
+        let ab = d(l0, l1);
+        let ac = d(l0, l2);
+        let bc = d(l1, l2);
+        let cosa = ((b * b + c * c - bc * bc) / (2.0 * b * c)).acos();
+        let cosb = ((a * a + c * c - ac * ac) / (2.0 * a * c)).acos();
+        let cosc = ((b * b + a * a - ab * ab) / (2.0 * b * a)).acos();
+        let tot = 2.0 * std::f64::consts::PI - (cosa + cosb + cosc);
+        correction += -0.5 * (-10.0 * tot).exp();
+    }
+    correction
+}
+
 /// Authentic isolated atom configurations (ios, iop, iod, eheat) for Z=1..107
 /// extracted from OpenMOPAC `parameters_C.F90`.
 pub const ISOLATED_ATOM_CONFIG: &[(u8, f64, f64, f64, f64)] = &[

@@ -22,6 +22,10 @@ pub struct ScfResult {
     pub homo_energy_ev: f64,
     pub lumo_energy_ev: f64,
     pub dielectric_energy_ev: Option<f64>,
+    /// Final density-matrix max-element change (residual) at the end of the
+    /// SCF loop, in electrons. Reported so callers can judge how close a
+    /// non-converged run came to self-consistency.
+    pub density_change: f64,
 }
 
 /// Configuration options for the Self-Consistent Field (SCF) solver.
@@ -276,6 +280,7 @@ pub fn run_rhf_scf_with_options(
     let mut iters_done = 0;
     let mut last_diel_ev: Option<f64> = None;
     let mut consecutive_e_conv = 0usize;
+    let mut last_delta_p = f64::INFINITY;
 
     // 5. SCF Iteration Loop (ZERO dynamic heap allocations)
     for iter in 1..=options.max_iter {
@@ -323,10 +328,20 @@ pub fn run_rhf_scf_with_options(
         // 1. Explicit level_shift_ev requested by caller
         // 2. Early oscillation detection for conjugated systems: if iter > 12 and DIIS error > 5e-3
         // 3. Automatic adaptive level shift if calculation reaches iter > 25 (MOPAC iter.F90 lines 450-456)
+        //
+        // The applied shift is gated by the density-error proxy (DIIS max error):
+        // below 5e-3 the shift is fully removed. This mirrors MOPAC's dynamic
+        // shift, which ramps down as the density stabilizes (iter.F90 lines
+        // 381-430), and guarantees that a solution accepted as converged is a
+        // fixed point of the UNshifted SCF map — a constant shift otherwise lets
+        // explicit `level_shift_ev` runs converge onto a different (shifted)
+        // fixed point than the unshifted run (measured on CCCBDB cc-685: two
+        // self-consistent solutions 341.476 and 347.206 kcal/mol).
+        let shift_gate = if diis_res.max_error > 5e-3 { 1.0 } else { 0.0 };
         let eff_shift = if options.level_shift_ev > 0.0 && iter > 2 {
-            options.level_shift_ev
+            options.level_shift_ev * shift_gate
         } else if options.level_shift_ev == 0.0 && iter > 25 {
-            4.0 // Automatic level shift to break limit-cycle density oscillation
+            4.0 * shift_gate // Automatic level shift to break limit-cycle density oscillation
         } else if options.level_shift_ev == 0.0 && iter > 12 && diis_res.max_error > 5e-3 {
             3.0 // Early oscillation intervention for conjugated systems
         } else {
@@ -351,6 +366,7 @@ pub fn run_rhf_scf_with_options(
         // Check convergence matching OpenMOPAC iter.F90 SELCON / PL criteria
         let delta_e = (e_total - prev_energy).abs();
         let delta_p = max_density_diff(&ws.tmp1, &ws.density);
+        last_delta_p = delta_p;
 
         if iter > 1 && delta_e < (options.energy_tol_ev * 5.0) {
             consecutive_e_conv += 1;
@@ -453,6 +469,49 @@ pub fn run_rhf_scf_with_options(
         homo_energy_ev: homo,
         lumo_energy_ev: lumo,
         dielectric_energy_ev: last_diel_ev,
+        density_change: last_delta_p,
+    }
+}
+
+/// Run a complete closed-shell (RHF) Self-Consistent Field calculation with standard defaults.
+///
+/// Guaranteed to perform **zero heap allocations (`0 malloc`)** during the iterative loop.
+///
+/// Shifted-run root-selection guard: a constant Saunders-Hillier shift can steer
+/// convergence into a HIGHER-energy self-consistent solution of the unshifted map
+/// (measured on CCCBDB cc-685, PM3: 347.206 vs 341.476 kcal/mol — both are fixed
+/// points). OpenMOPAC's dynamic shift ramps with the density error (iter.F90 lines
+/// 381-430) and never exhibits this. Until the dynamic shift is ported, this
+/// wrapper enforces the observable contract: `level_shift_ev > 0` is a converger
+/// aid, never a root selector — when the shifted run converges, a fresh unshifted
+/// run is performed and the lower-energy solution is reported.
+pub fn run_rhf_scf_shift_safe(
+    batch: &MolecularBatch,
+    model: &dyn ParameterModel,
+    ws: &mut ScfWorkspace,
+    options: &ScfOptions,
+) -> ScfResult {
+    let shifted = run_rhf_scf_with_options(batch, model, ws, options);
+    if !shifted.converged || options.level_shift_ev <= 0.0 {
+        return shifted;
+    }
+    let mut fresh = ScfWorkspace::allocate(batch.norbs);
+    let unshifted_opts = ScfOptions {
+        level_shift_ev: 0.0,
+        damping: 0.5,
+        reuse_density: false,
+        ..options.clone()
+    };
+    let fresh_res = run_rhf_scf_with_options(batch, model, &mut fresh, &unshifted_opts);
+    if fresh_res.converged && fresh_res.total_energy_ev < shifted.total_energy_ev - 1e-9 {
+        // The unshifted map has a lower solution; adopt it and keep the
+        // caller's workspace density consistent with the reported result.
+        ws.density.data.copy_from_slice(&fresh.density.data);
+        let mut result = fresh_res;
+        result.iterations += shifted.iterations;
+        result
+    } else {
+        shifted
     }
 }
 
@@ -652,17 +711,48 @@ pub fn run_rhf_scf_adaptive_with_nddo_cosmo_and_charge(
         homo_energy_ev: 0.0,
         lumo_energy_ev: 0.0,
         dielectric_energy_ev: None,
+        density_change: f64::INFINITY,
     };
 
+    let mut converged_stage = 0usize;
+    let mut total_iters = 0usize;
     for (stage_idx, mut opts) in stages.into_iter().enumerate() {
         if stage_idx > 0 {
             opts.reuse_density = true;
             ws.reset_keeping_density();
         }
-        let res = run_rhf_scf_with_options(batch, model, ws, &opts);
+        let mut res = run_rhf_scf_with_options(batch, model, ws, &opts);
+        total_iters += res.iterations;
+        res.iterations = total_iters;
         last_res = res;
         if last_res.converged {
+            converged_stage = stage_idx;
             break;
+        }
+    }
+
+    if last_res.converged && converged_stage > 0 {
+        // A shifted stage must never report a higher-energy solution than the
+        // plain unshifted run would find (see run_rhf_scf_shift_safe).
+        let mut fresh = ScfWorkspace::allocate(batch.norbs);
+        let fresh_opts = ScfOptions {
+            max_iter: max_iter_per_stage * 2,
+            level_shift_ev: 0.0,
+            damping: 0.5,
+            use_nddo,
+            charge,
+            cosmo,
+            electric_field_ev_angstrom: None,
+            external_charges: None,
+            reuse_density: false,
+            ..Default::default()
+        };
+        let fresh_res = run_rhf_scf_with_options(batch, model, &mut fresh, &fresh_opts);
+        if fresh_res.converged && fresh_res.total_energy_ev < last_res.total_energy_ev - 1e-9 {
+            ws.density.data.copy_from_slice(&fresh.density.data);
+            let mut r = fresh_res;
+            r.iterations += last_res.iterations;
+            last_res = r;
         }
     }
 
@@ -761,6 +851,7 @@ pub fn run_rhf_scf_adaptive_with_field(
         homo_energy_ev: 0.0,
         lumo_energy_ev: 0.0,
         dielectric_energy_ev: None,
+        density_change: f64::INFINITY,
     };
 
     for (stage_idx, mut opts) in stages.into_iter().enumerate() {

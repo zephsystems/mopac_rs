@@ -4,6 +4,31 @@ All notable changes to `mopac_rs` and `mopac-py` will be documented in this file
 
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
+
+## [0.1.5] - 2026-10-31
+
+### Added
+- **Universal HPC GPU Memory Architecture (`mopac_gpu::context`, `coulomb_fp32`)**:
+  - Introduced `GpuMemoryArchitecture` and `GpuMemoryInfo` for hardware introspection across discrete VRAM (GDDR6/HBM), unified memory (UMA / Grace Hopper / APU), and PCIe Resizable BAR (ReBAR).
+  - Implemented dynamic memory tier scoring (`find_optimal_device_memory_type`, `find_optimal_staging_memory_type`) with cached lookup.
+  - Implemented zero-copy direct host mapping for UMA and ReBAR architectures, bypassing PCIe DMA staging overhead.
+  - Generalized batch manager to `GpuBatchDeviceMemoryManager` while retaining full backward compatibility aliases for GDDR6 callers.
+- **PM6 Molecular-Mechanics Additive Corrections (`nsp2`)**:
+  - Implemented canonical OpenMOPAC `nsp2_correction` and `nsp2_atom_correction` (`set_up_dentate.F90`, `compfg.F90`) for trigonal planar $sp^2$ nitrogen centers with $<2$ hydrogen substituents.
+  - Resolves systematic $+0.500\text{ kcal/mol}$ discrepancy on nitro/nitrate compounds ($\text{CH}_3\text{NO}_2$, $\text{CH}_3\text{NO}_3$, $\text{C}_2\text{H}_5\text{NO}_3$, $\text{FNO}_3$) and $+0.980\text{ kcal/mol}$ on $\text{N}_2\text{O}_5$, reaching $<0.001\text{ kcal/mol}$ parity with OpenMOPAC v23.2.5.
+- **CLI Dispersion Model Flag Mapping (`--disp`)**:
+  - Added robust case-insensitive parsing for CLI `--disp` flags (`none`, `off`, `d3`, `d3bj`, `d3-bj`, `pm6-dh+`, `pm7`).
+  - Aligned CLI dispersion behavior with `mopac_py` Python API semantics while preserving exact default PM7 oracle agreement.
+- **SCF Convergence Escalation and Root Invariance (`run_rhf_scf_shift_safe`)**:
+  - Implemented `run_rhf_scf_shift_safe` in `mopac_core::scf::scf_loop` preventing Saunders-Hillier level shifts from converging onto higher-energy stationary points of the SCF map.
+  - Added density change convergence tracking (`density_change` field in `ScfResult`).
+- **Python Bindings Versioning & Provenance Stamping**:
+  - Exposed runtime `__version__` attribute in `mopac_py` module reflecting workspace package version.
+  - Added centralized benchmark provenance tracking (`provenance.py`) recording workspace version, wheel version, oracle binary, and execution timestamp across benchmark scripts.
+- **Differential Parity Test Gates**:
+  - Added CLI test suites `additive_corrections.rs` and `dispersion_flag_parity.rs` verifying bitwise and numerical agreement with canonical OpenMOPAC.
+  - Added SCF escalation test `convergence_escalation.rs` and UHF spin multiplicity validation `multiplicity_handling.rs`.
+
 ## [0.1.4] - 2026-10-17
 
 ### Added

@@ -68,3 +68,39 @@ jobs:
         run: |
           cargo build --release -p mopac_py
           python3 crates/mopac_py/tests/test_python_api.py
+
+  benchmark-provenance:
+    name: Benchmark Provenance Stamp
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout Source Code
+        uses: actions/checkout@v4
+
+      - name: Install Rust Toolchain
+        uses: dtolnay/rust-toolchain@stable
+
+      - name: Setup Python
+        uses: actions/setup-python@v5
+        with:
+          python-version: '3.12'
+
+      - name: Build & Install Wheel
+        run: |
+          pip install maturin
+          maturin build --release -m crates/mopac_py/Cargo.toml
+          pip install --no-index --find-links target/wheels mopac_py
+
+      - name: Verify Provenance Stamps
+        run: |
+          python3 - <<'PYEOF'
+          import tomllib, mopac_py, sys
+          from pathlib import Path
+          ws = tomllib.loads(Path("Cargo.toml").read_text())["workspace"]["package"]["version"]
+          assert mopac_py.__version__ == ws, f"wheel {mopac_py.__version__} != workspace {ws}"
+          sys.path.insert(0, str(Path("benchmarks").resolve()))
+          import provenance
+          md = provenance.stamp_metadata()
+          assert md["workspace_version"] == ws, f"metadata ws {md['workspace_version']} != {ws}"
+          assert md["wheel_version"] == ws, f"metadata wheel {md['wheel_version']} != {ws}"
+          print("benchmark provenance verified for", ws)
+          PYEOF

@@ -1,7 +1,7 @@
 #!/usr/bin/env bash
 set -euo pipefail
 
-PKG_VER="${1:-0.1.4}"
+PKG_VER="${1:-0.1.5}"
 PKG_VER="${PKG_VER#v}"
 DEB_DIR="target/debian_pkg"
 

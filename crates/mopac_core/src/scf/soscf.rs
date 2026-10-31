@@ -348,6 +348,7 @@ pub fn run_rhf_soscf(
         homo_energy_ev: homo,
         lumo_energy_ev: lumo,
         dielectric_energy_ev: None,
+        density_change: 0.0,
     }
 }
 
