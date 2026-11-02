@@ -14,7 +14,7 @@ publish_crate() {
         echo "Successfully published $crate_name to crates.io"
     else
         echo "$output"
-        if echo "$output" | grep -iq "already exists"; then
+        if echo "$output" | grep -iqE "already exists|already uploaded"; then
             echo "Notice: $crate_name version already exists on crates.io index. Skipping upload."
         else
             echo "Error publishing $crate_name" >&2
