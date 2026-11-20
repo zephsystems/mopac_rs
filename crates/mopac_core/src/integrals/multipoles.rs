@@ -7,6 +7,7 @@
 use crate::constants::codata2018::{BOHR_RADIUS_ANGSTROMS as A0_BOHR, HARTREE_TO_EV as EV_HARTREE};
 use crate::parameters::{ParameterModel, SemiEmpiricalElementParams};
 use crate::types::{AlignedMatrix, MolecularBatch};
+use rayon::prelude::*;
 
 /// Derived multipole parameters for an element ($dd$, $qq$, $ad$, $aq$, $am$, $po$).
 ///
@@ -963,363 +964,458 @@ pub struct DiatomicPairIntegrals {
     pub e2a: Vec<f64>,
 }
 
+/// Compute rotated multipole integrals for a single atom pair `(i, j)` with `i > j`.
+fn compute_diatomic_pair(
+    i: usize,
+    j: usize,
+    batch: &MolecularBatch,
+    model: &dyn ParameterModel,
+) -> Option<DiatomicPairIntegrals> {
+    let za = batch.atomic_numbers[i];
+    let p_a = model.get_element(za)?;
+    let norb_a = batch.basis_types[i].num_orbitals();
+    let orb_start_a = batch.orbital_offsets[i];
+    let params_a = DerivedMultipoleParams::from_element(&p_a);
+
+    let zb = batch.atomic_numbers[j];
+    let p_b = model.get_element(zb)?;
+    let norb_b = batch.basis_types[j].num_orbitals();
+    let orb_start_b = batch.orbital_offsets[j];
+    let params_b = DerivedMultipoleParams::from_element(&p_b);
+
+    let r_angstrom = batch.distance(i, j);
+    if r_angstrom < 1e-10 {
+        return None;
+    }
+
+    let dx = batch.x[j] - batch.x[i];
+    let dy = batch.y[j] - batch.y[i];
+    let dz = batch.z[j] - batch.z[i];
+
+    let (mut ri, _gab) = compute_22_multipoles(&params_a, &params_b, r_angstrom);
+    if model.use_feathering() {
+        const TRUNC_1: f64 = 7.0;
+        const TRUNC_2: f64 = 0.22;
+        let (point, const_val) = if r_angstrom < TRUNC_1 {
+            let dr = r_angstrom - TRUNC_1;
+            let c = 1.0 - (-dr * dr * TRUNC_2).exp();
+            let pt = crate::constants::codata2018::EV_ANGSTROM_FACTOR / r_angstrom;
+            (pt, c)
+        } else {
+            let pt = crate::constants::codata2018::EV_ANGSTROM_FACTOR / r_angstrom;
+            (pt, 0.0)
+        };
+
+        for (k, val) in ri.iter_mut().enumerate() {
+            match k {
+                0 | 2 | 3 | 10 | 11 | 15 | 16 | 17 | 18 | 20 => {
+                    *val = *val * const_val + (1.0 - const_val) * point;
+                }
+                _ => {
+                    *val *= const_val;
+                }
+            }
+        }
+    }
+
+    let has_d_a = norb_a >= 9;
+    let has_d_b = norb_b >= 9;
+
+    let (w, e1b, e2a) = if has_d_a || has_d_b {
+        let r_bohr = r_angstrom / A0_BOHR;
+        let rot_d = crate::integrals::d_orbitals::DOrbitalRotation3D::new(dx, dy, dz, r_angstrom);
+
+        let (po_a, ddp_a) = match model.get_d_element_params(za) {
+            Some(dp) => (dp.po, dp.ddp),
+            None => {
+                let mut po = [0.0f64; 10];
+                let mut ddp = [0.0f64; 7];
+                po[1] = params_a.po[0];
+                po[2] = params_a.po[1];
+                po[3] = params_a.po[2];
+                po[7] = params_a.po[0];
+                po[9] = params_a.po[0];
+                ddp[2] = params_a.dd;
+                ddp[3] = params_a.qq * 2.0f64.sqrt();
+                (po, ddp)
+            }
+        };
+        let (po_b, ddp_b) = match model.get_d_element_params(zb) {
+            Some(dp) => (dp.po, dp.ddp),
+            None => {
+                let mut po = [0.0f64; 10];
+                let mut ddp = [0.0f64; 7];
+                po[1] = params_b.po[0];
+                po[2] = params_b.po[1];
+                po[3] = params_b.po[2];
+                po[7] = params_b.po[0];
+                po[9] = params_b.po[0];
+                ddp[2] = params_b.dd;
+                ddp[3] = params_b.qq * 2.0f64.sqrt();
+                (po, ddp)
+            }
+        };
+
+        let r2 = r_bohr * r_bohr;
+        let ssi = (po_a[9] + po_b[1]).powi(2);
+        let ssj = (po_b[9] + po_a[1]).powi(2);
+
+        let mut cored = [[0.0f64; 2]; 10];
+        cored[0][0] = -p_b.core_charge * EV_HARTREE / (r2 + ssj).sqrt();
+        cored[0][1] = -p_a.core_charge * EV_HARTREE / (r2 + ssi).sqrt();
+
+        const PXY: [f64; 7] = [1.0, -0.5, -0.5, 0.5, 0.25, 0.25, 0.5];
+
+        if za >= 3 {
+            let ppj = (po_b[9] + po_a[7]).powi(2);
+            let da = ddp_a[2];
+            let qa = ddp_a[3] / 2.0f64.sqrt();
+            let twoqa = 2.0 * qa;
+            let adj = (po_a[2] + po_b[9]).powi(2);
+            let aqj = (po_a[3] + po_b[9]).powi(2);
+
+            let mut xj = [0.0f64; 7];
+            xj[0] = r2 + ppj;
+            xj[1] = r2 + aqj;
+            xj[2] = (r_bohr + da).powi(2) + adj;
+            xj[3] = (r_bohr - da).powi(2) + adj;
+            xj[4] = (r_bohr - twoqa).powi(2) + aqj;
+            xj[5] = (r_bohr + twoqa).powi(2) + aqj;
+            xj[6] = r2 + twoqa * twoqa + aqj;
+
+            let mut xj_term = [0.0f64; 7];
+            for k in 0..7 {
+                xj_term[k] = PXY[k] / xj[k].sqrt();
+            }
+
+            let aj2 = (xj_term[2] + xj_term[3]) * EV_HARTREE;
+            let aj3 = (xj_term[0] + xj_term[1] + xj_term[4] + xj_term[5]) * EV_HARTREE;
+            let aj4 = (xj_term[0] + xj_term[1] + xj_term[6]) * EV_HARTREE;
+
+            cored[1][0] = -p_b.core_charge * aj2;
+            cored[2][0] = -p_b.core_charge * aj3;
+            cored[3][0] = -p_b.core_charge * aj4;
+        }
+
+        if zb >= 3 {
+            let ppi = (po_a[9] + po_b[7]).powi(2);
+            let db = ddp_b[2];
+            let qb = ddp_b[3] / 2.0f64.sqrt();
+            let twoqb = 2.0 * qb;
+            let adi = (po_b[2] + po_a[9]).powi(2);
+            let aqi = (po_b[3] + po_a[9]).powi(2);
+
+            let mut xi = [0.0f64; 7];
+            xi[0] = r2 + ppi;
+            xi[1] = r2 + aqi;
+            xi[2] = (r_bohr + db).powi(2) + adi;
+            xi[3] = (r_bohr - db).powi(2) + adi;
+            xi[4] = (r_bohr - twoqb).powi(2) + aqi;
+            xi[5] = (r_bohr + twoqb).powi(2) + aqi;
+            xi[6] = r2 + twoqb * twoqb + aqi;
+
+            let mut xi_term = [0.0f64; 7];
+            for k in 0..7 {
+                xi_term[k] = PXY[k] / xi[k].sqrt();
+            }
+
+            let ai2 = -(xi_term[2] + xi_term[3]) * EV_HARTREE;
+            let ai3 = (xi_term[0] + xi_term[1] + xi_term[4] + xi_term[5]) * EV_HARTREE;
+            let ai4 = (xi_term[0] + xi_term[1] + xi_term[6]) * EV_HARTREE;
+
+            cored[1][1] = -p_a.core_charge * ai2;
+            cored[2][1] = -p_a.core_charge * ai3;
+            cored[3][1] = -p_a.core_charge * ai4;
+        }
+
+        let mut rep = [0.0f64; 492];
+        crate::integrals::d_orbitals::compute_reppd2(
+            norb_a,
+            norb_b,
+            r_bohr,
+            &ri,
+            &po_a,
+            &ddp_a,
+            &po_b,
+            &ddp_b,
+            p_a.core_charge,
+            p_b.core_charge,
+            &mut rep,
+            &mut cored,
+            model.use_feathering(),
+        );
+
+        if model.use_feathering() {
+            let const_val = if r_angstrom < 7.0 {
+                let dr = r_angstrom - 7.0;
+                1.0 - (-dr * dr * 0.22).exp()
+            } else {
+                0.0
+            };
+
+            let point_b = -(EV_HARTREE / r_bohr) * p_b.core_charge;
+            cored[0][0] = cored[0][0] * const_val + (1.0 - const_val) * point_b;
+            cored[1][0] *= const_val;
+            cored[2][0] = cored[2][0] * const_val + (1.0 - const_val) * point_b;
+            cored[3][0] = cored[3][0] * const_val + (1.0 - const_val) * point_b;
+            cored[4][0] *= const_val;
+            cored[5][0] *= const_val;
+            cored[6][0] = cored[6][0] * const_val + (1.0 - const_val) * point_b;
+            cored[7][0] *= const_val;
+            cored[8][0] = cored[8][0] * const_val + (1.0 - const_val) * point_b;
+            cored[9][0] = cored[9][0] * const_val + (1.0 - const_val) * point_b;
+
+            let point_a = -(EV_HARTREE / r_bohr) * p_a.core_charge;
+            cored[0][1] = cored[0][1] * const_val + (1.0 - const_val) * point_a;
+            cored[1][1] *= const_val;
+            cored[2][1] = cored[2][1] * const_val + (1.0 - const_val) * point_a;
+            cored[3][1] = cored[3][1] * const_val + (1.0 - const_val) * point_a;
+            cored[4][1] *= const_val;
+            cored[5][1] *= const_val;
+            cored[6][1] = cored[6][1] * const_val + (1.0 - const_val) * point_a;
+            cored[7][1] *= const_val;
+            cored[8][1] = cored[8][1] * const_val + (1.0 - const_val) * point_a;
+            cored[9][1] = cored[9][1] * const_val + (1.0 - const_val) * point_a;
+        }
+
+        let mut logv = [[false; 45]; 45];
+        let mut v = [[0.0f64; 45]; 45];
+        crate::integrals::d_orbitals::tx(norb_a, norb_b, &rep, &mut logv, &mut v, &rot_d);
+
+        let mut ww = [0.0f64; 2025];
+        crate::integrals::d_orbitals::rotatd_step2(norb_a, norb_b, &v, &logv, &rot_d, &mut ww);
+
+        if model.use_feathering() {
+            let has_valence_d_a = crate::integrals::d_orbitals::get_iod(za) > 0;
+            let has_valence_d_b = crate::integrals::d_orbitals::get_iod(zb) > 0;
+            crate::integrals::d_orbitals::apply_pm7_d_correction(
+                norb_a,
+                norb_b,
+                has_valence_d_a,
+                has_valence_d_b,
+                &mut ww,
+                &mut cored,
+            );
+        }
+
+        let limij = (norb_a * (norb_a + 1)) / 2;
+        let limkl = (norb_b * (norb_b + 1)) / 2;
+        let mut w = vec![0.0f64; limij * limkl];
+        w.copy_from_slice(&ww[..limij * limkl]);
+
+        let mut e1b = vec![0.0f64; limij];
+        for i in 0..norb_a {
+            for j in 0..=i {
+                let val = if i == 0 && j == 0 {
+                    cored[0][0]
+                } else if i < 4 && j == 0 {
+                    rot_d.sp[0][i - 1] * cored[1][0]
+                } else if i < 4 && j < 4 {
+                    let ipp = crate::integrals::d_orbitals::INDPP[i - 1][j - 1] - 1;
+                    cored[2][0] * rot_d.pp[ipp][0][0]
+                        + cored[3][0] * (rot_d.pp[ipp][1][1] + rot_d.pp[ipp][2][2])
+                } else if i >= 4 && j == 0 {
+                    rot_d.sd[0][i - 4] * cored[4][0]
+                } else if i >= 4 && j < 4 {
+                    let idp = crate::integrals::d_orbitals::INDDP[i - 4][j - 1] - 1;
+                    cored[5][0] * rot_d.dp[idp][0][0]
+                        + cored[7][0] * (rot_d.dp[idp][1][1] + rot_d.dp[idp][2][2])
+                } else {
+                    let idd = crate::integrals::d_orbitals::INDDD[i - 4][j - 4] - 1;
+                    cored[6][0] * rot_d.d_d[idd][0][0]
+                        + cored[8][0] * (rot_d.d_d[idd][1][1] + rot_d.d_d[idd][2][2])
+                        + cored[9][0] * (rot_d.d_d[idd][3][3] + rot_d.d_d[idd][4][4])
+                };
+                e1b[(i * (i + 1)) / 2 + j] = val;
+            }
+        }
+
+        let mut e2a = vec![0.0f64; limkl];
+        for i in 0..norb_b {
+            for j in 0..=i {
+                let val = if i == 0 && j == 0 {
+                    cored[0][1]
+                } else if i < 4 && j == 0 {
+                    rot_d.sp[0][i - 1] * cored[1][1]
+                } else if i < 4 && j < 4 {
+                    let ipp = crate::integrals::d_orbitals::INDPP[i - 1][j - 1] - 1;
+                    cored[2][1] * rot_d.pp[ipp][0][0]
+                        + cored[3][1] * (rot_d.pp[ipp][1][1] + rot_d.pp[ipp][2][2])
+                } else if i >= 4 && j == 0 {
+                    rot_d.sd[0][i - 4] * cored[4][1]
+                } else if i >= 4 && j < 4 {
+                    let idp = crate::integrals::d_orbitals::INDDP[i - 4][j - 1] - 1;
+                    cored[5][1] * rot_d.dp[idp][0][0]
+                        + cored[7][1] * (rot_d.dp[idp][1][1] + rot_d.dp[idp][2][2])
+                } else {
+                    let idd = crate::integrals::d_orbitals::INDDD[i - 4][j - 4] - 1;
+                    cored[6][1] * rot_d.d_d[idd][0][0]
+                        + cored[8][1] * (rot_d.d_d[idd][1][1] + rot_d.d_d[idd][2][2])
+                        + cored[9][1] * (rot_d.d_d[idd][3][3] + rot_d.d_d[idd][4][4])
+                };
+                e2a[(i * (i + 1)) / 2 + j] = val;
+            }
+        }
+
+        (w, e1b, e2a)
+    } else {
+        let rot = DiatomicRotation3D::new(dx, dy, dz, r_angstrom);
+        let mut w = vec![0.0f64; 100];
+        rotate_multipoles_to_w(norb_a, norb_b, &ri, &rot, &mut w);
+
+        let mut e1b = vec![0.0f64; 10];
+        let mut e2a = vec![0.0f64; 10];
+        compute_electron_nuclear_attraction(
+            norb_a,
+            norb_b,
+            &params_a,
+            &params_b,
+            p_a.core_charge,
+            p_b.core_charge,
+            r_angstrom,
+            &rot,
+            &mut e1b,
+            &mut e2a,
+            model.use_feathering(),
+        );
+        (w, e1b, e2a)
+    };
+
+    Some(DiatomicPairIntegrals {
+        atom_a: i,
+        atom_b: j,
+        norb_a,
+        norb_b,
+        orb_start_a,
+        orb_start_b,
+        w,
+        e1b,
+        e2a,
+    })
+}
+
 /// Precompute all diatomic multipole pairs $(A, B)$ with $A > B$ for a molecular batch.
+///
+/// Automatically dispatches across Rayon worker threads for systems with $\ge 16$ atoms.
 pub fn precompute_diatomic_pairs(
     batch: &MolecularBatch,
     model: &dyn ParameterModel,
 ) -> Vec<DiatomicPairIntegrals> {
-    let mut pairs = Vec::with_capacity((batch.natoms * (batch.natoms - 1)) / 2);
+    let natoms = batch.natoms;
+    if natoms <= 1 {
+        return Vec::new();
+    }
+    let num_pairs = (natoms * (natoms - 1)) / 2;
 
-    for i in 0..batch.natoms {
-        let za = batch.atomic_numbers[i];
-        let p_a = match model.get_element(za) {
-            Some(p) => p,
-            None => continue,
-        };
-        let norb_a = batch.basis_types[i].num_orbitals();
-        let orb_start_a = batch.orbital_offsets[i];
-        let params_a = DerivedMultipoleParams::from_element(&p_a);
-
-        for j in 0..i {
-            let zb = batch.atomic_numbers[j];
-            let p_b = match model.get_element(zb) {
-                Some(p) => p,
-                None => continue,
-            };
-            let norb_b = batch.basis_types[j].num_orbitals();
-            let orb_start_b = batch.orbital_offsets[j];
-            let params_b = DerivedMultipoleParams::from_element(&p_b);
-
-            let r_angstrom = batch.distance(i, j);
-            if r_angstrom < 1e-10 {
-                continue;
+    if natoms >= 16 && rayon::current_num_threads() > 1 {
+        let mut ij_pairs = Vec::with_capacity(num_pairs);
+        for i in 0..natoms {
+            for j in 0..i {
+                ij_pairs.push((i, j));
             }
-
-            let dx = batch.x[j] - batch.x[i];
-            let dy = batch.y[j] - batch.y[i];
-            let dz = batch.z[j] - batch.z[i];
-
-            let (mut ri, _gab) = compute_22_multipoles(&params_a, &params_b, r_angstrom);
-            if model.use_feathering() {
-                const TRUNC_1: f64 = 7.0;
-                const TRUNC_2: f64 = 0.22;
-                let (point, const_val) = if r_angstrom < TRUNC_1 {
-                    let dr = r_angstrom - TRUNC_1;
-                    let c = 1.0 - (-dr * dr * TRUNC_2).exp();
-                    let pt = crate::constants::codata2018::EV_ANGSTROM_FACTOR / r_angstrom;
-                    (pt, c)
-                } else {
-                    let pt = crate::constants::codata2018::EV_ANGSTROM_FACTOR / r_angstrom;
-                    (pt, 0.0)
-                };
-
-                for (k, val) in ri.iter_mut().enumerate() {
-                    match k {
-                        0 | 2 | 3 | 10 | 11 | 15 | 16 | 17 | 18 | 20 => {
-                            *val = *val * const_val + (1.0 - const_val) * point;
-                        }
-                        _ => {
-                            *val *= const_val;
-                        }
-                    }
-                }
-            }
-
-            let has_d_a = norb_a >= 9;
-            let has_d_b = norb_b >= 9;
-
-            let (w, e1b, e2a) = if has_d_a || has_d_b {
-                let r_bohr = r_angstrom / A0_BOHR;
-                let rot_d =
-                    crate::integrals::d_orbitals::DOrbitalRotation3D::new(dx, dy, dz, r_angstrom);
-
-                let (po_a, ddp_a) = match model.get_d_element_params(za) {
-                    Some(dp) => (dp.po, dp.ddp),
-                    None => {
-                        let mut po = [0.0f64; 10];
-                        let mut ddp = [0.0f64; 7];
-                        po[1] = params_a.po[0];
-                        po[2] = params_a.po[1];
-                        po[3] = params_a.po[2];
-                        po[7] = params_a.po[0];
-                        po[9] = params_a.po[0];
-                        ddp[2] = params_a.dd;
-                        ddp[3] = params_a.qq * 2.0f64.sqrt();
-                        (po, ddp)
-                    }
-                };
-                let (po_b, ddp_b) = match model.get_d_element_params(zb) {
-                    Some(dp) => (dp.po, dp.ddp),
-                    None => {
-                        let mut po = [0.0f64; 10];
-                        let mut ddp = [0.0f64; 7];
-                        po[1] = params_b.po[0];
-                        po[2] = params_b.po[1];
-                        po[3] = params_b.po[2];
-                        po[7] = params_b.po[0];
-                        po[9] = params_b.po[0];
-                        ddp[2] = params_b.dd;
-                        ddp[3] = params_b.qq * 2.0f64.sqrt();
-                        (po, ddp)
-                    }
-                };
-
-                let r2 = r_bohr * r_bohr;
-                let ssi = (po_a[9] + po_b[1]).powi(2);
-                let ssj = (po_b[9] + po_a[1]).powi(2);
-
-                let mut cored = [[0.0f64; 2]; 10];
-                cored[0][0] = -p_b.core_charge * EV_HARTREE / (r2 + ssj).sqrt();
-                cored[0][1] = -p_a.core_charge * EV_HARTREE / (r2 + ssi).sqrt();
-
-                const PXY: [f64; 7] = [1.0, -0.5, -0.5, 0.5, 0.25, 0.25, 0.5];
-
-                if za >= 3 {
-                    let ppj = (po_b[9] + po_a[7]).powi(2);
-                    let da = ddp_a[2];
-                    let qa = ddp_a[3] / 2.0f64.sqrt();
-                    let twoqa = 2.0 * qa;
-                    let adj = (po_a[2] + po_b[9]).powi(2);
-                    let aqj = (po_a[3] + po_b[9]).powi(2);
-
-                    let mut xj = [0.0f64; 7];
-                    xj[0] = r2 + ppj;
-                    xj[1] = r2 + aqj;
-                    xj[2] = (r_bohr + da).powi(2) + adj;
-                    xj[3] = (r_bohr - da).powi(2) + adj;
-                    xj[4] = (r_bohr - twoqa).powi(2) + aqj;
-                    xj[5] = (r_bohr + twoqa).powi(2) + aqj;
-                    xj[6] = r2 + twoqa * twoqa + aqj;
-
-                    let mut xj_term = [0.0f64; 7];
-                    for k in 0..7 {
-                        xj_term[k] = PXY[k] / xj[k].sqrt();
-                    }
-
-                    let aj2 = (xj_term[2] + xj_term[3]) * EV_HARTREE;
-                    let aj3 = (xj_term[0] + xj_term[1] + xj_term[4] + xj_term[5]) * EV_HARTREE;
-                    let aj4 = (xj_term[0] + xj_term[1] + xj_term[6]) * EV_HARTREE;
-
-                    cored[1][0] = -p_b.core_charge * aj2;
-                    cored[2][0] = -p_b.core_charge * aj3;
-                    cored[3][0] = -p_b.core_charge * aj4;
-                }
-
-                if zb >= 3 {
-                    let ppi = (po_a[9] + po_b[7]).powi(2);
-                    let db = ddp_b[2];
-                    let qb = ddp_b[3] / 2.0f64.sqrt();
-                    let twoqb = 2.0 * qb;
-                    let adi = (po_b[2] + po_a[9]).powi(2);
-                    let aqi = (po_b[3] + po_a[9]).powi(2);
-
-                    let mut xi = [0.0f64; 7];
-                    xi[0] = r2 + ppi;
-                    xi[1] = r2 + aqi;
-                    xi[2] = (r_bohr + db).powi(2) + adi;
-                    xi[3] = (r_bohr - db).powi(2) + adi;
-                    xi[4] = (r_bohr - twoqb).powi(2) + aqi;
-                    xi[5] = (r_bohr + twoqb).powi(2) + aqi;
-                    xi[6] = r2 + twoqb * twoqb + aqi;
-
-                    let mut xi_term = [0.0f64; 7];
-                    for k in 0..7 {
-                        xi_term[k] = PXY[k] / xi[k].sqrt();
-                    }
-
-                    let ai2 = -(xi_term[2] + xi_term[3]) * EV_HARTREE;
-                    let ai3 = (xi_term[0] + xi_term[1] + xi_term[4] + xi_term[5]) * EV_HARTREE;
-                    let ai4 = (xi_term[0] + xi_term[1] + xi_term[6]) * EV_HARTREE;
-
-                    cored[1][1] = -p_a.core_charge * ai2;
-                    cored[2][1] = -p_a.core_charge * ai3;
-                    cored[3][1] = -p_a.core_charge * ai4;
-                }
-
-                let mut rep = [0.0f64; 492];
-                crate::integrals::d_orbitals::compute_reppd2(
-                    norb_a,
-                    norb_b,
-                    r_bohr,
-                    &ri,
-                    &po_a,
-                    &ddp_a,
-                    &po_b,
-                    &ddp_b,
-                    p_a.core_charge,
-                    p_b.core_charge,
-                    &mut rep,
-                    &mut cored,
-                    model.use_feathering(),
-                );
-
-                if model.use_feathering() {
-                    let const_val = if r_angstrom < 7.0 {
-                        let dr = r_angstrom - 7.0;
-                        1.0 - (-dr * dr * 0.22).exp()
-                    } else {
-                        0.0
-                    };
-
-                    let point_b = -(EV_HARTREE / r_bohr) * p_b.core_charge;
-                    cored[0][0] = cored[0][0] * const_val + (1.0 - const_val) * point_b;
-                    cored[1][0] *= const_val;
-                    cored[2][0] = cored[2][0] * const_val + (1.0 - const_val) * point_b;
-                    cored[3][0] = cored[3][0] * const_val + (1.0 - const_val) * point_b;
-                    cored[4][0] *= const_val;
-                    cored[5][0] *= const_val;
-                    cored[6][0] = cored[6][0] * const_val + (1.0 - const_val) * point_b;
-                    cored[7][0] *= const_val;
-                    cored[8][0] = cored[8][0] * const_val + (1.0 - const_val) * point_b;
-                    cored[9][0] = cored[9][0] * const_val + (1.0 - const_val) * point_b;
-
-                    let point_a = -(EV_HARTREE / r_bohr) * p_a.core_charge;
-                    cored[0][1] = cored[0][1] * const_val + (1.0 - const_val) * point_a;
-                    cored[1][1] *= const_val;
-                    cored[2][1] = cored[2][1] * const_val + (1.0 - const_val) * point_a;
-                    cored[3][1] = cored[3][1] * const_val + (1.0 - const_val) * point_a;
-                    cored[4][1] *= const_val;
-                    cored[5][1] *= const_val;
-                    cored[6][1] = cored[6][1] * const_val + (1.0 - const_val) * point_a;
-                    cored[7][1] *= const_val;
-                    cored[8][1] = cored[8][1] * const_val + (1.0 - const_val) * point_a;
-                    cored[9][1] = cored[9][1] * const_val + (1.0 - const_val) * point_a;
-                }
-
-                let mut logv = [[false; 45]; 45];
-                let mut v = [[0.0f64; 45]; 45];
-                crate::integrals::d_orbitals::tx(norb_a, norb_b, &rep, &mut logv, &mut v, &rot_d);
-
-                let mut ww = [0.0f64; 2025];
-                crate::integrals::d_orbitals::rotatd_step2(
-                    norb_a, norb_b, &v, &logv, &rot_d, &mut ww,
-                );
-
-                if model.use_feathering() {
-                    let has_valence_d_a = crate::integrals::d_orbitals::get_iod(za) > 0;
-                    let has_valence_d_b = crate::integrals::d_orbitals::get_iod(zb) > 0;
-                    crate::integrals::d_orbitals::apply_pm7_d_correction(
-                        norb_a,
-                        norb_b,
-                        has_valence_d_a,
-                        has_valence_d_b,
-                        &mut ww,
-                        &mut cored,
-                    );
-                }
-
-                let limij = (norb_a * (norb_a + 1)) / 2;
-                let limkl = (norb_b * (norb_b + 1)) / 2;
-                let mut w = vec![0.0f64; limij * limkl];
-                w.copy_from_slice(&ww[..limij * limkl]);
-
-                let mut e1b = vec![0.0f64; limij];
-                for i in 0..norb_a {
-                    for j in 0..=i {
-                        let val = if i == 0 && j == 0 {
-                            cored[0][0]
-                        } else if i < 4 && j == 0 {
-                            rot_d.sp[0][i - 1] * cored[1][0]
-                        } else if i < 4 && j < 4 {
-                            let ipp = crate::integrals::d_orbitals::INDPP[i - 1][j - 1] - 1;
-                            cored[2][0] * rot_d.pp[ipp][0][0]
-                                + cored[3][0] * (rot_d.pp[ipp][1][1] + rot_d.pp[ipp][2][2])
-                        } else if i >= 4 && j == 0 {
-                            rot_d.sd[0][i - 4] * cored[4][0]
-                        } else if i >= 4 && j < 4 {
-                            let idp = crate::integrals::d_orbitals::INDDP[i - 4][j - 1] - 1;
-                            cored[5][0] * rot_d.dp[idp][0][0]
-                                + cored[7][0] * (rot_d.dp[idp][1][1] + rot_d.dp[idp][2][2])
-                        } else {
-                            let idd = crate::integrals::d_orbitals::INDDD[i - 4][j - 4] - 1;
-                            cored[6][0] * rot_d.d_d[idd][0][0]
-                                + cored[8][0] * (rot_d.d_d[idd][1][1] + rot_d.d_d[idd][2][2])
-                                + cored[9][0] * (rot_d.d_d[idd][3][3] + rot_d.d_d[idd][4][4])
-                        };
-                        e1b[(i * (i + 1)) / 2 + j] = val;
-                    }
-                }
-
-                let mut e2a = vec![0.0f64; limkl];
-                for i in 0..norb_b {
-                    for j in 0..=i {
-                        let val = if i == 0 && j == 0 {
-                            cored[0][1]
-                        } else if i < 4 && j == 0 {
-                            rot_d.sp[0][i - 1] * cored[1][1]
-                        } else if i < 4 && j < 4 {
-                            let ipp = crate::integrals::d_orbitals::INDPP[i - 1][j - 1] - 1;
-                            cored[2][1] * rot_d.pp[ipp][0][0]
-                                + cored[3][1] * (rot_d.pp[ipp][1][1] + rot_d.pp[ipp][2][2])
-                        } else if i >= 4 && j == 0 {
-                            rot_d.sd[0][i - 4] * cored[4][1]
-                        } else if i >= 4 && j < 4 {
-                            let idp = crate::integrals::d_orbitals::INDDP[i - 4][j - 1] - 1;
-                            cored[5][1] * rot_d.dp[idp][0][0]
-                                + cored[7][1] * (rot_d.dp[idp][1][1] + rot_d.dp[idp][2][2])
-                        } else {
-                            let idd = crate::integrals::d_orbitals::INDDD[i - 4][j - 4] - 1;
-                            cored[6][1] * rot_d.d_d[idd][0][0]
-                                + cored[8][1] * (rot_d.d_d[idd][1][1] + rot_d.d_d[idd][2][2])
-                                + cored[9][1] * (rot_d.d_d[idd][3][3] + rot_d.d_d[idd][4][4])
-                        };
-                        e2a[(i * (i + 1)) / 2 + j] = val;
-                    }
-                }
-
-                (w, e1b, e2a)
-            } else {
-                let rot = DiatomicRotation3D::new(dx, dy, dz, r_angstrom);
-                let mut w = vec![0.0f64; 100];
-                rotate_multipoles_to_w(norb_a, norb_b, &ri, &rot, &mut w);
-
-                let mut e1b = vec![0.0f64; 10];
-                let mut e2a = vec![0.0f64; 10];
-                compute_electron_nuclear_attraction(
-                    norb_a,
-                    norb_b,
-                    &params_a,
-                    &params_b,
-                    p_a.core_charge,
-                    p_b.core_charge,
-                    r_angstrom,
-                    &rot,
-                    &mut e1b,
-                    &mut e2a,
-                    model.use_feathering(),
-                );
-                (w, e1b, e2a)
-            };
-
-            pairs.push(DiatomicPairIntegrals {
-                atom_a: i,
-                atom_b: j,
-                norb_a,
-                norb_b,
-                orb_start_a,
-                orb_start_b,
-                w,
-                e1b,
-                e2a,
-            });
         }
+        return ij_pairs
+            .into_par_iter()
+            .filter_map(|(i, j)| compute_diatomic_pair(i, j, batch, model))
+            .collect();
     }
 
+    let mut pairs = Vec::with_capacity(num_pairs);
+    for i in 0..natoms {
+        for j in 0..i {
+            if let Some(pair) = compute_diatomic_pair(i, j, batch, model) {
+                pairs.push(pair);
+            }
+        }
+    }
     pairs
 }
 
 #[allow(clippy::needless_range_loop)]
-fn assemble_nddo_pair_dorbs(
+trait FockTarget {
+    fn add_diag_a_sym(&mut self, ia: usize, r: usize, c: usize, val: f64);
+    fn add_diag_b_sym(&mut self, atom_b: usize, ja: usize, r: usize, c: usize, val: f64);
+    fn add_off_diag(&mut self, ia: usize, r: usize, ja: usize, c: usize, val: f64);
+}
+
+struct FullMatrixTarget<'a> {
+    fock: &'a mut AlignedMatrix<f64>,
+}
+
+impl FockTarget for FullMatrixTarget<'_> {
+    #[inline(always)]
+    fn add_diag_a_sym(&mut self, ia: usize, r: usize, c: usize, val: f64) {
+        let cur = self.fock.get(ia + r, ia + c);
+        self.fock.set(ia + r, ia + c, cur + val);
+        if r != c {
+            self.fock.set(ia + c, ia + r, cur + val);
+        }
+    }
+
+    #[inline(always)]
+    fn add_diag_b_sym(&mut self, _atom_b: usize, ja: usize, r: usize, c: usize, val: f64) {
+        let cur = self.fock.get(ja + r, ja + c);
+        self.fock.set(ja + r, ja + c, cur + val);
+        if r != c {
+            self.fock.set(ja + c, ja + r, cur + val);
+        }
+    }
+
+    #[inline(always)]
+    fn add_off_diag(&mut self, ia: usize, r: usize, ja: usize, c: usize, val: f64) {
+        let cur = self.fock.get(ia + r, ja + c);
+        self.fock.set(ia + r, ja + c, cur + val);
+        self.fock.set(ja + c, ia + r, cur + val);
+    }
+}
+
+struct RowBandTarget<'a> {
+    row_base: usize,
+    cols: usize,
+    band: &'a mut [f64],
+    diag_b: &'a mut [[f64; 45]],
+}
+
+impl FockTarget for RowBandTarget<'_> {
+    #[inline(always)]
+    fn add_diag_a_sym(&mut self, ia: usize, r: usize, c: usize, val: f64) {
+        let cols = self.cols;
+        let base_r = ia - self.row_base;
+        let idx_rc = (base_r + r) * cols + (ia + c);
+        let updated = self.band[idx_rc] + val;
+        self.band[idx_rc] = updated;
+        if r != c {
+            self.band[(base_r + c) * cols + (ia + r)] = updated;
+        }
+    }
+
+    #[inline(always)]
+    fn add_diag_b_sym(&mut self, atom_b: usize, _ja: usize, r: usize, c: usize, val: f64) {
+        debug_assert!(r >= c);
+        let sym_idx = (r * (r + 1)) / 2 + c;
+        self.diag_b[atom_b][sym_idx] += val;
+    }
+
+    #[inline(always)]
+    fn add_off_diag(&mut self, ia: usize, r: usize, ja: usize, c: usize, val: f64) {
+        let idx = (ia - self.row_base + r) * self.cols + (ja + c);
+        self.band[idx] += val;
+    }
+}
+
+#[inline(always)]
+fn accumulate_nddo_pair_dorbs<T: FockTarget>(
     pair: &DiatomicPairIntegrals,
     p_coul: &AlignedMatrix<f64>,
     p_exch: &AlignedMatrix<f64>,
     scale_exch: f64,
-    fock: &mut AlignedMatrix<f64>,
+    target: &mut T,
 ) {
     let ia = pair.orb_start_a;
     let ja = pair.orb_start_b;
     let na = pair.norb_a;
     let nb = pair.norb_b;
+    let atom_b = pair.atom_b;
     let w = &pair.w;
 
     let mut delta_f_ab = [[0.0f64; 9]; 9];
@@ -1339,17 +1435,8 @@ fn assemble_nddo_pair_dorbs(
                     let term_a = bb * a * p_kl;
                     let term_b = aa * a * p_ij;
 
-                    let cur_a = fock.get(ia + i, ia + j);
-                    fock.set(ia + i, ia + j, cur_a + term_a);
-                    if i != j {
-                        fock.set(ia + j, ia + i, cur_a + term_a);
-                    }
-
-                    let cur_b = fock.get(ja + k, ja + l);
-                    fock.set(ja + k, ja + l, cur_b + term_b);
-                    if k != l {
-                        fock.set(ja + l, ja + k, cur_b + term_b);
-                    }
+                    target.add_diag_a_sym(ia, i, j, term_a);
+                    target.add_diag_b_sym(atom_b, ja, k, l, term_b);
 
                     let exch_a = a * aa * bb * 0.25 * scale_exch;
                     delta_f_ab[i][k] -= exch_a * p_exch.get(ia + j, ja + l);
@@ -1361,14 +1448,459 @@ fn assemble_nddo_pair_dorbs(
         }
     }
 
-    for i in 0..na {
-        for k in 0..nb {
-            let val = delta_f_ab[i][k];
-            let cur = fock.get(ia + i, ja + k);
-            fock.set(ia + i, ja + k, cur + val);
-            fock.set(ja + k, ia + i, cur + val);
+    for (i, row_ab) in delta_f_ab.iter().enumerate().take(na) {
+        for (k, &val) in row_ab.iter().enumerate().take(nb) {
+            target.add_off_diag(ia, i, ja, k, val);
         }
     }
+}
+
+#[inline(always)]
+fn accumulate_nddo_pair<T: FockTarget>(
+    pair: &DiatomicPairIntegrals,
+    p_coul: &AlignedMatrix<f64>,
+    p_exch: &AlignedMatrix<f64>,
+    scale_exch: f64,
+    target: &mut T,
+) {
+    let ia = pair.orb_start_a;
+    let ja = pair.orb_start_b;
+    let na = pair.norb_a;
+    let nb = pair.norb_b;
+    let atom_b = pair.atom_b;
+    let w = &pair.w;
+
+    if na >= 9 || nb >= 9 {
+        accumulate_nddo_pair_dorbs(pair, p_coul, p_exch, scale_exch, target);
+    } else if na >= 4 && nb >= 4 {
+        let mut pja = [0.0f64; 16];
+        let mut pjb = [0.0f64; 16];
+        let mut pk = [0.0f64; 16];
+
+        for r in 0..4 {
+            for c in 0..4 {
+                pja[r * 4 + c] = p_coul.get(ia + r, ia + c);
+                pjb[r * 4 + c] = p_coul.get(ja + r, ja + c);
+                pk[r * 4 + c] = scale_exch * p_exch.get(ia + r, ja + c);
+            }
+        }
+
+        let mut f_block_a = [0.0f64; 10];
+        let mut f_block_b = [0.0f64; 10];
+        contract_jab(&pja, &pjb, w, &mut f_block_a, &mut f_block_b);
+
+        for r in 0..4 {
+            for c in 0..=r {
+                let idx = (r * (r + 1)) / 2 + c;
+                target.add_diag_a_sym(ia, r, c, f_block_a[idx]);
+                target.add_diag_b_sym(atom_b, ja, r, c, f_block_b[idx]);
+            }
+        }
+
+        let mut f_ab = [0.0f64; 16];
+        contract_kab(&pk, w, &mut f_ab);
+
+        for r in 0..4 {
+            for c in 0..4 {
+                target.add_off_diag(ia, r, ja, c, f_ab[r * 4 + c]);
+            }
+        }
+    } else if na >= 4 && nb == 1 {
+        let p_b = p_coul.get(ja, ja);
+        for r in 0..4 {
+            for c in 0..=r {
+                let idx = (r * (r + 1)) / 2 + c;
+                target.add_diag_a_sym(ia, r, c, p_b * w[idx]);
+            }
+        }
+
+        let mut sumdia = 0.0;
+        let mut sumoff = 0.0;
+        for r in 0..4 {
+            let idx_dia = (r * (r + 1)) / 2 + r;
+            sumdia += p_coul.get(ia + r, ia + r) * w[idx_dia];
+            for c in 0..r {
+                let idx_off = (r * (r + 1)) / 2 + c;
+                sumoff += p_coul.get(ia + r, ia + c) * w[idx_off];
+            }
+        }
+        target.add_diag_b_sym(atom_b, ja, 0, 0, sumdia + 2.0 * sumoff);
+
+        for r in 0..4 {
+            let mut s = 0.0;
+            for c in 0..4 {
+                let idx = if r >= c {
+                    (r * (r + 1)) / 2 + c
+                } else {
+                    (c * (c + 1)) / 2 + r
+                };
+                s += p_exch.get(ia + c, ja) * w[idx];
+            }
+            target.add_off_diag(ia, r, ja, 0, -scale_exch * s);
+        }
+    } else if na == 1 && nb >= 4 {
+        let p_a = p_coul.get(ia, ia);
+        for r in 0..4 {
+            for c in 0..=r {
+                let idx = (r * (r + 1)) / 2 + c;
+                target.add_diag_b_sym(atom_b, ja, r, c, p_a * w[idx]);
+            }
+        }
+
+        let mut sumdia = 0.0;
+        let mut sumoff = 0.0;
+        for r in 0..4 {
+            let idx_dia = (r * (r + 1)) / 2 + r;
+            sumdia += p_coul.get(ja + r, ja + r) * w[idx_dia];
+            for c in 0..r {
+                let idx_off = (r * (r + 1)) / 2 + c;
+                sumoff += p_coul.get(ja + r, ja + c) * w[idx_off];
+            }
+        }
+        target.add_diag_a_sym(ia, 0, 0, sumdia + 2.0 * sumoff);
+
+        for r in 0..4 {
+            let mut s = 0.0;
+            for c in 0..4 {
+                let idx = if r >= c {
+                    (r * (r + 1)) / 2 + c
+                } else {
+                    (c * (c + 1)) / 2 + r
+                };
+                s += p_exch.get(ia, ja + c) * w[idx];
+            }
+            target.add_off_diag(ia, 0, ja, r, -scale_exch * s);
+        }
+    } else if na == 1 && nb == 1 {
+        let w0 = w[0];
+        let p_a = p_coul.get(ia, ia);
+        let p_b = p_coul.get(ja, ja);
+        let p_ab = p_exch.get(ia, ja);
+
+        target.add_diag_a_sym(ia, 0, 0, p_b * w0);
+        target.add_diag_b_sym(atom_b, ja, 0, 0, p_a * w0);
+        target.add_off_diag(ia, 0, ja, 0, -scale_exch * p_ab * w0);
+    }
+}
+
+/// Minimum weighted two-electron integral work (`sum(pair.w.len())`) to activate the
+/// preallocated zero-malloc Rayon row-band Fock assembler inside SCF iterations.
+pub const NDDO_FOCK_PARALLEL_WORK_THRESHOLD: usize = 65_000;
+
+/// Minimum weighted two-electron integral work to activate one-shot parallel Fock assembly
+/// when no preallocated `NddoFockParallelPlan` is supplied.
+pub const NDDO_FOCK_STANDALONE_WORK_THRESHOLD: usize = 95_000;
+
+const MAX_FOCK_PARALLEL_CHUNKS: usize = 64;
+
+#[derive(Debug, Clone)]
+struct RowBandRun {
+    pair_start: usize,
+    pair_end: usize,
+    row_start: usize,
+    row_end: usize,
+    cum_work: usize,
+}
+
+/// Reusable Data-Oriented Programming (DOP) parallel execution plan and flat scratch arena
+/// for zero-allocation two-center NDDO Fock assembly inside SCF loops.
+///
+/// Built once per molecular geometry (when `diatomic_pairs` are precomputed) and reused
+/// across every RHF/UHF SCF iteration with strictly 0 heap allocations.
+#[derive(Debug, Clone)]
+pub struct NddoFockParallelPlan {
+    runs: Vec<RowBandRun>,
+    atom_b_info: Vec<Option<(usize, usize)>>,
+    chunk_bounds: Vec<(usize, usize, usize, usize)>,
+    diag_b_flat: Vec<[f64; 45]>,
+    num_b_slots: usize,
+    norbs: usize,
+    total_work: usize,
+    cached_threads: usize,
+}
+
+impl NddoFockParallelPlan {
+    /// Build a reusable parallel row-band plan if `pairs` satisfy monotonic lower-triangle layout
+    /// and total integral work meets `min_work` with more than one Rayon worker thread.
+    pub fn build(pairs: &[DiatomicPairIntegrals], norbs: usize, min_work: usize) -> Option<Self> {
+        // Fast O(1) upper-bound reject before querying Rayon or scanning pairs
+        if norbs == 0 || pairs.is_empty() || pairs.len().saturating_mul(2025) < min_work {
+            return None;
+        }
+        // Fast zero-allocation work check before allocating plan vectors
+        let quick_work: usize = pairs.iter().map(|p| p.w.len().max(1)).sum();
+        if quick_work < min_work {
+            return None;
+        }
+        let n_threads = rayon::current_num_threads();
+        if n_threads <= 1 {
+            return None;
+        }
+
+        let first = &pairs[0];
+        if first.norb_a > 9
+            || first.norb_b > 9
+            || first.orb_start_a + first.norb_a > norbs
+            || first.orb_start_b + first.norb_b > first.orb_start_a
+            || first.atom_b >= first.atom_a
+            || first.atom_b >= norbs
+        {
+            return None;
+        }
+
+        let mut runs = Vec::new();
+        let mut cur_atom_a = first.atom_a;
+        let mut cur_row_start = first.orb_start_a;
+        let mut cur_norb_a = first.norb_a;
+        let mut run_start = 0usize;
+        let mut cum_work = first.w.len().max(1);
+        let mut atom_b_info: Vec<Option<(usize, usize)>> = Vec::new();
+
+        if first.atom_b >= atom_b_info.len() {
+            atom_b_info.resize(first.atom_b + 1, None);
+        }
+        atom_b_info[first.atom_b] = Some((first.orb_start_b, first.norb_b));
+
+        for (idx, pair) in pairs.iter().enumerate().skip(1) {
+            if pair.norb_a > 9
+                || pair.norb_b > 9
+                || pair.orb_start_a + pair.norb_a > norbs
+                || pair.orb_start_b + pair.norb_b > pair.orb_start_a
+                || pair.atom_b >= pair.atom_a
+                || pair.atom_b >= norbs
+            {
+                return None;
+            }
+
+            if pair.atom_b >= atom_b_info.len() {
+                atom_b_info.resize(pair.atom_b + 1, None);
+            }
+            match atom_b_info[pair.atom_b] {
+                None => atom_b_info[pair.atom_b] = Some((pair.orb_start_b, pair.norb_b)),
+                Some((jb, nb)) if jb == pair.orb_start_b && nb == pair.norb_b => {}
+                Some(_) => return None,
+            }
+
+            if pair.atom_a == cur_atom_a {
+                if pair.orb_start_a != cur_row_start || pair.norb_a != cur_norb_a {
+                    return None;
+                }
+            } else {
+                if pair.atom_a < cur_atom_a || pair.orb_start_a < cur_row_start + cur_norb_a {
+                    return None;
+                }
+                runs.push(RowBandRun {
+                    pair_start: run_start,
+                    pair_end: idx,
+                    row_start: cur_row_start,
+                    row_end: cur_row_start + cur_norb_a,
+                    cum_work,
+                });
+                cur_atom_a = pair.atom_a;
+                cur_row_start = pair.orb_start_a;
+                cur_norb_a = pair.norb_a;
+                run_start = idx;
+            }
+            cum_work += pair.w.len().max(1);
+        }
+
+        runs.push(RowBandRun {
+            pair_start: run_start,
+            pair_end: pairs.len(),
+            row_start: cur_row_start,
+            row_end: cur_row_start + cur_norb_a,
+            cum_work,
+        });
+
+        let total_work = cum_work;
+        if runs.len() < 2 || total_work < min_work {
+            return None;
+        }
+
+        let target_chunks = n_threads.clamp(2, MAX_FOCK_PARALLEL_CHUNKS).min(runs.len());
+        let mut chunk_bounds = Vec::with_capacity(target_chunks);
+        let mut r_idx = 0usize;
+        let mut prev_work = 0usize;
+        for chunk_idx in 0..target_chunks {
+            if r_idx >= runs.len() {
+                break;
+            }
+            let remaining_chunks = target_chunks - chunk_idx;
+            let max_end = runs.len() - (remaining_chunks - 1);
+            let remaining_work = total_work - prev_work;
+            let target_chunk_work = remaining_work.div_ceil(remaining_chunks);
+
+            let start_run = r_idx;
+            while r_idx + 1 < max_end && (runs[r_idx].cum_work - prev_work) < target_chunk_work {
+                r_idx += 1;
+            }
+            let end_run = r_idx + 1;
+            chunk_bounds.push((
+                start_run,
+                end_run,
+                runs[start_run].row_start,
+                runs[end_run - 1].row_end,
+            ));
+            prev_work = runs[end_run - 1].cum_work;
+            r_idx = end_run;
+        }
+
+        let num_b_slots = atom_b_info.len();
+        let diag_b_flat = vec![[0.0f64; 45]; chunk_bounds.len() * num_b_slots];
+
+        Some(Self {
+            runs,
+            atom_b_info,
+            chunk_bounds,
+            diag_b_flat,
+            num_b_slots,
+            norbs,
+            total_work,
+            cached_threads: n_threads,
+        })
+    }
+
+    /// Total weighted two-electron integral work across all diatomic pairs in this plan.
+    pub fn total_work(&self) -> usize {
+        self.total_work
+    }
+
+    /// Execute two-center NDDO Fock accumulation in parallel with strictly 0 heap allocations.
+    fn execute(
+        &mut self,
+        pairs: &[DiatomicPairIntegrals],
+        p_coul: &AlignedMatrix<f64>,
+        p_exch: &AlignedMatrix<f64>,
+        scale_exch: f64,
+        fock: &mut AlignedMatrix<f64>,
+    ) {
+        let norbs = self.norbs;
+        let n_chunks = self.chunk_bounds.len();
+        let num_b_slots = self.num_b_slots;
+
+        type BandSlice<'a> = (usize, usize, usize, &'a mut [f64], &'a mut [[f64; 45]]);
+        let mut bands: [BandSlice<'_>; MAX_FOCK_PARALLEL_CHUNKS] =
+            std::array::from_fn(|_| (0, 0, 0, &mut [][..], &mut [][..]));
+
+        let mut fock_tail: &mut [f64] = &mut fock.data;
+        let mut diag_tail: &mut [[f64; 45]] = &mut self.diag_b_flat;
+        let mut cursor_row = 0usize;
+
+        for (slot, &(start_run, end_run, band_start, band_end)) in
+            bands.iter_mut().zip(self.chunk_bounds.iter())
+        {
+            let skip_rows = band_start - cursor_row;
+            let (_, after_skip) = fock_tail.split_at_mut(skip_rows * norbs);
+            let (band, rest_fock) = after_skip.split_at_mut((band_end - band_start) * norbs);
+            let (diag_b, rest_diag) = diag_tail.split_at_mut(num_b_slots);
+            *slot = (start_run, end_run, band_start, band, diag_b);
+            fock_tail = rest_fock;
+            diag_tail = rest_diag;
+            cursor_row = band_end;
+        }
+
+        let runs = &self.runs;
+        bands[..n_chunks].par_iter_mut().for_each(
+            |(start_run, end_run, band_start, band, diag_b)| {
+                diag_b.fill([0.0f64; 45]);
+                let mut target = RowBandTarget {
+                    row_base: *band_start,
+                    cols: norbs,
+                    band,
+                    diag_b,
+                };
+                for run in &runs[*start_run..*end_run] {
+                    for pair in &pairs[run.pair_start..run.pair_end] {
+                        accumulate_nddo_pair(pair, p_coul, p_exch, scale_exch, &mut target);
+                    }
+                }
+            },
+        );
+
+        for diag_b_buf in self.diag_b_flat.chunks_exact(num_b_slots) {
+            for (atom_b, block) in diag_b_buf.iter().enumerate() {
+                if let Some((ja, nb)) = self.atom_b_info[atom_b] {
+                    for r in 0..nb {
+                        for c in 0..=r {
+                            let val = block[(r * (r + 1)) / 2 + c];
+                            if val != 0.0 {
+                                let cur = fock.get(ja + r, ja + c);
+                                fock.set(ja + r, ja + c, cur + val);
+                                if r != c {
+                                    fock.set(ja + c, ja + r, cur + val);
+                                }
+                            }
+                        }
+                    }
+                }
+            }
+        }
+
+        // Mirror strict lower triangle into upper triangle in a branchless cache-linear sweep.
+        let cols = fock.cols;
+        let data = &mut fock.data;
+        for r in 1..norbs {
+            let row_off = r * cols;
+            for c in 0..r {
+                data[c * cols + r] = data[row_off + c];
+            }
+        }
+    }
+}
+
+fn assemble_nddo_two_center_fock_impl(
+    pairs: &[DiatomicPairIntegrals],
+    p_coul: &AlignedMatrix<f64>,
+    p_exch: &AlignedMatrix<f64>,
+    scale_exch: f64,
+    fock: &mut AlignedMatrix<f64>,
+    cached_plan: Option<&mut NddoFockParallelPlan>,
+) {
+    if fock.rows == fock.cols {
+        let norbs = fock.rows;
+        if let Some(plan) = cached_plan {
+            if plan.norbs == norbs
+                && plan.cached_threads == rayon::current_num_threads()
+                && rayon::current_num_threads() > 1
+            {
+                plan.execute(pairs, p_coul, p_exch, scale_exch, fock);
+                return;
+            }
+        } else if let Some(mut one_shot_plan) =
+            NddoFockParallelPlan::build(pairs, norbs, NDDO_FOCK_STANDALONE_WORK_THRESHOLD)
+        {
+            one_shot_plan.execute(pairs, p_coul, p_exch, scale_exch, fock);
+            return;
+        }
+    }
+
+    let mut target = FullMatrixTarget { fock };
+    for pair in pairs {
+        accumulate_nddo_pair(pair, p_coul, p_exch, scale_exch, &mut target);
+    }
+}
+
+/// Assemble full two-center two-electron NDDO Coulomb and Exchange into the Fock matrix
+/// using an optional preallocated `NddoFockParallelPlan` for zero-allocation parallel SCF.
+pub fn assemble_nddo_two_center_fock_with_plan(
+    pairs: &[DiatomicPairIntegrals],
+    density: &AlignedMatrix<f64>,
+    fock: &mut AlignedMatrix<f64>,
+    plan: Option<&mut NddoFockParallelPlan>,
+) {
+    assemble_nddo_two_center_fock_impl(pairs, density, density, 0.5, fock, plan);
+}
+
+/// Assemble full two-center two-electron NDDO Coulomb and Exchange into the Fock matrix for UHF
+/// using an optional preallocated `NddoFockParallelPlan` for zero-allocation parallel SCF.
+pub fn assemble_nddo_two_center_fock_spin_with_plan(
+    pairs: &[DiatomicPairIntegrals],
+    p_tot: &AlignedMatrix<f64>,
+    p_spin: &AlignedMatrix<f64>,
+    fock: &mut AlignedMatrix<f64>,
+    plan: Option<&mut NddoFockParallelPlan>,
+) {
+    assemble_nddo_two_center_fock_impl(pairs, p_tot, p_spin, 1.0, fock, plan);
 }
 
 /// Assemble full two-center two-electron NDDO Coulomb and Exchange into the Fock matrix.
@@ -1379,160 +1911,7 @@ pub fn assemble_nddo_two_center_fock(
     density: &AlignedMatrix<f64>,
     fock: &mut AlignedMatrix<f64>,
 ) {
-    for pair in pairs {
-        let ia = pair.orb_start_a;
-        let ja = pair.orb_start_b;
-        let na = pair.norb_a;
-        let nb = pair.norb_b;
-        let w = &pair.w;
-
-        if na >= 9 || nb >= 9 {
-            assemble_nddo_pair_dorbs(pair, density, density, 0.5, fock);
-        } else if na >= 4 && nb >= 4 {
-            let mut pja = [0.0f64; 16];
-            let mut pjb = [0.0f64; 16];
-            let mut pk = [0.0f64; 16];
-
-            for r in 0..4 {
-                for c in 0..4 {
-                    pja[r * 4 + c] = density.get(ia + r, ia + c);
-                    pjb[r * 4 + c] = density.get(ja + r, ja + c);
-                    pk[r * 4 + c] = 0.5 * density.get(ia + r, ja + c);
-                }
-            }
-
-            let mut f_block_a = [0.0f64; 10];
-            let mut f_block_b = [0.0f64; 10];
-            contract_jab(&pja, &pjb, w, &mut f_block_a, &mut f_block_b);
-
-            for r in 0..4 {
-                for c in 0..=r {
-                    let idx = (r * (r + 1)) / 2 + c;
-                    let val_a = f_block_a[idx];
-                    let cur_a = fock.get(ia + r, ia + c);
-                    fock.set(ia + r, ia + c, cur_a + val_a);
-                    if r != c {
-                        fock.set(ia + c, ia + r, cur_a + val_a);
-                    }
-
-                    let val_b = f_block_b[idx];
-                    let cur_b = fock.get(ja + r, ja + c);
-                    fock.set(ja + r, ja + c, cur_b + val_b);
-                    if r != c {
-                        fock.set(ja + c, ja + r, cur_b + val_b);
-                    }
-                }
-            }
-
-            let mut f_ab = [0.0f64; 16];
-            contract_kab(&pk, w, &mut f_ab);
-
-            for r in 0..4 {
-                for c in 0..4 {
-                    let val = f_ab[r * 4 + c];
-                    let cur = fock.get(ia + r, ja + c);
-                    fock.set(ia + r, ja + c, cur + val);
-                    fock.set(ja + c, ia + r, cur + val);
-                }
-            }
-        } else if na >= 4 && nb == 1 {
-            let p_b = density.get(ja, ja);
-            for r in 0..4 {
-                for c in 0..=r {
-                    let idx = (r * (r + 1)) / 2 + c;
-                    let val = p_b * w[idx];
-                    let cur = fock.get(ia + r, ia + c);
-                    fock.set(ia + r, ia + c, cur + val);
-                    if r != c {
-                        fock.set(ia + c, ia + r, cur + val);
-                    }
-                }
-            }
-
-            let mut sumdia = 0.0;
-            let mut sumoff = 0.0;
-            for r in 0..4 {
-                let idx_dia = (r * (r + 1)) / 2 + r;
-                sumdia += density.get(ia + r, ia + r) * w[idx_dia];
-                for c in 0..r {
-                    let idx_off = (r * (r + 1)) / 2 + c;
-                    sumoff += density.get(ia + r, ia + c) * w[idx_off];
-                }
-            }
-            let cur_b = fock.get(ja, ja);
-            fock.set(ja, ja, cur_b + sumdia + 2.0 * sumoff);
-
-            for r in 0..4 {
-                let mut s = 0.0;
-                for c in 0..4 {
-                    let idx = if r >= c {
-                        (r * (r + 1)) / 2 + c
-                    } else {
-                        (c * (c + 1)) / 2 + r
-                    };
-                    s += density.get(ia + c, ja) * w[idx];
-                }
-                let cur = fock.get(ia + r, ja);
-                fock.set(ia + r, ja, cur - 0.5 * s);
-                fock.set(ja, ia + r, cur - 0.5 * s);
-            }
-        } else if na == 1 && nb >= 4 {
-            let p_a = density.get(ia, ia);
-            for r in 0..4 {
-                for c in 0..=r {
-                    let idx = (r * (r + 1)) / 2 + c;
-                    let val = p_a * w[idx];
-                    let cur = fock.get(ja + r, ja + c);
-                    fock.set(ja + r, ja + c, cur + val);
-                    if r != c {
-                        fock.set(ja + c, ja + r, cur + val);
-                    }
-                }
-            }
-
-            let mut sumdia = 0.0;
-            let mut sumoff = 0.0;
-            for r in 0..4 {
-                let idx_dia = (r * (r + 1)) / 2 + r;
-                sumdia += density.get(ja + r, ja + r) * w[idx_dia];
-                for c in 0..r {
-                    let idx_off = (r * (r + 1)) / 2 + c;
-                    sumoff += density.get(ja + r, ja + c) * w[idx_off];
-                }
-            }
-            let cur_a = fock.get(ia, ia);
-            fock.set(ia, ia, cur_a + sumdia + 2.0 * sumoff);
-
-            for r in 0..4 {
-                let mut s = 0.0;
-                for c in 0..4 {
-                    let idx = if r >= c {
-                        (r * (r + 1)) / 2 + c
-                    } else {
-                        (c * (c + 1)) / 2 + r
-                    };
-                    s += density.get(ia, ja + c) * w[idx];
-                }
-                let cur = fock.get(ia, ja + r);
-                fock.set(ia, ja + r, cur - 0.5 * s);
-                fock.set(ja + r, ia, cur - 0.5 * s);
-            }
-        } else if na == 1 && nb == 1 {
-            let w0 = w[0];
-            let p_a = density.get(ia, ia);
-            let p_b = density.get(ja, ja);
-            let p_ab = density.get(ia, ja);
-
-            let cur_a = fock.get(ia, ia);
-            fock.set(ia, ia, cur_a + p_b * w0);
-            let cur_b = fock.get(ja, ja);
-            fock.set(ja, ja, cur_b + p_a * w0);
-
-            let cur_ab = fock.get(ia, ja);
-            fock.set(ia, ja, cur_ab - 0.5 * p_ab * w0);
-            fock.set(ja, ia, cur_ab - 0.5 * p_ab * w0);
-        }
-    }
+    assemble_nddo_two_center_fock_impl(pairs, density, density, 0.5, fock, None);
 }
 
 /// Assemble full two-center two-electron NDDO Coulomb and Exchange into the Fock matrix for UHF.
@@ -1545,160 +1924,7 @@ pub fn assemble_nddo_two_center_fock_spin(
     p_spin: &AlignedMatrix<f64>,
     fock: &mut AlignedMatrix<f64>,
 ) {
-    for pair in pairs {
-        let ia = pair.orb_start_a;
-        let ja = pair.orb_start_b;
-        let na = pair.norb_a;
-        let nb = pair.norb_b;
-        let w = &pair.w;
-
-        if na >= 9 || nb >= 9 {
-            assemble_nddo_pair_dorbs(pair, p_tot, p_spin, 1.0, fock);
-        } else if na >= 4 && nb >= 4 {
-            let mut pja = [0.0f64; 16];
-            let mut pjb = [0.0f64; 16];
-            let mut pk = [0.0f64; 16];
-
-            for r in 0..4 {
-                for c in 0..4 {
-                    pja[r * 4 + c] = p_tot.get(ia + r, ia + c);
-                    pjb[r * 4 + c] = p_tot.get(ja + r, ja + c);
-                    pk[r * 4 + c] = p_spin.get(ia + r, ja + c);
-                }
-            }
-
-            let mut f_block_a = [0.0f64; 10];
-            let mut f_block_b = [0.0f64; 10];
-            contract_jab(&pja, &pjb, w, &mut f_block_a, &mut f_block_b);
-
-            for r in 0..4 {
-                for c in 0..=r {
-                    let idx = (r * (r + 1)) / 2 + c;
-                    let val_a = f_block_a[idx];
-                    let cur_a = fock.get(ia + r, ia + c);
-                    fock.set(ia + r, ia + c, cur_a + val_a);
-                    if r != c {
-                        fock.set(ia + c, ia + r, cur_a + val_a);
-                    }
-
-                    let val_b = f_block_b[idx];
-                    let cur_b = fock.get(ja + r, ja + c);
-                    fock.set(ja + r, ja + c, cur_b + val_b);
-                    if r != c {
-                        fock.set(ja + c, ja + r, cur_b + val_b);
-                    }
-                }
-            }
-
-            let mut f_ab = [0.0f64; 16];
-            contract_kab(&pk, w, &mut f_ab);
-
-            for r in 0..4 {
-                for c in 0..4 {
-                    let val = f_ab[r * 4 + c];
-                    let cur = fock.get(ia + r, ja + c);
-                    fock.set(ia + r, ja + c, cur + val);
-                    fock.set(ja + c, ia + r, cur + val);
-                }
-            }
-        } else if na >= 4 && nb == 1 {
-            let p_b = p_tot.get(ja, ja);
-            for r in 0..4 {
-                for c in 0..=r {
-                    let idx = (r * (r + 1)) / 2 + c;
-                    let val = p_b * w[idx];
-                    let cur = fock.get(ia + r, ia + c);
-                    fock.set(ia + r, ia + c, cur + val);
-                    if r != c {
-                        fock.set(ia + c, ia + r, cur + val);
-                    }
-                }
-            }
-
-            let mut sumdia = 0.0;
-            let mut sumoff = 0.0;
-            for r in 0..4 {
-                let idx_dia = (r * (r + 1)) / 2 + r;
-                sumdia += p_tot.get(ia + r, ia + r) * w[idx_dia];
-                for c in 0..r {
-                    let idx_off = (r * (r + 1)) / 2 + c;
-                    sumoff += p_tot.get(ia + r, ia + c) * w[idx_off];
-                }
-            }
-            let cur_b = fock.get(ja, ja);
-            fock.set(ja, ja, cur_b + sumdia + 2.0 * sumoff);
-
-            for r in 0..4 {
-                let mut s = 0.0;
-                for c in 0..4 {
-                    let idx = if r >= c {
-                        (r * (r + 1)) / 2 + c
-                    } else {
-                        (c * (c + 1)) / 2 + r
-                    };
-                    s += p_spin.get(ia + c, ja) * w[idx];
-                }
-                let cur = fock.get(ia + r, ja);
-                fock.set(ia + r, ja, cur - s);
-                fock.set(ja, ia + r, cur - s);
-            }
-        } else if na == 1 && nb >= 4 {
-            let p_a = p_tot.get(ia, ia);
-            for r in 0..4 {
-                for c in 0..=r {
-                    let idx = (r * (r + 1)) / 2 + c;
-                    let val = p_a * w[idx];
-                    let cur = fock.get(ja + r, ja + c);
-                    fock.set(ja + r, ja + c, cur + val);
-                    if r != c {
-                        fock.set(ja + c, ja + r, cur + val);
-                    }
-                }
-            }
-
-            let mut sumdia = 0.0;
-            let mut sumoff = 0.0;
-            for r in 0..4 {
-                let idx_dia = (r * (r + 1)) / 2 + r;
-                sumdia += p_tot.get(ja + r, ja + r) * w[idx_dia];
-                for c in 0..r {
-                    let idx_off = (r * (r + 1)) / 2 + c;
-                    sumoff += p_tot.get(ja + r, ja + c) * w[idx_off];
-                }
-            }
-            let cur_a = fock.get(ia, ia);
-            fock.set(ia, ia, cur_a + sumdia + 2.0 * sumoff);
-
-            for r in 0..4 {
-                let mut s = 0.0;
-                for c in 0..4 {
-                    let idx = if r >= c {
-                        (r * (r + 1)) / 2 + c
-                    } else {
-                        (c * (c + 1)) / 2 + r
-                    };
-                    s += p_spin.get(ia, ja + c) * w[idx];
-                }
-                let cur = fock.get(ia, ja + r);
-                fock.set(ia, ja + r, cur - s);
-                fock.set(ja + r, ia, cur - s);
-            }
-        } else if na == 1 && nb == 1 {
-            let w0 = w[0];
-            let p_a = p_tot.get(ia, ia);
-            let p_b = p_tot.get(ja, ja);
-            let p_ab = p_spin.get(ia, ja);
-
-            let cur_a = fock.get(ia, ia);
-            fock.set(ia, ia, cur_a + p_b * w0);
-            let cur_b = fock.get(ja, ja);
-            fock.set(ja, ja, cur_b + p_a * w0);
-
-            let cur_ab = fock.get(ia, ja);
-            fock.set(ia, ja, cur_ab - p_ab * w0);
-            fock.set(ja, ia, cur_ab - p_ab * w0);
-        }
-    }
+    assemble_nddo_two_center_fock_impl(pairs, p_tot, p_spin, 1.0, fock, None);
 }
 
 /// Apply rotated electron-nuclear attractions $E_{1B}$ and $E_{2A}$ to $H^{\text{core}}$.
@@ -1870,6 +2096,109 @@ mod tests {
         }
         println!(
             "[OK] NDDO Precomputation & Fock Assembly verified with strict Hermiticity on H2O!"
+        );
+    }
+
+    #[test]
+    fn test_parallel_vs_serial_nddo_fock_assembly_parity() {
+        use crate::parameters::pm6::Pm6Model;
+
+        // 35-atom alkane chain (11 carbons, 24 hydrogens => 595 pairs >= 512 threshold)
+        let mut z = Vec::new();
+        let mut coords = Vec::new();
+        for c in 0..11 {
+            z.push(6u8);
+            coords.push([c as f64 * 1.53, (c % 2) as f64 * 0.5, 0.0]);
+            let n_h = if c == 0 || c == 10 { 3 } else { 2 };
+            for h in 0..n_h {
+                z.push(1u8);
+                coords.push([
+                    c as f64 * 1.53 + 0.3 * h as f64,
+                    (c % 2) as f64 * 0.5 + if h == 0 { 1.09 } else { -0.8 },
+                    if h == 2 { 0.85 } else { 0.2 },
+                ]);
+            }
+        }
+        assert_eq!(z.len(), 35);
+        let model = Pm6Model;
+        let batch = MolecularBatch::new_for_model(z, &coords, &model);
+        let pairs = crate::threading::run_with_thread_pool(Some(4), || {
+            precompute_diatomic_pairs(&batch, &model)
+        });
+        assert!(pairs.len() >= 512);
+
+        let n = batch.norbs;
+        let mut p_tot = AlignedMatrix::zeroed(n, n);
+        let mut p_spin = AlignedMatrix::zeroed(n, n);
+        let mut h_init = AlignedMatrix::zeroed(n, n);
+        for i in 0..n {
+            for j in 0..=i {
+                let d = ((i + 1) as f64 * 0.13 + (j + 1) as f64 * 0.07).sin() * 0.15;
+                p_tot.set(i, j, d);
+                p_tot.set(j, i, d);
+                p_spin.set(i, j, 0.6 * d);
+                p_spin.set(j, i, 0.6 * d);
+                let hval = 0.05 * ((i as f64) - (j as f64)).cos();
+                h_init.set(i, j, hval);
+                h_init.set(j, i, hval);
+            }
+        }
+
+        let mut f_serial = h_init.clone();
+        let mut f_parallel = h_init.clone();
+        let mut plan = NddoFockParallelPlan::build(&pairs, n, 1)
+            .expect("Explicit plan with threshold=1 should build for 35-atom alkane");
+        crate::threading::run_with_thread_pool(Some(1), || {
+            assemble_nddo_two_center_fock(&pairs, &p_tot, &mut f_serial);
+        });
+        crate::threading::run_with_thread_pool(Some(4), || {
+            assemble_nddo_two_center_fock_with_plan(
+                &pairs,
+                &p_tot,
+                &mut f_parallel,
+                Some(&mut plan),
+            );
+        });
+
+        let mut max_diff = 0.0f64;
+        for i in 0..n {
+            for j in 0..n {
+                max_diff = max_diff.max((f_serial.get(i, j) - f_parallel.get(i, j)).abs());
+                assert!((f_parallel.get(i, j) - f_parallel.get(j, i)).abs() < 1e-13);
+            }
+        }
+        assert!(
+            max_diff < 1e-13,
+            "Parallel RHF NDDO Fock diverged from serial: {:e}",
+            max_diff
+        );
+
+        let mut fu_serial = h_init.clone();
+        let mut fu_parallel = h_init;
+        crate::threading::run_with_thread_pool(Some(1), || {
+            assemble_nddo_two_center_fock_spin(&pairs, &p_tot, &p_spin, &mut fu_serial);
+        });
+        crate::threading::run_with_thread_pool(Some(4), || {
+            assemble_nddo_two_center_fock_spin_with_plan(
+                &pairs,
+                &p_tot,
+                &p_spin,
+                &mut fu_parallel,
+                Some(&mut plan),
+            );
+        });
+
+        let mut max_u_diff = 0.0f64;
+        for i in 0..n {
+            for j in 0..n {
+                max_u_diff = max_u_diff.max((fu_serial.get(i, j) - fu_parallel.get(i, j)).abs());
+                assert!((fu_parallel.get(i, j) - fu_parallel.get(j, i)).abs() < 1e-13);
+            }
+        }
+        assert!(
+            max_u_diff < 1e-13,
+            "Parallel UHF NDDO Fock diverged from serial: {:e}",
+            max_u_diff
         );
     }
 }

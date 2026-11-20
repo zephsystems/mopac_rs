@@ -1001,11 +1001,8 @@ fn main() -> Result<(), Box<dyn std::error::Error>> {
         _ => Box::new(Am1Model),
     };
 
-    let use_nddo = if use_gpu && !cli.nddo && !parsed.is_nddo_requested {
-        false
-    } else {
-        (!cli.monopole && !parsed.is_monopole_requested) || cli.nddo || parsed.is_nddo_requested
-    };
+    let use_nddo =
+        (!cli.monopole && !parsed.is_monopole_requested) || cli.nddo || parsed.is_nddo_requested;
     let charge = cli.charge.or(parsed.charge).unwrap_or(0);
 
     println!("===============================================================================");
@@ -1045,13 +1042,12 @@ fn main() -> Result<(), Box<dyn std::error::Error>> {
     );
     println!(
         " Compute Backend       : {}",
-        if use_gpu {
-            format!(
-                "Vulkan GPU ({})",
-                if use_fp32 { "FP32 (18 TFLOPS)" } else { "FP64" }
-            )
+        if use_gpu && !use_nddo {
+            format!("Vulkan GPU ({})", if use_fp32 { "FP32" } else { "FP64" })
+        } else if use_gpu && use_nddo {
+            "CPU NDDO (Vulkan GPU initialized for diagnostics/monopole)".to_string()
         } else {
-            "CPU SIMD AVX2".to_string()
+            "CPU".to_string()
         }
     );
     println!(" Number of Atoms       : {}", parsed.atoms.len());
@@ -1446,7 +1442,7 @@ fn main() -> Result<(), Box<dyn std::error::Error>> {
 
     let mut ws = ScfWorkspace::allocate(batch.norbs);
 
-    // If GPU is requested, warm up and verify device acceleration
+    // If GPU is requested, verify Vulkan context and evaluate monopole Coulomb on GPU when monopole mode is active
     if use_gpu {
         match VulkanContext::new() {
             Ok(c) => {
@@ -1460,7 +1456,11 @@ fn main() -> Result<(), Box<dyn std::error::Error>> {
                     mem_gb,
                     ctx.device_info.supports_float64
                 );
-                if use_fp32 {
+                if use_nddo {
+                    println!(
+                        " [Vulkan GPU] Full 22-multipole NDDO SCF executes on CPU; GPU Coulomb kernel applies to --monopole runs."
+                    );
+                } else if use_fp32 {
                     match GpuCoulombCalculatorFP32::new(Arc::clone(&ctx)) {
                         Ok(gpu_calc) => match gpu_calc.compute_batch(&batch, model.as_ref()) {
                             Ok(gpu_matrix) => {
@@ -1714,6 +1714,7 @@ fn main() -> Result<(), Box<dyn std::error::Error>> {
             );
         }
 
+        let charge = cli.charge.or(parsed.charge).unwrap_or(0);
         let opts = OptimizationOptions {
             max_cycles: 100,
             grad_rms_tol: 0.5,
@@ -1724,11 +1725,10 @@ fn main() -> Result<(), Box<dyn std::error::Error>> {
             use_nddo,
             opt_mask: Some(opt_mask),
             cosmo: cosmo_params,
+            charge,
         };
 
         let mut grad_ws = GradientWorkspace::allocate(batch.norbs);
-
-        let charge = cli.charge.or(parsed.charge).unwrap_or(0);
         let mut total_val_elecs = -(charge as f64);
         for &z in &batch.atomic_numbers {
             if let Some(p) = model.get_element(z) {
@@ -1773,6 +1773,7 @@ fn main() -> Result<(), Box<dyn std::error::Error>> {
                 damping: 0.5,
                 use_nddo,
                 cosmo: cosmo_params,
+                ..Default::default()
             };
 
             let mut uhf_ws = UhfWorkspace::new(batch.norbs);
@@ -1895,6 +1896,7 @@ fn main() -> Result<(), Box<dyn std::error::Error>> {
                 damping: 0.5,
                 use_nddo,
                 cosmo: cosmo_params,
+                ..Default::default()
             };
 
             let mut uhf_ws = UhfWorkspace::new(batch.norbs);
@@ -2507,10 +2509,10 @@ fn main() -> Result<(), Box<dyn std::error::Error>> {
     writeln!(
         out,
         "   Backend:   {}",
-        if use_gpu {
-            "Vulkan GPU"
+        if use_gpu && !use_nddo {
+            "Vulkan GPU (Monopole)"
         } else {
-            "CPU SIMD AVX2"
+            "CPU"
         }
     )?;
     writeln!(out)?;

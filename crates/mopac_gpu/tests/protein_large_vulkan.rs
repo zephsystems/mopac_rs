@@ -2,7 +2,7 @@
 //! Human Serum Albumin (HSA, PDB: 1AO6, 1,156 residues, 9,198 atoms, 84.6 Million Pairwise Coulomb Integrals).
 //!
 //! Evaluates the complete 9,198 x 9,198 double-precision Float64 Dewar-Klopman Coulomb
-//! interaction matrix in hardware on the NVIDIA GeForce RTX 4050 Laptop GPU,
+//! interaction matrix in hardware on a discrete FP64-capable Vulkan GPU,
 //! compares speed against CPU reference, and outputs Molstar-compatible PDB and PDBQT files
 //! with quantum electrostatic potentials mapped for 3D visualization.
 
@@ -149,7 +149,7 @@ fn test_vulkan_gpu_large_protein_human_serum_albumin() {
     );
     println!("  VRAM Buffer Allocated:       {:.2} MB (Float64)", vram_mb);
 
-    // 2. Dispatch on GPU (NVIDIA RTX 4050)
+    // 2. Dispatch on Vulkan GPU
     let t0_gpu = Instant::now();
     let gpu_matrix = calc
         .compute_batch(&batch, &pm6)
@@ -210,7 +210,7 @@ fn test_vulkan_gpu_large_protein_human_serum_albumin() {
         cpu_projected_total_s
     );
     println!(
-        "  Hardware Acceleration Speedup:           {:.2}x faster on RTX 4050 GPU",
+        "  Hardware Acceleration Speedup:           {:.2}x faster on Vulkan GPU",
         speedup
     );
     println!(

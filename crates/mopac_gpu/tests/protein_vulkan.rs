@@ -1,7 +1,7 @@
 //! Empirical Vulkan GPU Shader Benchmark on Medium-Sized Protein: T4 Lysozyme (PDB: 2LZM).
 //!
 //! Loads 164-residue T4 Lysozyme (1,309 atoms, 1,713,481 pairwise Coulomb interactions),
-//! dispatches the Vulkan compute shader on the NVIDIA GeForce RTX 4050 GPU,
+//! dispatches the Vulkan compute shader on a discrete FP64-capable GPU,
 //! compares speed against CPU reference, and outputs a Molstar-compatible PDB/PDBQT file
 //! with quantum partial charges mapped to the B-factor column.
 
@@ -135,7 +135,7 @@ fn test_vulkan_gpu_t4_lysozyme_protein() {
     let calc = GpuCoulombCalculator::new(Arc::clone(&ctx))
         .expect("Failed to build Vulkan Coulomb compute pipeline");
 
-    // 2. Dispatch on GPU (NVIDIA RTX 4050)
+    // 2. Dispatch on Vulkan GPU
     let t0_gpu = Instant::now();
     let gpu_matrix = calc
         .compute_batch(&batch, &pm6)

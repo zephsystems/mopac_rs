@@ -458,6 +458,7 @@ fn test_golden_parity_methyl_radical_uhf_am1() {
         damping: 0.5,
         use_nddo: true,
         cosmo: None,
+        ..Default::default()
     };
 
     let result = run_uhf_scf_with_options(&batch, &model, &mut ws, &options);
@@ -934,6 +935,7 @@ fn test_golden_parity_oh_radical_uhf_pm6() {
         damping: 0.5,
         use_nddo: true,
         cosmo: None,
+        ..Default::default()
     };
 
     let uhf_res = run_uhf_scf_with_options(&batch, &model, &mut ws, &uhf_opts);

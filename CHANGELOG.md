@@ -5,6 +5,47 @@ All notable changes to `mopac_rs` and `mopac-py` will be documented in this file
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [0.2.0] - 2026-11-18
+
+### Added
+- **Pure-Rust $O(N^3)$ Tridiagonal Eigensolver (`mopac_core::scf::eigensolver`)**:
+  - Implemented zero-allocation Householder tridiagonalization (`tred2`) followed by implicitly shifted QL (`tql2`) for symmetric matrices of dimension $N > 12$, retaining cyclic Jacobi fallback for $N \le 12$ and non-convergence safety.
+- **Parallel Two-Center NDDO Fock & Gradient Engines (`mopac_core::integrals::multipoles`, `gradients::nuclear_gradients`)**:
+  - Parallelized `precompute_diatomic_pairs` with Rayon for `natoms >= 16`.
+  - Unified RHF and UHF two-center NDDO Fock builders (`assemble_nddo_two_center_fock`, `assemble_nddo_two_center_fock_spin`) into a shared `FockTarget` kernel with a geometry-cached zero-allocation `NddoFockParallelPlan` (`ScfWorkspace` / `UhfWorkspace`) and work-weighted integral thresholds ($W = \sum |w_{AB}|$) covering `s`, `sp`, and `d`-orbital regimes.
+  - Added preallocated per-worker `DiatomicGradScratch` and Rayon parallel analytical pair gradients (`num_pairs >= 16`) for both RHF and UHF.
+- **Persistent Python `QuantumSession`, Charged Optimization & Open-Shell Property Support (`mopac_py`, `mopac_core::opt::lbfgs`)**:
+  - Exposed `QuantumSession` caching converged RHF/UHF state across `.calculate()`, `.esp_charges()`, `.bond_orders()`, `.generate_density_cube()`, `.generate_orbital_cube()`, `.generate_cubes_bundle()`, and `.meci()` without re-running SCF.
+  - Added `pub charge: i32` to `OptimizationOptions` (wired through `optimize_geometry_lbfgs`, `mopac_cli`, and `mopac_py::optimize`) enabling closed-shell charged ion geometry optimizations (`NH4+`, `OH-`).
+  - Added automatic open-shell UHF support in `bond_orders`, `generate_density_cube`, `generate_orbital_cube`, `generate_cubes_bundle`, and `MopacCalculator.export_molstar_bundle`.
+  - Added `compute_gradients` (`default: true`) and optional `charge`, `uhf`, and `multiplicity` arguments to `MopacCalculator.calculate()` and `MopacCalculator.optimize()`, plus optional `charge` on `MopacCalculator.export_molstar_bundle()`.
+  - Added optional `charge = 0` and `cosmo_eps = None` arguments to `bond_orders`, `generate_orbital_cube`, `generate_density_cube`, and `generate_cubes_bundle`.
+  - Added `OnceLock` singleton caching for `GpuCubeEvaluator` (`get_cached_gpu_cube_eval()`).
+- **SOSCF Full Hamiltonian Options & Warm-Start Infrastructure**:
+  - Added `run_rhf_soscf_with_options`, `ScfWorkspace::reset_for_new_geometry(keep_density)`, and `UhfOptions::reuse_density` with SCF warm-start support in L-BFGS geometry optimization and tightened (`1e-9 / 1e-8`) parallel Rayon `map_init` vibrational Hessian workers.
+- **Verification Coverage**:
+  - Added parity tests for `tred2`/`tql2` up to `150x150`, single-thread vs parallel RHF/UHF nuclear gradients (`< 1e-12` eV/A), SOSCF with NDDO + charge + COSMO, L-BFGS warm-start + charged `NH4+` optimization + workspace geometry resets, parallel vs serial `NddoFockParallelPlan` Fock assembly (`< 1e-13` eV), large-work `d`-orbital zero-allocation plan gate, parallel `CosmoState::initialize` parity (`< 1e-13`), >64-atom GPU density cluster parity, `QuantumSession`, `compute_gradients=False`, charged `esp_charges`, and open-shell Python properties/cubes.
+
+### Changed
+- **Workspace Version Bump to `0.2.0`**: Updated Cargo manifests (`Cargo.toml`, crate manifests), `CITATION.cff`, Debian packaging script, and AUR packaging metadata.
+- **Compact & Parallel COSMO Coupling Matrix (`mopac_core::solvation::cosmo`)**:
+  - Compacted `CosmoState.b_matrix` from `(norbs^2 x nseg)` to intra-atom orbital blocks (`total_intra_pairs x nseg`) indexed by `atom_pair_offsets`, reducing COSMO memory and inner-SCF Fock complexity from quadratic to linear in atom count (`42.87x` faster Fock step, `29.11x` less `b_matrix` memory).
+  - Parallelized `CosmoState::initialize` boundary matrix $A$ rows and atom-outer compact $B$-matrix bands via Rayon (`1.71x` faster initialization on `C14H30` with bit-identical screening energy).
+- **Eliminated Duplicate Post-Optimization & Export SCF Passes (`mopac_py`, `mopac_core::reactions::saddle`)**:
+  - Added `run_saddle_with_state` and updated `optimize`, `transition_state`, `saddle`, and `MopacCalculator.export_molstar_bundle` to reuse converged SCF wavefunctions directly.
+- **Parallel Gaussian Cube Serialization (`mopac_core::export::cube`, `mopac_gpu::cube`)**:
+  - Replaced per-voxel heap `String` formatting with shared Rayon slice-parallel `format_cube_voxels_into` writer preserving 6-values-per-line ASCII formatting.
+- **English Audit Documentation**:
+  - Translated `explanations/06` and `07` into technical English and added `explanations/08_V020_ARCHITECTURAL_REMEDIATION_AND_PERFORMANCE_ENGINE.md`.
+
+### Fixed
+- **GPU Density Grid Shader Truncation (`crates/mopac_gpu/shaders/density_grid.comp`)**:
+  - Replaced fixed 64-atom cutoff buffer with tiled batch processing and cross-batch symmetric accumulation so dense clusters with >64 active atoms within 12 Bohr evaluate without truncation.
+- **CLI GPU NDDO Flag Handling (`crates/mopac_cli/src/main.rs`)**:
+  - Stopped silently disabling NDDO under `--gpu` and ensured GPU Coulomb `gamma` runs only in non-NDDO mode with accurate backend reporting.
+- **Python Charged Systems & Guards (`mopac_py`)**:
+  - Guarded GPU Coulomb setup in RHF with `if use_gpu && !use_nddo`, fixed closed-shell charged RHF Mulliken occupation counts, and fixed `esp_charges` forwarding of `net_charge` into SCF execution.
+
 ## [0.1.5] - 2026-10-31
 
 ### Added

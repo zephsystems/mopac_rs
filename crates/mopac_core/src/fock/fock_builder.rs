@@ -303,13 +303,16 @@ pub fn add_one_center_fock_terms(
 /// 2. Add one-center two-electron Coulomb and Exchange.
 /// 3. Assemble two-center two-electron Coulomb and Exchange via rotated 22 multipoles ($W$),
 ///    `contract_jab`, `contract_kab`, and heavy-light/light-light routines.
-pub fn build_fock_nddo(
+///
+/// Accepts an optional preallocated DOP parallel plan for zero-allocation SCF iterations.
+pub fn build_fock_nddo_with_plan(
     batch: &MolecularBatch,
     model: &dyn ParameterModel,
     pairs: &[crate::integrals::multipoles::DiatomicPairIntegrals],
     h_core: &AlignedMatrix<f64>,
     density: &AlignedMatrix<f64>,
     fock: &mut AlignedMatrix<f64>,
+    plan: Option<&mut crate::integrals::multipoles::NddoFockParallelPlan>,
 ) {
     assert_eq!(fock.rows, batch.norbs);
     assert_eq!(fock.cols, batch.norbs);
@@ -321,7 +324,20 @@ pub fn build_fock_nddo(
     add_one_center_fock_terms(batch, model, density, fock);
 
     // 3. Assemble two-center two-electron Coulomb & Exchange from precomputed pairs
-    crate::integrals::multipoles::assemble_nddo_two_center_fock(pairs, density, fock);
+    crate::integrals::multipoles::assemble_nddo_two_center_fock_with_plan(
+        pairs, density, fock, plan,
+    );
+}
+
+pub fn build_fock_nddo(
+    batch: &MolecularBatch,
+    model: &dyn ParameterModel,
+    pairs: &[crate::integrals::multipoles::DiatomicPairIntegrals],
+    h_core: &AlignedMatrix<f64>,
+    density: &AlignedMatrix<f64>,
+    fock: &mut AlignedMatrix<f64>,
+) {
+    build_fock_nddo_with_plan(batch, model, pairs, h_core, density, fock, None);
 }
 
 /// Accumulate one-center two-electron Coulomb and Exchange terms for UHF matching OpenMOPAC `fock1.F90`:
@@ -440,8 +456,10 @@ pub fn add_one_center_fock_terms_spin(
     }
 }
 
-/// Build UHF Fock matrix $F^\sigma = H^{\text{core}} + J(P^\text{tot}) - K(P^\sigma)$ using full NDDO 22 multipoles.
-pub fn build_fock_uhf(
+/// Build UHF Fock matrix $F^\sigma = H^{\text{core}} + J(P^\text{tot}) - K(P^\sigma)$
+/// using full NDDO 22 multipoles and an optional preallocated DOP parallel plan.
+#[allow(clippy::too_many_arguments)]
+pub fn build_fock_uhf_with_plan(
     batch: &MolecularBatch,
     model: &dyn ParameterModel,
     pairs: &[crate::integrals::multipoles::DiatomicPairIntegrals],
@@ -449,6 +467,7 @@ pub fn build_fock_uhf(
     p_tot: &AlignedMatrix<f64>,
     p_spin: &AlignedMatrix<f64>,
     fock: &mut AlignedMatrix<f64>,
+    plan: Option<&mut crate::integrals::multipoles::NddoFockParallelPlan>,
 ) {
     assert_eq!(fock.rows, batch.norbs);
     assert_eq!(fock.cols, batch.norbs);
@@ -460,7 +479,22 @@ pub fn build_fock_uhf(
     add_one_center_fock_terms_spin(batch, model, p_tot, p_spin, fock);
 
     // 3. Assemble two-center two-electron Coulomb & Exchange
-    crate::integrals::multipoles::assemble_nddo_two_center_fock_spin(pairs, p_tot, p_spin, fock);
+    crate::integrals::multipoles::assemble_nddo_two_center_fock_spin_with_plan(
+        pairs, p_tot, p_spin, fock, plan,
+    );
+}
+
+/// Build UHF Fock matrix $F^\sigma = H^{\text{core}} + J(P^\text{tot}) - K(P^\sigma)$ using full NDDO 22 multipoles.
+pub fn build_fock_uhf(
+    batch: &MolecularBatch,
+    model: &dyn ParameterModel,
+    pairs: &[crate::integrals::multipoles::DiatomicPairIntegrals],
+    h_core: &AlignedMatrix<f64>,
+    p_tot: &AlignedMatrix<f64>,
+    p_spin: &AlignedMatrix<f64>,
+    fock: &mut AlignedMatrix<f64>,
+) {
+    build_fock_uhf_with_plan(batch, model, pairs, h_core, p_tot, p_spin, fock, None);
 }
 
 /// Build UHF Fock matrix with monopole approximation (non-NDDO fallback).

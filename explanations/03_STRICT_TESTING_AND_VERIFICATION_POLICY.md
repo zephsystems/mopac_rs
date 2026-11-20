@@ -10,7 +10,7 @@
 ```
 
 * **Document ID:** `EXPLANATION-003-STRICT-TESTING-POLICY`
-* **Target Project:** `mopac_rs` (`05_mopac_rs`)
+* **Target Project:** `mopac_rs`
 * **Reference Upstream Standard:** MOPAC v23.2.5 Official Fortran Engine
 * **License:** Apache License 2.0 (Apache-2.0)
 * **Language:** English

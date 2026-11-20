@@ -376,6 +376,8 @@ pub struct ScfWorkspace {
     pub diis: crate::scf::diis::DiisWorkspace,
     /// Precomputed NDDO diatomic multipole pair integrals
     pub diatomic_pairs: Vec<crate::integrals::multipoles::DiatomicPairIntegrals>,
+    /// Preallocated zero-allocation DOP parallel Fock plan for large NDDO systems
+    pub nddo_fock_plan: Option<crate::integrals::multipoles::NddoFockParallelPlan>,
     /// Optional precomputed two-center Coulomb repulsion matrix Gamma (from GPU or SIMD)
     pub gamma: Option<AlignedMatrix<f64>>,
 }
@@ -398,11 +400,12 @@ impl ScfWorkspace {
                 crate::scf::diis::DEFAULT_MAX_DIIS,
             ),
             diatomic_pairs: Vec::new(),
+            nddo_fock_plan: None,
             gamma: None,
         }
     }
 
-    /// Reset all computational matrices to zero.
+    /// Reset all computational matrices to zero and invalidate cached geometry integrals.
     pub fn reset(&mut self) {
         self.fock.fill_zero();
         self.density.fill_zero();
@@ -413,6 +416,9 @@ impl ScfWorkspace {
         self.tmp1.fill_zero();
         self.tmp2.fill_zero();
         self.diis.reset();
+        self.diatomic_pairs.clear();
+        self.nddo_fock_plan = None;
+        self.gamma = None;
     }
 
     /// Reset workspace for the next stage of SCF while preserving the current density matrix.
@@ -422,5 +428,25 @@ impl ScfWorkspace {
         self.tmp1.fill_zero();
         self.tmp2.fill_zero();
         self.diis.reset();
+    }
+
+    /// Reset workspace after molecular geometry coordinates change, invalidating stale
+    /// geometry-dependent integrals (`diatomic_pairs`, `nddo_fock_plan`, `gamma`) while optionally keeping
+    /// the prior density matrix for warm-started SCF convergence.
+    pub fn reset_for_new_geometry(&mut self, keep_density: bool) {
+        self.fock.fill_zero();
+        self.h_core.fill_zero();
+        self.diis_error.fill_zero();
+        self.tmp1.fill_zero();
+        self.tmp2.fill_zero();
+        self.diis.reset();
+        self.diatomic_pairs.clear();
+        self.nddo_fock_plan = None;
+        self.gamma = None;
+        if !keep_density {
+            self.density.fill_zero();
+            self.eigenvectors.fill_zero();
+            self.eigenvalues.fill_zero();
+        }
     }
 }

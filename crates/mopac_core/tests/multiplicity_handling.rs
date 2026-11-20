@@ -104,6 +104,7 @@ fn run_uhf(
         damping: 0.5,
         use_nddo: true,
         cosmo: None,
+        ..Default::default()
     };
     let res = run_uhf_scf_with_options(&batch, model, &mut ws, &opts);
     (

@@ -1,8 +1,8 @@
 # Technical Report: Virtual Orbital Level Shifting & Direct Vulkan GPU Compute Acceleration
 
-**Status**: Verified & Implemented Milestone  
-**Author**: Antigravity Autonomous Pair-Programming Agent  
-**Language**: English (Strict Mandate)  
+**Document:** `explanations/05_VULKAN_GPU_ACCELERATION_AND_LEVEL_SHIFTING.md`  
+**Classification**: SCF Convergence Mathematics and Vulkan Compute Architecture  
+**Language**: English  
 **License**: Apache License 2.0  
 **Workspace Crates**: [`mopac_core`](../crates/mopac_core), [`mopac_gpu`](../crates/mopac_gpu)  
 
@@ -22,7 +22,7 @@
 
 This milestone delivers two foundational capabilities to the `mopac_rs` ecosystem:
 1. **Saunders-Hillier Virtual Orbital Level Shifting (`bshift`)** integrated directly into [`mopac_core::scf::scf_loop`](../crates/mopac_core/src/scf/scf_loop.rs). Modeled identically on MOPAC's Fortran source (`iter.F90`), this technique resolves near-degeneracy oscillations by elevating the virtual manifold while keeping occupied states and physical ground-state energy strictly invariant.
-2. **Direct Vulkan GPU Compute Engine ([`mopac_gpu`](../crates/mopac_gpu))**: Built with zero-overhead Vulkan bindings (`ash 0.38`), native IEEE-754 double precision (`shaderFloat64`), and pre-allocated zero-allocation GPU memory workspaces (`GpuWorkspace`). The engine detects and dispatches computation to discrete GPUs (`NVIDIA GeForce RTX 4050 Laptop GPU`) and integrated GPUs (`AMD Radeon 680M`), matching CPU reference calculations to **$1.78 \times 10^{-15}\text{ eV}$** across $4,000,000$ matrix pairs.
+2. **Direct Vulkan GPU Compute Engine ([`mopac_gpu`](../crates/mopac_gpu))**: Built with zero-overhead Vulkan bindings (`ash 0.38`), native IEEE-754 double precision (`shaderFloat64`), and pre-allocated zero-allocation GPU memory workspaces (`GpuWorkspace`). The engine detects and dispatches computation to discrete and integrated Vulkan GPUs, matching CPU reference calculations to **$1.78 \times 10^{-15}\text{ eV}$** across $4,000,000$ matrix pairs.
 
 ---
 
@@ -148,7 +148,7 @@ The workspace test suite incorporates **13 automated scrutiny tests**, all passi
 
 ## 5. Hardware Performance Audit: Discrete GPU (Vulkan) vs CPU (AVX2 SoA)
 
-Empirically measured on host system with **NVIDIA GeForce RTX 4050 Laptop GPU (Discrete)** and **AMD Ryzen AVX2 CPU**:
+Measured on a reference **discrete Vulkan FP64-capable consumer GPU** paired with a **modern AVX2 x86_64 host CPU**:
 
 | Molecule Size ($N$ atoms) | Matrix Pairs ($N \times N$) | CPU Time (ms) | GPU Time (ms) (Pre-allocated `GpuWorkspace`) | Max Discrepancy ($\text{eV}$) |
 | :---: | :---: | :---: | :---: | :---: |
@@ -160,7 +160,7 @@ Empirically measured on host system with **NVIDIA GeForce RTX 4050 Laptop GPU (D
 | **2000** | $4,000,000$ | $25.999\text{ ms}$ | $169.128\text{ ms}$ | $1.78 \times 10^{-15}$ |
 
 ### Architectural Insights & Analysis:
-1. **Double Precision Throughput**: Consumer GeForce RTX GPUs (RTX 4050) feature a 1:64 FP64-to-FP32 compute ratio, whereas Datacenter GPUs (NVIDIA A100/H100) feature a 1:2 ratio. For small single-molecule computations, CPU cache-line alignment (L1/L2 hits) delivers exceptional single-threaded performance.
+1. **Double Precision Throughput**: Consumer discrete GPUs typically feature a 1:64 FP64-to-FP32 compute ratio, whereas datacenter GPUs (e.g., A100/H100) feature a 1:2 ratio. For small single-molecule computations, CPU cache-line alignment (L1/L2 hits) delivers exceptional single-threaded performance.
 2. **Pre-Allocation Advantage**: By introducing [`GpuWorkspace`](../crates/mopac_gpu/src/coulomb.rs#L440-L460), iterative dispatch overhead was reduced by **over 11x** (from $2.34\text{ ms}$ to $0.21\text{ ms}$ for $N=50$).
 3. **Batch Molecular Scaling**: The true power of GPU compute in `mopac_gpu` will be realized when evaluating **molecular batches** (e.g., conformational ensembles or docking libraries with 100+ molecules evaluated concurrently across GPU warps).
 
@@ -188,13 +188,10 @@ Only 4 molecules out of 100 did not converge within the iteration limit:
 
 ---
 
-## 6. Next Architectural Steps
+## 6. Historical Architecture Roadmap *(Completed in Subsequent Releases)*
 
-1. **Multipole NDDO Expansion ($p-p$ Repulsion)**:
-   - Implement dipole-dipole and quadrupole-quadrupole Coulomb/exchange terms in `fock_builder.rs` and as a secondary Vulkan compute pipeline.
-2. **GPU Batch Molecular Dispatch**:
-   - Dispatch multiple molecules concurrently into a single Vulkan command buffer for high-throughput screening.
-3. **Camp-King Quadratic Density Interpolator (`interp.F90`)**:
-   - Resolve the final 4 systems to reach 100% convergence across the entire reference dataset.
-4. **Analytical Nuclear Energy Gradients ($\nabla E$)**:
-   - Implement Pulay force evaluations for Cartesian coordinate relaxation and geometry optimization.
+At the time of this initial Vulkan + level-shifting milestone, the following targets were identified and subsequently delivered (`multipoles.rs`, `camp_king.rs`, `nuclear_gradients.rs`, `GpuBatchDeviceMemoryManager`):
+1. **Multipole NDDO Expansion ($p-p$ Repulsion)**: Full dipole-dipole and quadrupole-quadrupole Coulomb/exchange terms in `fock_builder.rs` and `multipoles.rs`.
+2. **GPU Batch Molecular Dispatch**: Concurrent multi-molecule command buffer evaluation via `GpuBatchDeviceMemoryManager`.
+3. **Camp-King Quadratic Density Interpolator (`camp_king.rs`)**: Resolved the remaining 4 difficult conjugated systems to achieve 100% convergence across the 100-molecule suite.
+4. **Analytical Nuclear Energy Gradients ($\nabla E$)**: Full diatomic Pulay force evaluation in `nuclear_gradients.rs`.

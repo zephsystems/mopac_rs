@@ -241,7 +241,6 @@ pub struct SaddleResult {
 /// Run two-ended transition state location between reactant and product geometries.
 ///
 /// Port of canonical OpenMOPAC `react1.F90`.
-#[allow(clippy::needless_range_loop)]
 pub fn run_saddle(
     atomic_numbers: Vec<u8>,
     reactant_coords: &[[f64; 3]],
@@ -249,6 +248,33 @@ pub fn run_saddle(
     model: &dyn ParameterModel,
     options: &SaddleOptions,
 ) -> SaddleResult {
+    run_saddle_with_state(
+        atomic_numbers,
+        reactant_coords,
+        product_coords,
+        model,
+        options,
+    )
+    .0
+}
+
+/// Type alias for optional converged transition-state SCF workspace returned by `run_saddle_with_state`.
+pub type ConvergedTsState = (
+    MolecularBatch,
+    ScfWorkspace,
+    crate::scf::scf_loop::ScfResult,
+);
+
+/// Run two-ended transition state location and return the converged transition-state SCF workspace
+/// when available at the final geometry so callers avoid a duplicate SCF solve.
+#[allow(clippy::needless_range_loop)]
+pub fn run_saddle_with_state(
+    atomic_numbers: Vec<u8>,
+    reactant_coords: &[[f64; 3]],
+    product_coords: &[[f64; 3]],
+    model: &dyn ParameterModel,
+    options: &SaddleOptions,
+) -> (SaddleResult, Option<ConvergedTsState>) {
     let natoms = atomic_numbers.len();
     assert_eq!(reactant_coords.len(), natoms);
     assert_eq!(product_coords.len(), natoms);
@@ -637,6 +663,7 @@ pub fn run_saddle(
 
     // 4. Optional EF Transition State Refinement
     let mut ts_refinement = None;
+    let mut converged_ts_state = None;
     if options.refine_with_ts {
         let ts_options = TransitionStateOptions {
             max_cycles: 60,
@@ -665,23 +692,29 @@ pub fn run_saddle(
             }
             ts_energy = ref_result.final_energy_ev;
             ts_hof = ref_result.heat_of_formation_kcal;
+            converged_ts_state = Some((ts_batch, ts_scf_ws, ref_result.final_scf.clone()));
         }
         ts_refinement = Some(ref_result);
+    } else {
+        converged_ts_state = Some((ts_batch, ts_scf_ws, ts_scf));
     }
 
     let barrier_fwd = ts_hof - hof_a_init;
     let barrier_rev = ts_hof - hof_b_init;
 
-    SaddleResult {
-        converged,
-        num_cycles: trajectory.len(),
-        final_distance: dist,
-        transition_state_coordinates: ts_coords,
-        transition_state_energy_ev: ts_energy,
-        transition_state_heat_of_formation_kcal: ts_hof,
-        barrier_forward_kcal: barrier_fwd,
-        barrier_reverse_kcal: barrier_rev,
-        trajectory,
-        ts_refinement,
-    }
+    (
+        SaddleResult {
+            converged,
+            num_cycles: trajectory.len(),
+            final_distance: dist,
+            transition_state_coordinates: ts_coords,
+            transition_state_energy_ev: ts_energy,
+            transition_state_heat_of_formation_kcal: ts_hof,
+            barrier_forward_kcal: barrier_fwd,
+            barrier_reverse_kcal: barrier_rev,
+            trajectory,
+            ts_refinement,
+        },
+        converged_ts_state,
+    )
 }

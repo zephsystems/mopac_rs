@@ -8,8 +8,8 @@ authors:
 repository-code: "https://github.com/zephsystems/mopac_rs"
 url: "https://github.com/zephsystems/mopac_rs"
 license: "Apache-2.0"
-version: "0.1.5"
-date-released: "2026-10-31"
+version: "0.2.0"
+date-released: "2026-11-20"
 keywords:
   - "quantum-chemistry"
   - "semi-empirical"

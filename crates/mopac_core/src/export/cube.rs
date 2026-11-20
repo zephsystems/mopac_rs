@@ -9,6 +9,7 @@ use crate::parameters::ParameterModel;
 use crate::types::{AlignedMatrix, BasisType, MolecularBatch};
 use rayon::prelude::*;
 use std::f64::consts::PI;
+use std::fmt::Write as _;
 
 /// Conversion factor: 1 Angstrom = 1.8897261246 Bohr (atomic units).
 pub const ANGSTROM_TO_BOHR: f64 = 1.8897261246;
@@ -473,22 +474,49 @@ pub fn generate_molecular_orbital_cube(
             });
     });
 
-    for ix in 0..nx {
-        for iy in 0..ny {
-            for iz in 0..nz {
-                let idx = ix * (ny * nz) + iy * nz + iz;
-                out.push_str(&format!(" {:12.5E}", grid_values[idx]));
-                if (iz + 1) % 6 == 0 {
-                    out.push('\n');
-                }
-            }
-            if nz % 6 != 0 {
-                out.push('\n');
-            }
-        }
-    }
+    format_cube_voxels_into(&mut out, &grid_values, nx, ny, nz, config.n_threads);
 
     out
+}
+
+/// Format 3D Gaussian Cube voxel grid into `out` across `ix` slices using Rayon,
+/// preserving exact 6-values-per-line formatting.
+pub fn format_cube_voxels_into<T: std::fmt::UpperExp + Copy + Sync>(
+    out: &mut String,
+    grid_values: &[T],
+    nx: usize,
+    ny: usize,
+    nz: usize,
+    n_threads: Option<usize>,
+) {
+    let slice_len = ny * nz;
+    let slice_strings: Vec<String> = crate::threading::run_with_thread_pool(n_threads, || {
+        (0..nx)
+            .into_par_iter()
+            .map(|ix| {
+                let mut slice_out = String::with_capacity(slice_len * 14 + ny * (nz / 6 + 2));
+                let ix_offset = ix * slice_len;
+                for iy in 0..ny {
+                    let row_offset = ix_offset + iy * nz;
+                    for iz in 0..nz {
+                        let val = grid_values[row_offset + iz];
+                        let _ = write!(slice_out, " {:12.5E}", val);
+                        if (iz + 1) % 6 == 0 {
+                            slice_out.push('\n');
+                        }
+                    }
+                    if nz % 6 != 0 {
+                        slice_out.push('\n');
+                    }
+                }
+                slice_out
+            })
+            .collect()
+    });
+
+    for slice_str in slice_strings {
+        out.push_str(&slice_str);
+    }
 }
 
 /// Generates a Gaussian Cube (.cube) formatted string for total electron density.
@@ -677,20 +705,7 @@ pub fn generate_density_cube(
             });
     });
 
-    for ix in 0..nx {
-        for iy in 0..ny {
-            for iz in 0..nz {
-                let idx = ix * (ny * nz) + iy * nz + iz;
-                out.push_str(&format!(" {:12.5E}", grid_values[idx]));
-                if (iz + 1) % 6 == 0 {
-                    out.push('\n');
-                }
-            }
-            if nz % 6 != 0 {
-                out.push('\n');
-            }
-        }
-    }
+    format_cube_voxels_into(&mut out, &grid_values, nx, ny, nz, config.n_threads);
 
     out
 }

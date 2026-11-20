@@ -4,7 +4,7 @@
 //! Executes open-shell UHF iterations with separate alpha and beta spin channels
 //! and zero dynamic heap allocations in the inner iterative cycle.
 
-use crate::fock::fock_builder::{build_fock_spin, build_fock_uhf};
+use crate::fock::fock_builder::{build_fock_spin, build_fock_uhf_with_plan};
 use crate::hamiltonian::build_hcore;
 use crate::integrals::core_repulsion::compute_total_core_repulsion;
 use crate::parameters::ParameterModel;
@@ -53,6 +53,8 @@ pub struct UhfOptions {
     pub use_nddo: bool,
     /// COSMO implicit solvation model parameters (default: None)
     pub cosmo: Option<crate::solvation::CosmoParams>,
+    /// Reuse existing spin densities in `ws.density_a` / `ws.density_b` as warm-start guess
+    pub reuse_density: bool,
 }
 
 impl Default for UhfOptions {
@@ -66,6 +68,7 @@ impl Default for UhfOptions {
             damping: 0.5,
             use_nddo: true,
             cosmo: None,
+            reuse_density: false,
         }
     }
 }
@@ -90,6 +93,7 @@ pub struct UhfWorkspace {
     pub diis_a: DiisWorkspace,
     pub diis_b: DiisWorkspace,
     pub diatomic_pairs: Vec<crate::integrals::multipoles::DiatomicPairIntegrals>,
+    pub nddo_fock_plan: Option<crate::integrals::multipoles::NddoFockParallelPlan>,
 }
 
 impl UhfWorkspace {
@@ -113,6 +117,7 @@ impl UhfWorkspace {
             diis_a: DiisWorkspace::allocate(norbs, 6),
             diis_b: DiisWorkspace::allocate(norbs, 6),
             diatomic_pairs: Vec::new(),
+            nddo_fock_plan: None,
         }
     }
 }
@@ -183,6 +188,11 @@ pub fn run_uhf_scf_with_options(
     // 3. Build one-electron core Hamiltonian H_core
     if options.use_nddo {
         ws.diatomic_pairs = crate::integrals::multipoles::precompute_diatomic_pairs(batch, model);
+        ws.nddo_fock_plan = crate::integrals::multipoles::NddoFockParallelPlan::build(
+            &ws.diatomic_pairs,
+            ws.norbs,
+            crate::integrals::multipoles::NDDO_FOCK_PARALLEL_WORK_THRESHOLD,
+        );
         crate::hamiltonian::hcore::build_hcore_nddo(
             batch,
             model,
@@ -190,6 +200,7 @@ pub fn run_uhf_scf_with_options(
             &mut ws.h_core,
         );
     } else {
+        ws.nddo_fock_plan = None;
         build_hcore(batch, model, &mut ws.h_core);
     }
 
@@ -197,35 +208,39 @@ pub fn run_uhf_scf_with_options(
         cs.apply_nuclear_reaction_field_to_hcore(&mut ws.h_core);
     }
 
-    // 4. Initial guess: diagonalize H_core to generate initial alpha and beta densities
-    diagonalize_symmetric_with_work(
-        &ws.h_core,
-        &mut ws.tmp_mult,
-        &mut ws.eigenvalues_a,
-        &mut ws.eigenvectors_a,
-    );
-    ws.eigenvectors_b
-        .data
-        .copy_from_slice(&ws.eigenvectors_a.data);
-    ws.eigenvalues_b.copy_from_slice(&ws.eigenvalues_a);
+    // 4. Initial guess: diagonalize H_core unless warm-starting from prior converged spin densities
+    let has_warm_density =
+        options.reuse_density && ws.density_tot.data.iter().any(|&x| x.abs() > 1e-12);
+    if !has_warm_density {
+        diagonalize_symmetric_with_work(
+            &ws.h_core,
+            &mut ws.tmp_mult,
+            &mut ws.eigenvalues_a,
+            &mut ws.eigenvectors_a,
+        );
+        ws.eigenvectors_b
+            .data
+            .copy_from_slice(&ws.eigenvectors_a.data);
+        ws.eigenvalues_b.copy_from_slice(&ws.eigenvalues_a);
 
-    compute_spin_density_matrix(&ws.eigenvectors_a, n_alpha, &mut ws.density_a);
-    compute_spin_density_matrix(&ws.eigenvectors_b, n_beta, &mut ws.density_b);
-
-    // If singlet open-shell (n_alpha == n_beta), break symmetry slightly to allow UHF solution
-    if n_alpha == n_beta && ws.norbs > n_alpha {
-        let mix_angle = 0.15f64;
-        let c = mix_angle.cos();
-        let s = mix_angle.sin();
-        let h_idx = n_alpha - 1;
-        let l_idx = n_alpha;
-        for i in 0..ws.norbs {
-            let ch = ws.eigenvectors_b.get(i, h_idx);
-            let cl = ws.eigenvectors_b.get(i, l_idx);
-            ws.eigenvectors_b.set(i, h_idx, c * ch + s * cl);
-            ws.eigenvectors_b.set(i, l_idx, -s * ch + c * cl);
-        }
+        compute_spin_density_matrix(&ws.eigenvectors_a, n_alpha, &mut ws.density_a);
         compute_spin_density_matrix(&ws.eigenvectors_b, n_beta, &mut ws.density_b);
+
+        // If singlet open-shell (n_alpha == n_beta), break symmetry slightly to allow UHF solution
+        if n_alpha == n_beta && ws.norbs > n_alpha {
+            let mix_angle = 0.15f64;
+            let c = mix_angle.cos();
+            let s = mix_angle.sin();
+            let h_idx = n_alpha - 1;
+            let l_idx = n_alpha;
+            for i in 0..ws.norbs {
+                let ch = ws.eigenvectors_b.get(i, h_idx);
+                let cl = ws.eigenvectors_b.get(i, l_idx);
+                ws.eigenvectors_b.set(i, h_idx, c * ch + s * cl);
+                ws.eigenvectors_b.set(i, l_idx, -s * ch + c * cl);
+            }
+            compute_spin_density_matrix(&ws.eigenvectors_b, n_beta, &mut ws.density_b);
+        }
     }
 
     for idx in 0..ws.density_tot.data.len() {
@@ -247,7 +262,7 @@ pub fn run_uhf_scf_with_options(
 
         // Build alpha and beta Fock matrices
         if options.use_nddo {
-            build_fock_uhf(
+            build_fock_uhf_with_plan(
                 batch,
                 model,
                 &ws.diatomic_pairs,
@@ -255,8 +270,9 @@ pub fn run_uhf_scf_with_options(
                 &ws.density_tot,
                 &ws.density_a,
                 &mut ws.fock_a,
+                ws.nddo_fock_plan.as_mut(),
             );
-            build_fock_uhf(
+            build_fock_uhf_with_plan(
                 batch,
                 model,
                 &ws.diatomic_pairs,
@@ -264,6 +280,7 @@ pub fn run_uhf_scf_with_options(
                 &ws.density_tot,
                 &ws.density_b,
                 &mut ws.fock_b,
+                ws.nddo_fock_plan.as_mut(),
             );
         } else {
             build_fock_spin(

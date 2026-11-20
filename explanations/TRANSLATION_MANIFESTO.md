@@ -10,7 +10,7 @@
  Modern Data-Oriented Semi-Empirical Quantum Mechanics
 ```
 
-* **Project Identifier:** `mopac_rs` (`05_mopac_rs`)
+* **Project Identifier:** `mopac_rs`
 * **Upstream Ancestry:** OpenMOPAC (MOPAC v22 / v23 Fortran 77/90/2003 Engine)
 * **License:** Apache License 2.0 (Apache-2.0)
 * **Target Language & Toolchain:** Rust (Edition 2021 / 2024), Strict `no-std` mathematical core capability, explicit SIMD (AVX2/AVX-512)
@@ -162,7 +162,7 @@ In strict alignment with the engineering integrity of our platform:
 ## 6. Project Directory Layout
 
 ```text
-05_mopac_rs/
+mopac_rs/
 ├── LICENSE                        # Apache License 2.0
 ├── Cargo.toml                     # Workspace & build configuration
 ├── explanations/

@@ -107,19 +107,14 @@ pub fn apply_level_shift(
     }
 }
 
-/// Run a complete closed-shell (RHF) Self-Consistent Field calculation with explicit options.
-///
-/// Guaranteed to perform **zero heap allocations (`0 malloc`)** during the iterative loop.
-pub fn run_rhf_scf_with_options(
+/// Compute the number of doubly occupied orbitals `nocc` for a closed-shell RHF calculation.
+pub(crate) fn compute_rhf_nocc(
     batch: &MolecularBatch,
     model: &dyn ParameterModel,
-    ws: &mut ScfWorkspace,
-    options: &ScfOptions,
-) -> ScfResult {
-    assert_eq!(ws.norbs, batch.norbs);
-
-    // 1. Calculate total valence electrons and number of occupied orbitals
-    let mut total_valence_elecs = -(options.charge as f64);
+    charge: i32,
+    norbs: usize,
+) -> usize {
+    let mut total_valence_elecs = -(charge as f64);
     for &z in &batch.atomic_numbers {
         if let Some(p) = model.get_element(z) {
             total_valence_elecs += p.core_charge;
@@ -137,7 +132,7 @@ pub fn run_rhf_scf_with_options(
         nelecs % 2 == 0,
         "Closed-shell RHF requires an even number of valence electrons (got {} with charge {}). Use UHF for open-shell systems.",
         nelecs,
-        options.charge
+        charge
     );
 
     let nocc = nelecs / 2;
@@ -146,17 +141,24 @@ pub fn run_rhf_scf_with_options(
         "System must have at least one electron pair for closed-shell RHF"
     );
     assert!(
-        nocc <= ws.norbs,
+        nocc <= norbs,
         "Number of occupied orbitals ({}) cannot exceed total basis functions ({})",
         nocc,
-        ws.norbs
+        norbs
     );
+    nocc
+}
 
-    // 2. Nuclear-nuclear core repulsion energy
+/// Prepare nuclear core repulsion, optional COSMO state, and one-electron `H_core`.
+pub(crate) fn prepare_scf_hamiltonian(
+    batch: &MolecularBatch,
+    model: &dyn ParameterModel,
+    ws: &mut ScfWorkspace,
+    options: &ScfOptions,
+) -> (f64, Option<crate::solvation::CosmoState>) {
     let mut enuc = compute_total_core_repulsion(batch, model);
 
-    // Optional COSMO implicit solvation initialization
-    let mut cosmo_state = if let Some(cosmo_params) = options.cosmo {
+    let cosmo_state = if let Some(cosmo_params) = options.cosmo {
         crate::solvation::CosmoState::initialize(batch, model, cosmo_params).ok()
     } else {
         None
@@ -166,9 +168,13 @@ pub fn run_rhf_scf_with_options(
         enuc += cs.e_nuc_diel_ev;
     }
 
-    // 3. Build one-electron core Hamiltonian H_core
     if options.use_nddo {
         ws.diatomic_pairs = crate::integrals::multipoles::precompute_diatomic_pairs(batch, model);
+        ws.nddo_fock_plan = crate::integrals::multipoles::NddoFockParallelPlan::build(
+            &ws.diatomic_pairs,
+            ws.norbs,
+            crate::integrals::multipoles::NDDO_FOCK_PARALLEL_WORK_THRESHOLD,
+        );
         crate::hamiltonian::hcore::build_hcore_nddo(
             batch,
             model,
@@ -176,6 +182,7 @@ pub fn run_rhf_scf_with_options(
             &mut ws.h_core,
         );
     } else {
+        ws.nddo_fock_plan = None;
         build_hcore(batch, model, &mut ws.h_core);
     }
 
@@ -207,6 +214,61 @@ pub fn run_rhf_scf_with_options(
         );
         enuc += e_nuc_ext;
     }
+
+    (enuc, cosmo_state)
+}
+
+/// Assemble the closed-shell Fock matrix and optional COSMO electronic reaction field.
+pub(crate) fn assemble_scf_fock(
+    batch: &MolecularBatch,
+    model: &dyn ParameterModel,
+    ws: &mut ScfWorkspace,
+    use_nddo: bool,
+    cosmo_state: &mut Option<crate::solvation::CosmoState>,
+) -> Option<f64> {
+    if use_nddo {
+        crate::fock::fock_builder::build_fock_nddo_with_plan(
+            batch,
+            model,
+            &ws.diatomic_pairs,
+            &ws.h_core,
+            &ws.density,
+            &mut ws.fock,
+            ws.nddo_fock_plan.as_mut(),
+        );
+    } else if let Some(ref gamma) = ws.gamma {
+        crate::fock::fock_builder::build_fock_with_gamma(
+            batch,
+            model,
+            &ws.h_core,
+            &ws.density,
+            gamma,
+            &mut ws.fock,
+        );
+    } else {
+        build_fock(batch, model, &ws.h_core, &ws.density, &mut ws.fock);
+    }
+
+    if let Some(cs) = cosmo_state.as_mut() {
+        Some(cs.apply_electronic_reaction_field_to_fock(&ws.density, &mut ws.fock))
+    } else {
+        None
+    }
+}
+
+/// Run a complete closed-shell (RHF) Self-Consistent Field calculation with explicit options.
+///
+/// Guaranteed to perform **zero heap allocations (`0 malloc`)** during the iterative loop.
+pub fn run_rhf_scf_with_options(
+    batch: &MolecularBatch,
+    model: &dyn ParameterModel,
+    ws: &mut ScfWorkspace,
+    options: &ScfOptions,
+) -> ScfResult {
+    assert_eq!(ws.norbs, batch.norbs);
+
+    let nocc = compute_rhf_nocc(batch, model, options.charge, ws.norbs);
+    let (enuc, mut cosmo_state) = prepare_scf_hamiltonian(batch, model, ws, options);
 
     // 4. Initial guess: Diagonalize H_core to generate initial molecular density P^(0),
     // respecting molecular symmetry and nodal structure across all conjugated and aromatic systems.
@@ -286,32 +348,9 @@ pub fn run_rhf_scf_with_options(
     for iter in 1..=options.max_iter {
         iters_done = iter;
 
-        // Build Fock matrix F = H_core + G(P)
-        if options.use_nddo {
-            crate::fock::fock_builder::build_fock_nddo(
-                batch,
-                model,
-                &ws.diatomic_pairs,
-                &ws.h_core,
-                &ws.density,
-                &mut ws.fock,
-            );
-        } else if let Some(ref gamma) = ws.gamma {
-            crate::fock::fock_builder::build_fock_with_gamma(
-                batch,
-                model,
-                &ws.h_core,
-                &ws.density,
-                gamma,
-                &mut ws.fock,
-            );
-        } else {
-            build_fock(batch, model, &ws.h_core, &ws.density, &mut ws.fock);
-        }
-
-        // Apply COSMO reaction field to Fock matrix
-        if let Some(ref mut cs) = cosmo_state {
-            let ediel = cs.apply_electronic_reaction_field_to_fock(&ws.density, &mut ws.fock);
+        // Build Fock matrix F = H_core + G(P) + optional COSMO reaction field
+        if let Some(ediel) = assemble_scf_fock(batch, model, ws, options.use_nddo, &mut cosmo_state)
+        {
             last_diel_ev = Some(ediel);
         }
 
@@ -416,30 +455,7 @@ pub fn run_rhf_scf_with_options(
 
     // Rebuild clean, unshifted canonical Fock matrix from final density P
     // to evaluate exact variational electronic energy E_elec = 0.5 * Tr[P (H + F)]
-    if options.use_nddo {
-        crate::fock::fock_builder::build_fock_nddo(
-            batch,
-            model,
-            &ws.diatomic_pairs,
-            &ws.h_core,
-            &ws.density,
-            &mut ws.fock,
-        );
-    } else if let Some(ref gamma) = ws.gamma {
-        crate::fock::fock_builder::build_fock_with_gamma(
-            batch,
-            model,
-            &ws.h_core,
-            &ws.density,
-            gamma,
-            &mut ws.fock,
-        );
-    } else {
-        build_fock(batch, model, &ws.h_core, &ws.density, &mut ws.fock);
-    }
-
-    if let Some(ref mut cs) = cosmo_state {
-        let ediel = cs.apply_electronic_reaction_field_to_fock(&ws.density, &mut ws.fock);
+    if let Some(ediel) = assemble_scf_fock(batch, model, ws, options.use_nddo, &mut cosmo_state) {
         last_diel_ev = Some(ediel);
     }
 
@@ -758,15 +774,19 @@ pub fn run_rhf_scf_adaptive_with_nddo_cosmo_and_charge(
 
     if !last_res.converged {
         // Tier 5: Second-Order SCF (SOSCF) coupled Newton-Raphson orbital optimization
-        ws.reset();
-        let soscf_res = crate::scf::soscf::run_rhf_soscf(
-            batch,
-            model,
-            ws,
-            max_iter_per_stage * 2,
+        ws.reset_keeping_density();
+        let soscf_opts = ScfOptions {
+            max_iter: max_iter_per_stage * 2,
             energy_tol_ev,
             density_tol,
-        );
+            use_nddo,
+            charge,
+            cosmo,
+            reuse_density: true,
+            ..Default::default()
+        };
+        let soscf_res =
+            crate::scf::soscf::run_rhf_soscf_with_options(batch, model, ws, &soscf_opts);
         if soscf_res.converged {
             return soscf_res;
         }

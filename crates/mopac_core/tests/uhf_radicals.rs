@@ -48,6 +48,7 @@ fn test_ch3_radical_uhf_am1() {
         damping: 0.5,
         use_nddo: true,
         cosmo: None,
+        ..Default::default()
     };
 
     let result = run_uhf_scf_with_options(&batch, &model, &mut ws, &options);
@@ -102,6 +103,7 @@ fn test_oh_radical_uhf_am1() {
         damping: 0.5,
         use_nddo: true,
         cosmo: None,
+        ..Default::default()
     };
 
     let result = run_uhf_scf_with_options(&batch, &model, &mut ws, &options);
@@ -156,6 +158,7 @@ fn test_closed_shell_uhf_rhf_equivalence() {
         damping: 0.5,
         use_nddo: true,
         cosmo: None,
+        ..Default::default()
     };
     let uhf_res = run_uhf_scf_with_options(&batch, &model, &mut uhf_ws, &uhf_options);
     assert!(uhf_res.converged);
@@ -183,6 +186,7 @@ fn test_ch3_radical_all_hamiltonians() {
         damping: 0.5,
         use_nddo: true,
         cosmo: None,
+        ..Default::default()
     };
 
     // MNDO

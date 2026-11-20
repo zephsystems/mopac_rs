@@ -51,6 +51,56 @@ layout(std430, binding = 2) writeonly buffer OutputGridBuffer {
     float grid_values[];
 };
 
+ActiveAtom eval_active_atom(uint a, float dx, float dy, float dz, float r2) {
+    ActiveAtom item;
+    float r = sqrt(r2);
+    uint z = atoms[a].z_num;
+    float zs = atoms[a].zs;
+    float zp = atoms[a].zp;
+    float norm_s = atoms[a].norm_s;
+    float norm_p = atoms[a].norm_p;
+
+    item.offset = atoms[a].offset;
+
+    if (z == 1u) {
+        // H: 1s orbital
+        item.count = 1u;
+        item.vals[0] = norm_s * exp(-zs * r);
+    } else if (z <= 10u) {
+        // Row 2: 2s, 2px, 2py, 2pz
+        float exp_s = exp(-zs * r);
+        float exp_p = exp(-zp * r);
+        item.count = 4u;
+        item.vals[0] = norm_s * r * exp_s;
+        item.vals[1] = norm_p * dx * exp_p;
+        item.vals[2] = norm_p * dy * exp_p;
+        item.vals[3] = norm_p * dz * exp_p;
+    } else {
+        // Row 3+: 3s, 3px, 3py, 3pz
+        float exp_s = exp(-zs * r);
+        float exp_p = exp(-zp * r);
+        item.count = 4u;
+        item.vals[0] = norm_s * r2 * exp_s;
+        item.vals[1] = norm_p * dx * r * exp_p;
+        item.vals[2] = norm_p * dy * r * exp_p;
+        item.vals[3] = norm_p * dz * r * exp_p;
+    }
+
+    // 5 d-orbitals for SPD basis (dx2-y2, dxz, dz2, dyz, dxy)
+    if (atoms[a].basis_type == 2u && atoms[a].zd > 1e-8) {
+        float exp_d = exp(-atoms[a].zd * r);
+        float d_prefactor = atoms[a].norm_d * exp_d;
+        item.count = 9u;
+        item.vals[4] = 0.5 * d_prefactor * (dx * dx - dy * dy);
+        item.vals[5] = d_prefactor * dx * dz;
+        item.vals[6] = 0.28867513459 * d_prefactor * (2.0 * dz * dz - dx * dx - dy * dy);
+        item.vals[7] = d_prefactor * dy * dz;
+        item.vals[8] = d_prefactor * dx * dy;
+    }
+
+    return item;
+}
+
 void main() {
     uint g_idx = gl_GlobalInvocationID.x;
     uint total_voxels = pc.nx * pc.ny * pc.nz;
@@ -70,87 +120,88 @@ void main() {
     float pz = pc.origin_z + float(iz) * pc.step_bohr;
 
     ActiveAtom active_atoms[MAX_ACTIVE_ATOMS];
-    uint n_active = 0;
-
-    for (uint a = 0; a < pc.natoms; ++a) {
-        float dx = px - atoms[a].x;
-        float dy = py - atoms[a].y;
-        float dz = pz - atoms[a].z;
-        float r2 = dx * dx + dy * dy + dz * dz;
-
-        if (r2 <= CUTOFF_R2 && n_active < MAX_ACTIVE_ATOMS) {
-            float r = sqrt(r2);
-            uint z = atoms[a].z_num;
-            uint off = atoms[a].offset;
-            float zs = atoms[a].zs;
-            float zp = atoms[a].zp;
-            float norm_s = atoms[a].norm_s;
-            float norm_p = atoms[a].norm_p;
-
-            active_atoms[n_active].offset = off;
-
-            if (z == 1u) {
-                // H: 1s orbital
-                active_atoms[n_active].count = 1u;
-                active_atoms[n_active].vals[0] = norm_s * exp(-zs * r);
-            } else if (z <= 10u) {
-                // Row 2: 2s, 2px, 2py, 2pz
-                float exp_s = exp(-zs * r);
-                float exp_p = exp(-zp * r);
-                active_atoms[n_active].count = 4u;
-                active_atoms[n_active].vals[0] = norm_s * r * exp_s;
-                active_atoms[n_active].vals[1] = norm_p * dx * exp_p;
-                active_atoms[n_active].vals[2] = norm_p * dy * exp_p;
-                active_atoms[n_active].vals[3] = norm_p * dz * exp_p;
-            } else {
-                // Row 3+: 3s, 3px, 3py, 3pz
-                float exp_s = exp(-zs * r);
-                float exp_p = exp(-zp * r);
-                active_atoms[n_active].count = 4u;
-                active_atoms[n_active].vals[0] = norm_s * r2 * exp_s;
-                active_atoms[n_active].vals[1] = norm_p * dx * r * exp_p;
-                active_atoms[n_active].vals[2] = norm_p * dy * r * exp_p;
-                active_atoms[n_active].vals[3] = norm_p * dz * r * exp_p;
-            }
-
-            // 5 d-orbitals for SPD basis (dx2-y2, dxz, dz2, dyz, dxy)
-            if (atoms[a].basis_type == 2u && atoms[a].zd > 1e-8) {
-                float exp_d = exp(-atoms[a].zd * r);
-                float d_prefactor = atoms[a].norm_d * exp_d;
-                active_atoms[n_active].count = 9u;
-                active_atoms[n_active].vals[4] = 0.5 * d_prefactor * (dx * dx - dy * dy);
-                active_atoms[n_active].vals[5] = d_prefactor * dx * dz;
-                active_atoms[n_active].vals[6] = 0.28867513459 * d_prefactor * (2.0 * dz * dz - dx * dx - dy * dy);
-                active_atoms[n_active].vals[7] = d_prefactor * dy * dz;
-                active_atoms[n_active].vals[8] = d_prefactor * dx * dy;
-            }
-
-            n_active++;
-        }
-    }
-
     float rho = 0.0;
+    uint cursor_a = 0;
 
-    for (uint i = 0; i < n_active; ++i) {
-        uint off_i = active_atoms[i].offset;
-        uint count_i = active_atoms[i].count;
+    // Tile active atoms in batches of MAX_ACTIVE_ATOMS so dense systems with >64 active atoms
+    // within the 12 Bohr cutoff never truncate electron density contributions.
+    while (cursor_a < pc.natoms) {
+        uint n_active = 0;
+        while (cursor_a < pc.natoms && n_active < MAX_ACTIVE_ATOMS) {
+            float dx = px - atoms[cursor_a].x;
+            float dy = py - atoms[cursor_a].y;
+            float dz = pz - atoms[cursor_a].z;
+            float r2 = dx * dx + dy * dy + dz * dz;
 
-        for (uint j = 0; j < n_active; ++j) {
-            uint off_j = active_atoms[j].offset;
-            uint count_j = active_atoms[j].count;
+            if (r2 <= CUTOFF_R2) {
+                active_atoms[n_active] = eval_active_atom(cursor_a, dx, dy, dz, r2);
+                n_active++;
+            }
+            cursor_a++;
+        }
 
-            for (uint ki = 0; ki < count_i; ++ki) {
-                float v_mu = active_atoms[i].vals[ki];
-                if (abs(v_mu) > 1e-7) {
-                    uint mu = off_i + ki;
-                    uint row_offset = mu * pc.norbs;
+        if (n_active == 0u) {
+            break;
+        }
 
-                    for (uint kj = 0; kj < count_j; ++kj) {
-                        float v_nu = active_atoms[j].vals[kj];
-                        if (abs(v_nu) > 1e-7) {
-                            uint nu = off_j + kj;
-                            float p_elem = density_matrix[row_offset + nu];
-                            rho += p_elem * v_mu * v_nu;
+        for (uint i = 0; i < n_active; ++i) {
+            uint off_i = active_atoms[i].offset;
+            uint count_i = active_atoms[i].count;
+
+            for (uint j = 0; j < n_active; ++j) {
+                uint off_j = active_atoms[j].offset;
+                uint count_j = active_atoms[j].count;
+
+                for (uint ki = 0; ki < count_i; ++ki) {
+                    float v_mu = active_atoms[i].vals[ki];
+                    if (abs(v_mu) > 1e-7) {
+                        uint mu = off_i + ki;
+                        uint row_offset = mu * pc.norbs;
+
+                        for (uint kj = 0; kj < count_j; ++kj) {
+                            float v_nu = active_atoms[j].vals[kj];
+                            if (abs(v_nu) > 1e-7) {
+                                uint nu = off_j + kj;
+                                float p_elem = density_matrix[row_offset + nu];
+                                rho += p_elem * v_mu * v_nu;
+                            }
+                        }
+                    }
+                }
+            }
+        }
+
+        // Cross-batch interactions against any remaining active atoms beyond the current tile.
+        for (uint b = cursor_a; b < pc.natoms; ++b) {
+            float dx = px - atoms[b].x;
+            float dy = py - atoms[b].y;
+            float dz = pz - atoms[b].z;
+            float r2 = dx * dx + dy * dy + dz * dz;
+
+            if (r2 <= CUTOFF_R2) {
+                ActiveAtom atom_b = eval_active_atom(b, dx, dy, dz, r2);
+                uint off_b = atom_b.offset;
+                uint count_b = atom_b.count;
+
+                for (uint i = 0; i < n_active; ++i) {
+                    uint off_i = active_atoms[i].offset;
+                    uint count_i = active_atoms[i].count;
+
+                    for (uint ki = 0; ki < count_i; ++ki) {
+                        float v_mu = active_atoms[i].vals[ki];
+                        if (abs(v_mu) > 1e-7) {
+                            uint mu = off_i + ki;
+                            uint row_mu = mu * pc.norbs;
+
+                            for (uint kb = 0; kb < count_b; ++kb) {
+                                float v_nu = atom_b.vals[kb];
+                                if (abs(v_nu) > 1e-7) {
+                                    uint nu = off_b + kb;
+                                    float p_sum = density_matrix[row_mu + nu]
+                                        + density_matrix[nu * pc.norbs + mu];
+                                    rho += p_sum * v_mu * v_nu;
+                                }
+                            }
                         }
                     }
                 }

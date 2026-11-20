@@ -1243,6 +1243,7 @@ fn test_scrutiny_lbfgs_geometry_optimization() {
         use_nddo: false,
         opt_mask: None,
         cosmo: None,
+        charge: 0,
     };
 
     let res = optimize_geometry_lbfgs(&mut batch, &am1, &mut scf_ws, &mut grad_ws, &opts);
@@ -1582,6 +1583,7 @@ fn test_scrutiny_full_nddo_lbfgs_water_relaxation() {
         use_nddo: true,
         opt_mask: None,
         cosmo: None,
+        charge: 0,
     };
 
     let res = optimize_geometry_lbfgs(&mut batch, &am1, &mut scf_ws, &mut grad_ws, &opts);
@@ -1658,6 +1660,7 @@ fn test_scrutiny_constrained_geometry_relaxation_coordinate_pinning() {
         use_nddo: false,
         opt_mask: Some(opt_mask),
         cosmo: None,
+        charge: 0,
     };
 
     let res = optimize_geometry_lbfgs(&mut batch, &am1, &mut scf_ws, &mut grad_ws, &opts);
@@ -1803,6 +1806,7 @@ fn test_scrutiny_harmonic_vibrational_frequencies_and_thermodynamics() {
         use_nddo: true,
         opt_mask: None,
         cosmo: None,
+        charge: 0,
     };
     let opt_res = mopac_core::opt::optimize_geometry_lbfgs(
         &mut batch,

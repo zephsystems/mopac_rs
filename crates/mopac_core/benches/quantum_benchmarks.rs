@@ -108,6 +108,7 @@ fn bench_uhf_radicals(c: &mut Criterion) {
         damping: 0.5,
         use_nddo: true,
         cosmo: None,
+        ..Default::default()
     };
 
     c.bench_function("uhf/ch3_radical_am1_doublet", |b| {

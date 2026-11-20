@@ -18,10 +18,12 @@
 //!
 //! Strictly guaranteed **zero heap allocations** in iterative cycles.
 
-use crate::fock::build_fock;
 use crate::parameters::ParameterModel;
 use crate::scf::density::{compute_density_matrix, compute_electronic_energy, max_density_diff};
 use crate::scf::eigensolver::diagonalize_symmetric_with_work;
+use crate::scf::scf_loop::{
+    ScfOptions, ScfResult, assemble_scf_fock, compute_rhf_nocc, prepare_scf_hamiltonian,
+};
 use crate::types::{AlignedMatrix, AlignedVec64, MolecularBatch, ScfWorkspace};
 
 /// Summary result of an SOSCF step.
@@ -252,53 +254,53 @@ pub fn soscf_step(
     }
 }
 
-/// Run a complete Second-Order SCF optimization loop on difficult / oscillating systems.
-pub fn run_rhf_soscf(
+/// Run a Second-Order SCF optimization loop honoring full `ScfOptions`
+/// (NDDO multipoles, molecular charge, COSMO solvation, external fields, and warm density reuse).
+pub fn run_rhf_soscf_with_options(
     batch: &MolecularBatch,
     model: &dyn ParameterModel,
     ws: &mut ScfWorkspace,
-    max_iter: usize,
-    energy_tol_ev: f64,
-    density_tol: f64,
-) -> crate::scf::scf_loop::ScfResult {
+    options: &ScfOptions,
+) -> ScfResult {
     let norbs = batch.norbs;
-    let mut total_valence_elecs = 0.0;
-    for &z in &batch.atomic_numbers {
-        if let Some(p) = model.get_element(z) {
-            total_valence_elecs += p.core_charge;
-        }
-    }
-    let nocc = (total_valence_elecs.round() as usize) / 2;
+    assert_eq!(ws.norbs, norbs);
+
+    let nocc = compute_rhf_nocc(batch, model, options.charge, norbs);
+    let (enuc, mut cosmo_state) = prepare_scf_hamiltonian(batch, model, ws, options);
     let mut soscf_ws = SoscfWorkspace::allocate(norbs);
 
-    // Initial H_core diagonalization
-    crate::hamiltonian::build_hcore(batch, model, &mut ws.h_core);
-    let enuc = crate::integrals::core_repulsion::compute_total_core_repulsion(batch, model);
-    diagonalize_symmetric_with_work(
-        &ws.h_core,
-        &mut ws.tmp1,
-        &mut ws.eigenvalues,
-        &mut ws.eigenvectors,
-    );
-    compute_density_matrix(&ws.eigenvectors, nocc, &mut ws.density);
+    let has_warm_density =
+        options.reuse_density && ws.density.data.iter().any(|&x| x.abs() > 1e-12);
+    if has_warm_density {
+        // Seed orthonormal MO coefficients aligned with the warm density matrix
+        assemble_scf_fock(batch, model, ws, options.use_nddo, &mut cosmo_state);
+        diagonalize_symmetric_with_work(
+            &ws.fock,
+            &mut ws.tmp1,
+            &mut ws.eigenvalues,
+            &mut ws.eigenvectors,
+        );
+    } else {
+        diagonalize_symmetric_with_work(
+            &ws.h_core,
+            &mut ws.tmp1,
+            &mut ws.eigenvalues,
+            &mut ws.eigenvectors,
+        );
+        compute_density_matrix(&ws.eigenvectors, nocc, &mut ws.density);
+    }
 
     let mut prev_energy = 0.0f64;
     let mut converged = false;
     let mut iters_done = 0;
+    let mut last_diel_ev: Option<f64> = None;
+    let mut last_delta_p = f64::INFINITY;
 
-    for iter in 1..=max_iter {
+    for iter in 1..=options.max_iter {
         iters_done = iter;
-        if let Some(ref gamma) = ws.gamma {
-            crate::fock::build_fock_with_gamma(
-                batch,
-                model,
-                &ws.h_core,
-                &ws.density,
-                gamma,
-                &mut ws.fock,
-            );
-        } else {
-            build_fock(batch, model, &ws.h_core, &ws.density, &mut ws.fock);
+        if let Some(ediel) = assemble_scf_fock(batch, model, ws, options.use_nddo, &mut cosmo_state)
+        {
+            last_diel_ev = Some(ediel);
         }
 
         let e_elec = compute_electronic_energy(&ws.density, &ws.h_core, &ws.fock);
@@ -317,10 +319,11 @@ pub fn run_rhf_soscf(
 
         let delta_e = (e_total - prev_energy).abs();
         let delta_p = max_density_diff(&ws.tmp1, &ws.density);
+        last_delta_p = delta_p;
 
         if iter > 1
-            && delta_e < energy_tol_ev
-            && (delta_p < density_tol || step_res.max_orbital_gradient < 1e-4)
+            && delta_e < options.energy_tol_ev
+            && (delta_p < options.density_tol || step_res.max_orbital_gradient < 1e-4)
         {
             converged = true;
             ws.density.data.copy_from_slice(&ws.tmp1.data);
@@ -331,6 +334,17 @@ pub fn run_rhf_soscf(
         prev_energy = e_total;
     }
 
+    // Final canonical Fock and orbital energies matching converged density
+    if let Some(ediel) = assemble_scf_fock(batch, model, ws, options.use_nddo, &mut cosmo_state) {
+        last_diel_ev = Some(ediel);
+    }
+    diagonalize_symmetric_with_work(
+        &ws.fock,
+        &mut ws.tmp2,
+        &mut ws.eigenvalues,
+        &mut ws.eigenvectors,
+    );
+
     let homo = ws.eigenvalues[nocc - 1];
     let lumo = if nocc < norbs {
         ws.eigenvalues[nocc]
@@ -339,7 +353,7 @@ pub fn run_rhf_soscf(
     };
     let e_elec_final = compute_electronic_energy(&ws.density, &ws.h_core, &ws.fock);
 
-    crate::scf::scf_loop::ScfResult {
+    ScfResult {
         converged,
         iterations: iters_done,
         total_energy_ev: e_elec_final + enuc,
@@ -347,9 +361,28 @@ pub fn run_rhf_soscf(
         nuclear_repulsion_ev: enuc,
         homo_energy_ev: homo,
         lumo_energy_ev: lumo,
-        dielectric_energy_ev: None,
-        density_change: 0.0,
+        dielectric_energy_ev: last_diel_ev,
+        density_change: last_delta_p,
     }
+}
+
+/// Run a complete Second-Order SCF optimization loop on difficult / oscillating systems.
+pub fn run_rhf_soscf(
+    batch: &MolecularBatch,
+    model: &dyn ParameterModel,
+    ws: &mut ScfWorkspace,
+    max_iter: usize,
+    energy_tol_ev: f64,
+    density_tol: f64,
+) -> ScfResult {
+    let options = ScfOptions {
+        max_iter,
+        energy_tol_ev,
+        density_tol,
+        use_nddo: false,
+        ..Default::default()
+    };
+    run_rhf_soscf_with_options(batch, model, ws, &options)
 }
 
 #[cfg(test)]
@@ -368,5 +401,51 @@ mod tests {
         let res = run_rhf_soscf(&batch, &model, &mut ws, 40, 1e-7, 1e-6);
         assert!(res.converged, "SOSCF must converge for water");
         assert!(res.total_energy_ev < 0.0);
+    }
+
+    #[test]
+    fn test_soscf_with_nddo_charge_and_cosmo_parity() {
+        use crate::parameters::pm6::Pm6Model;
+        use crate::scf::scf_loop::run_rhf_scf_with_options;
+        use crate::solvation::CosmoParams;
+
+        // NH4+ tetrahedral geometry
+        let z = vec![7, 1, 1, 1, 1];
+        let d = 0.595;
+        let coords = vec![
+            [0.0, 0.0, 0.0],
+            [d, d, d],
+            [d, -d, -d],
+            [-d, d, -d],
+            [-d, -d, d],
+        ];
+        let model = Pm6Model;
+        let batch = MolecularBatch::new_for_model(z, &coords, &model);
+        let opts = ScfOptions {
+            max_iter: 80,
+            energy_tol_ev: 1e-7,
+            density_tol: 1e-6,
+            use_nddo: true,
+            charge: 1,
+            cosmo: Some(CosmoParams {
+                epsilon: 78.4,
+                rsolv: 1.3,
+            }),
+            ..Default::default()
+        };
+
+        let mut ws_diis = ScfWorkspace::allocate(batch.norbs);
+        let res_diis = run_rhf_scf_with_options(&batch, &model, &mut ws_diis, &opts);
+        assert!(res_diis.converged);
+
+        let mut ws_soscf = ScfWorkspace::allocate(batch.norbs);
+        let res_soscf = run_rhf_soscf_with_options(&batch, &model, &mut ws_soscf, &opts);
+        assert!(res_soscf.converged);
+        assert!(
+            (res_soscf.total_energy_ev - res_diis.total_energy_ev).abs() < 1e-5,
+            "SOSCF vs standard RHF energy mismatch: {} vs {}",
+            res_soscf.total_energy_ev,
+            res_diis.total_energy_ev
+        );
     }
 }

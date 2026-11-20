@@ -170,8 +170,11 @@ pub fn compute_hessian_and_frequencies(
             .collect()
     };
 
-    // 2. Ensure initial SCF convergence
-    let base_scf = run_rhf_scf_with_options(batch, model, ws, scf_opts);
+    // 2. Ensure tight initial SCF convergence for finite-difference Hessian stability
+    let mut tight_scf_opts = scf_opts.clone();
+    tight_scf_opts.energy_tol_ev = tight_scf_opts.energy_tol_ev.min(1e-9);
+    tight_scf_opts.density_tol = tight_scf_opts.density_tol.min(1e-8);
+    let base_scf = run_rhf_scf_with_options(batch, model, ws, &tight_scf_opts);
     assert!(
         base_scf.converged,
         "Base SCF must converge before computing Hessian"
@@ -185,61 +188,78 @@ pub fn compute_hessian_and_frequencies(
     let inv_2delta = 1.0 / (2.0 * delta);
 
     // 3. Central difference numerical gradient evaluation (parallelized with Rayon across coordinates, bounded by n_threads)
+    let mut warm_scf_opts = tight_scf_opts;
+    warm_scf_opts.reuse_density = true;
+
     let hessian_columns: Vec<Vec<f64>> =
         crate::threading::run_with_thread_pool(hess_opts.n_threads, || {
             (0..n3)
                 .into_par_iter()
-                .map(|col| {
-                    let a = col / 3;
-                    let alpha = col % 3;
-                    let mut local_batch = batch.clone();
-                    let mut local_ws = ScfWorkspace::allocate(batch.norbs);
-                    let mut local_grad_ws = GradientWorkspace::allocate(batch.norbs);
-                    let mut g_plus = vec![[0.0; 3]; natoms];
-                    let mut g_minus = vec![[0.0; 3]; natoms];
+                .map_init(
+                    || {
+                        (
+                            batch.clone(),
+                            ScfWorkspace::allocate(batch.norbs),
+                            GradientWorkspace::allocate(batch.norbs),
+                            vec![[0.0; 3]; natoms],
+                            vec![[0.0; 3]; natoms],
+                        )
+                    },
+                    |(local_batch, local_ws, local_grad_ws, g_plus, g_minus), col| {
+                        let a = col / 3;
+                        let alpha = col % 3;
 
-                    // --- Coordinate +delta ---
-                    displace_coord(&mut local_batch, a, alpha, delta);
-                    if hess_opts.recompute_scf {
-                        local_ws.density.clone_from(&init_density);
-                        run_rhf_scf_with_options(&local_batch, model, &mut local_ws, scf_opts);
-                    } else {
-                        local_ws.density.clone_from(&init_density);
-                    }
-                    compute_cartesian_gradients_with_options(
-                        &mut local_batch,
-                        model,
-                        &local_ws.density,
-                        &mut local_grad_ws,
-                        &mut g_plus,
-                        hess_opts.use_nddo,
-                    );
-
-                    // --- Coordinate -delta ---
-                    displace_coord(&mut local_batch, a, alpha, -2.0 * delta);
-                    if hess_opts.recompute_scf {
-                        local_ws.density.clone_from(&init_density);
-                        run_rhf_scf_with_options(&local_batch, model, &mut local_ws, scf_opts);
-                    }
-                    compute_cartesian_gradients_with_options(
-                        &mut local_batch,
-                        model,
-                        &local_ws.density,
-                        &mut local_grad_ws,
-                        &mut g_minus,
-                        hess_opts.use_nddo,
-                    );
-
-                    let mut col_vals = Vec::with_capacity(n3);
-                    for b in 0..natoms {
-                        for beta in 0..3 {
-                            let dg =
-                                (g_plus[b][beta] - g_minus[b][beta]) * inv_2delta * EV_TO_KCAL_MOL;
-                            col_vals.push(dg);
+                        // --- Coordinate +delta ---
+                        displace_coord(local_batch, a, alpha, delta);
+                        if hess_opts.recompute_scf {
+                            local_ws.reset_for_new_geometry(true);
+                            local_ws.density.copy_from(&init_density);
+                            run_rhf_scf_with_options(local_batch, model, local_ws, &warm_scf_opts);
+                        } else {
+                            local_ws.density.copy_from(&init_density);
                         }
-                    }
-                    col_vals
-                })
+                        compute_cartesian_gradients_with_options(
+                            local_batch,
+                            model,
+                            &local_ws.density,
+                            local_grad_ws,
+                            g_plus,
+                            hess_opts.use_nddo,
+                        );
+
+                        // --- Coordinate -delta ---
+                        displace_coord(local_batch, a, alpha, -2.0 * delta);
+                        if hess_opts.recompute_scf {
+                            local_ws.reset_for_new_geometry(true);
+                            local_ws.density.copy_from(&init_density);
+                            run_rhf_scf_with_options(local_batch, model, local_ws, &warm_scf_opts);
+                        }
+                        compute_cartesian_gradients_with_options(
+                            local_batch,
+                            model,
+                            &local_ws.density,
+                            local_grad_ws,
+                            g_minus,
+                            hess_opts.use_nddo,
+                        );
+
+                        // Restore exact baseline coordinate before reusing thread-local batch
+                        local_batch.x[a] = batch.x[a];
+                        local_batch.y[a] = batch.y[a];
+                        local_batch.z[a] = batch.z[a];
+
+                        let mut col_vals = Vec::with_capacity(n3);
+                        for b in 0..natoms {
+                            for beta in 0..3 {
+                                let dg = (g_plus[b][beta] - g_minus[b][beta])
+                                    * inv_2delta
+                                    * EV_TO_KCAL_MOL;
+                                col_vals.push(dg);
+                            }
+                        }
+                        col_vals
+                    },
+                )
                 .collect()
         });
 

@@ -786,24 +786,14 @@ impl GpuCubeEvaluator {
 
         out.push_str(&format!("{:5} {:5}\n", 1, orbital_index));
 
-        for ix in 0..nx {
-            for iy in 0..ny {
-                let mut line_count = 0;
-                for iz in 0..nz {
-                    let idx = ix * (ny * nz) + iy * nz + iz;
-                    let val = grid_values[idx];
-                    out.push_str(&format!(" {:12.5E}", val));
-                    line_count += 1;
-                    if line_count == 6 {
-                        out.push('\n');
-                        line_count = 0;
-                    }
-                }
-                if line_count > 0 {
-                    out.push('\n');
-                }
-            }
-        }
+        mopac_core::export::cube::format_cube_voxels_into(
+            &mut out,
+            &grid_values,
+            nx,
+            ny,
+            nz,
+            config.n_threads,
+        );
 
         Ok(out)
     }
@@ -899,24 +889,14 @@ impl GpuCubeEvaluator {
             ));
         }
 
-        for ix in 0..nx {
-            for iy in 0..ny {
-                let mut line_count = 0;
-                for iz in 0..nz {
-                    let idx = ix * (ny * nz) + iy * nz + iz;
-                    let val = grid_values[idx];
-                    out.push_str(&format!(" {:12.5E}", val));
-                    line_count += 1;
-                    if line_count == 6 {
-                        out.push('\n');
-                        line_count = 0;
-                    }
-                }
-                if line_count > 0 {
-                    out.push('\n');
-                }
-            }
-        }
+        mopac_core::export::cube::format_cube_voxels_into(
+            &mut out,
+            &grid_values,
+            nx,
+            ny,
+            nz,
+            config.n_threads,
+        );
 
         Ok(out)
     }

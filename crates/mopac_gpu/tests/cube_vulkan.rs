@@ -470,3 +470,90 @@ fn test_gpu_cube_d_orbitals_exact_mathematical_parity() {
         max_diff
     );
 }
+
+#[test]
+fn test_vulkan_gpu_dense_cluster_over_64_active_atoms_parity() {
+    use mopac_core::export::cube::{ANGSTROM_TO_BOHR, evaluate_density_at_point};
+    use mopac_core::parameters::Pm6Model;
+    use mopac_core::types::{AlignedMatrix, MolecularBatch};
+
+    let ctx = match VulkanContext::new() {
+        Ok(c) => Arc::new(c),
+        Err(_) => return,
+    };
+    let gpu_cube =
+        GpuCubeEvaluator::new(Arc::clone(&ctx)).expect("Failed to initialize GpuCubeEvaluator");
+
+    // Place 72 hydrogen atoms in a compact sphere of radius ~2.0 Angstrom (< 4 Bohr),
+    // ensuring all 72 atoms fall strictly within the 12.0 Bohr cutoff of the grid.
+    let natoms = 72usize;
+    let atomic_numbers = vec![1u8; natoms];
+    let mut coords = Vec::with_capacity(natoms);
+    let golden_angle = std::f64::consts::PI * (3.0 - 5.0f64.sqrt());
+    for i in 0..natoms {
+        let t = (i as f64 + 0.5) / natoms as f64;
+        let y = 1.0 - 2.0 * t;
+        let r_xy = (1.0 - y * y).sqrt();
+        let theta = golden_angle * i as f64;
+        let radius = 1.85;
+        coords.push([
+            radius * r_xy * theta.cos(),
+            radius * y,
+            radius * r_xy * theta.sin(),
+        ]);
+    }
+
+    let model = Pm6Model;
+    let batch = MolecularBatch::new_for_model(atomic_numbers, &coords, &model);
+    assert_eq!(batch.norbs, natoms);
+
+    // Put higher density weight on tail atoms (>= 64) so truncation to 64 would fail sharply.
+    let mut density = AlignedMatrix::zeroed(natoms, natoms);
+    for i in 0..natoms {
+        density.set(i, i, if i >= 64 { 1.5 } else { 0.4 });
+    }
+    for i in 0..natoms {
+        let j = (i + 64) % natoms;
+        if i != j {
+            density.set(i, j, 0.12);
+            density.set(j, i, 0.12);
+        }
+    }
+
+    let dims = (8usize, 8usize, 8usize);
+    let origin_bohr = [-1.4f64, -1.4f64, -1.4f64];
+    let step_bohr = 0.4f64;
+
+    let gpu_grid = gpu_cube
+        .compute_density_grid(&batch, &model, &density, origin_bohr, step_bohr, dims)
+        .expect("GPU density grid failed on >64 atom cluster");
+
+    let mut max_diff = 0.0f64;
+    for ix in 0..dims.0 {
+        for iy in 0..dims.1 {
+            for iz in 0..dims.2 {
+                let idx = ix * dims.1 * dims.2 + iy * dims.2 + iz;
+                let pt_angstrom = [
+                    (origin_bohr[0] + ix as f64 * step_bohr) / ANGSTROM_TO_BOHR,
+                    (origin_bohr[1] + iy as f64 * step_bohr) / ANGSTROM_TO_BOHR,
+                    (origin_bohr[2] + iz as f64 * step_bohr) / ANGSTROM_TO_BOHR,
+                ];
+                let cpu_val = evaluate_density_at_point(&batch, &model, &density, pt_angstrom);
+                let gpu_val = gpu_grid[idx];
+                let diff = (gpu_val - cpu_val).abs();
+                max_diff = max_diff.max(diff);
+                assert!(
+                    diff < 1e-4,
+                    "Dense >64-atom cluster parity mismatch at ({}, {}, {}): GPU={:.6}, CPU={:.6}, diff={:e}",
+                    ix,
+                    iy,
+                    iz,
+                    gpu_val,
+                    cpu_val,
+                    diff
+                );
+            }
+        }
+    }
+    assert!(max_diff < 1e-4);
+}

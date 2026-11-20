@@ -322,10 +322,11 @@ Detailed mathematical derivations, Fortran audits, and GPU specifications:
 - [**Fortran Codebase Audit & DOP Feasibility**](explanations/01_FORTRAN_CODEBASE_AUDIT_AND_DOP_FEASIBILITY.md)
 - [**Universal GPU Acceleration (Vulkan Compute / WGPU)**](explanations/02_UNIVERSAL_GPU_ACCELERATION_VULKAN_WGPU.md)
 - [**Strict Testing & Verification Policy**](explanations/03_STRICT_TESTING_AND_VERIFICATION_POLICY.md)
-- [**Translation Devlog & Physical Constants Audit**](explanations/04_TRANSLATION_DEVLOG_AND_PHYSICAL_CONSTANTS_AUDIT.md)
+- [**Engineering Record & Physical Constants Audit**](explanations/04_TRANSLATION_DEVLOG_AND_PHYSICAL_CONSTANTS_AUDIT.md)
 - [**Vulkan GPU Acceleration & Level Shifting**](explanations/05_VULKAN_GPU_ACCELERATION_AND_LEVEL_SHIFTING.md)
 - [**Volumetric Interoperability (Mol*, PDB B-Factors & Gaussian Cubes)**](explanations/06_VOLUMETRIC_INTEROP_CUBE_PDB_MOLSTAR_AUDIT.md)
 - [**Hardware Acceleration & Performance Audit (AVX2 vs Vulkan)**](explanations/07_MOPAC_RS_HARDWARE_ACCELERATION_AND_PERFORMANCE_AUDIT.md)
+- [**v0.2.0 Architectural Remediation, Performance Engine & Precision Audit**](explanations/08_V020_ARCHITECTURAL_REMEDIATION_AND_PERFORMANCE_ENGINE.md)
 
 ---
 
@@ -339,7 +340,7 @@ If you use `mopac_rs` in your academic research, benchmarks, or software, please
   title = {{MOPAC\_RS: Modern High-Performance Semi-Empirical Quantum Chemistry Engine in Rust}},
   year = {2026},
   publisher = {Zenodo},
-  version = {0.1.3},
+  version = {0.2.0},
   doi = {10.5281/zenodo.22731253},
   url = {https://github.com/zephsystems/mopac_rs}
 }

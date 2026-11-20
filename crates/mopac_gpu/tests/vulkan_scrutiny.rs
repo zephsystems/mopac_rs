@@ -13,7 +13,7 @@ use std::sync::Arc;
 
 /// Scrutiny Test: Vulkan GPU Device Initialization & IEEE-754 Float64 Parity.
 ///
-/// Dispatches real compute shaders to the available GPU (NVIDIA RTX 4050 or AMD 680M)
+/// Dispatches real compute shaders to the available Vulkan GPU (discrete or integrated)
 /// and verifies the pairwise Coulomb matrix against CPU reference down to < 1e-12 eV.
 #[test]
 fn test_scrutiny_vulkan_gpu_coulomb_matrix_parity() {

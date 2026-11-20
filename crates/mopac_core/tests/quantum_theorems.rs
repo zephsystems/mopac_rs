@@ -493,3 +493,53 @@ fn test_d_orbital_orthonormality() {
         "[OK] Test 1.1 Passed: D-orbital 5x5 rotation matrix is strictly SO(3) orthonormal (||D D^T - I|| < 1e-14) and preserves Casimir norm identically"
     );
 }
+
+/// Systems Invariant 7: Large-Work Zero-Allocation NDDO Fock Parallel Plan Gate.
+///
+/// Validates that a d-orbital cluster (high multipole work W = sum |w_AB|) activates
+/// the cached `NddoFockParallelPlan` inside `ScfWorkspace` and executes consecutive
+/// SCF cycles without reallocating any workspace matrices.
+#[test]
+fn test_zero_allocation_nddo_fock_plan_gate() {
+    use mopac_core::parameters::pm7::Pm7Model;
+
+    // 14-atom sulfur ring/chain in PM7 (spd basis: 9 orbitals/atom, 91 pairs, W = 184,275 >= threshold)
+    let mut z = Vec::new();
+    let mut coords = Vec::new();
+    for i in 0..14 {
+        let theta = 2.0 * std::f64::consts::PI * (i as f64) / 14.0;
+        let r = 4.5;
+        z.push(16u8);
+        coords.push([
+            r * theta.cos(),
+            r * theta.sin(),
+            if i % 2 == 0 { 0.45 } else { -0.45 },
+        ]);
+    }
+    let model = Pm7Model;
+    let batch = MolecularBatch::new_for_model(z, &coords, &model);
+    let mut ws = ScfWorkspace::allocate(batch.norbs);
+
+    let fock_ptr = ws.fock.data.as_ptr();
+    let density_ptr = ws.density.data.as_ptr();
+    let hcore_ptr = ws.h_core.data.as_ptr();
+
+    let opts = ScfOptions {
+        max_iter: 25,
+        energy_tol_ev: 1e-6,
+        density_tol: 1e-5,
+        use_nddo: true,
+        ..Default::default()
+    };
+
+    let _res1 = run_rhf_scf_with_options(&batch, &model, &mut ws, &opts);
+    assert!(
+        ws.nddo_fock_plan.is_some(),
+        "Expected NddoFockParallelPlan to activate for 14-atom PM7 d-orbital cluster"
+    );
+    let _res2 = run_rhf_scf_with_options(&batch, &model, &mut ws, &opts);
+
+    assert_eq!(ws.fock.data.as_ptr(), fock_ptr);
+    assert_eq!(ws.density.data.as_ptr(), density_ptr);
+    assert_eq!(ws.h_core.data.as_ptr(), hcore_ptr);
+}

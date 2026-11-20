@@ -12,7 +12,7 @@ use crate::gradients::nuclear_gradients::{
     compute_gradient_norms,
 };
 use crate::parameters::ParameterModel;
-use crate::scf::scf_loop::{ScfResult, run_rhf_scf_adaptive_with_nddo_and_cosmo};
+use crate::scf::scf_loop::{ScfResult, run_rhf_scf_adaptive_with_nddo_cosmo_and_charge};
 use crate::types::{MolecularBatch, ScfWorkspace};
 
 /// Configuration options for molecular geometry optimization.
@@ -37,6 +37,8 @@ pub struct OptimizationOptions {
     pub opt_mask: Option<Vec<bool>>,
     /// Optional COSMO implicit dielectric solvation parameters.
     pub cosmo: Option<crate::solvation::CosmoParams>,
+    /// Net molecular charge for closed-shell RHF optimization (default: 0).
+    pub charge: i32,
 }
 
 impl Default for OptimizationOptions {
@@ -51,6 +53,7 @@ impl Default for OptimizationOptions {
             use_nddo: false,
             opt_mask: None,
             cosmo: None,
+            charge: 0,
         }
     }
 }
@@ -134,7 +137,7 @@ pub fn optimize_geometry_lbfgs(
 
     // 1. Initial SCF evaluation
     scf_ws.reset();
-    let initial_scf = run_rhf_scf_adaptive_with_nddo_and_cosmo(
+    let initial_scf = run_rhf_scf_adaptive_with_nddo_cosmo_and_charge(
         batch,
         model,
         scf_ws,
@@ -143,6 +146,7 @@ pub fn optimize_geometry_lbfgs(
         1e-6,
         options.use_nddo,
         options.cosmo,
+        options.charge,
     );
     let mut current_energy = initial_scf.total_energy_ev;
     let initial_energy = current_energy;
@@ -206,13 +210,21 @@ pub fn optimize_geometry_lbfgs(
     let mut converged = false;
     let mut last_scf = initial_scf;
 
+    // Pre-allocated scratch buffers for zero-malloc L-BFGS steps
+    let mut q = vec![0.0f64; ncoords];
+    let mut r = vec![0.0f64; ncoords];
+    let mut p = vec![0.0f64; ncoords];
+    let mut step = vec![0.0f64; ncoords];
+    let mut trial_coords = vec![0.0f64; ncoords];
+    let mut new_grad = vec![0.0f64; ncoords];
+    let mut alphas = vec![0.0f64; cap];
+
     for cycle in 1..=options.max_cycles {
         cycles_done = cycle;
 
         // 2. Compute search direction p_k via L-BFGS two-loop recursion
-        let mut q = current_grad.clone();
+        q.copy_from_slice(&current_grad);
         let k = s_hist.len();
-        let mut alphas = vec![0.0f64; k];
 
         for i in (0..k).rev() {
             let alpha = rho_hist[i] * dot(&s_hist[i], &q);
@@ -234,7 +246,6 @@ pub fn optimize_geometry_lbfgs(
         };
 
         // r = gamma * q
-        let mut r = vec![0.0f64; ncoords];
         for j in 0..ncoords {
             r[j] = gamma * q[j];
         }
@@ -247,7 +258,6 @@ pub fn optimize_geometry_lbfgs(
         }
 
         // Search direction p = -r
-        let mut p = vec![0.0f64; ncoords];
         for j in 0..ncoords {
             p[j] = -r[j];
         }
@@ -271,7 +281,6 @@ pub fn optimize_geometry_lbfgs(
         };
 
         // 4. Trial step
-        let mut step = vec![0.0f64; ncoords];
         for j in 0..ncoords {
             step[j] = p[j] * scale;
         }
@@ -283,7 +292,6 @@ pub fn optimize_geometry_lbfgs(
             }
         }
 
-        let mut trial_coords = vec![0.0f64; ncoords];
         for j in 0..ncoords {
             trial_coords[j] = current_coords[j] + step[j];
         }
@@ -295,18 +303,33 @@ pub fn optimize_geometry_lbfgs(
             batch.z[i] = trial_coords[3 * i + 2];
         }
 
-        // 5. Evaluate SCF at trial point
-        scf_ws.reset();
-        let scf_res = run_rhf_scf_adaptive_with_nddo_and_cosmo(
-            batch,
-            model,
-            scf_ws,
-            50,
-            1e-7,
-            1e-6,
-            options.use_nddo,
-            options.cosmo,
-        );
+        // 5. Evaluate SCF at trial point with warm-started density and fresh geometry integrals
+        scf_ws.reset_for_new_geometry(true);
+        let warm_opts = crate::scf::scf_loop::ScfOptions {
+            max_iter: 50,
+            energy_tol_ev: 1e-7,
+            density_tol: 1e-6,
+            use_nddo: options.use_nddo,
+            cosmo: options.cosmo,
+            charge: options.charge,
+            reuse_density: true,
+            ..Default::default()
+        };
+        let mut scf_res =
+            crate::scf::scf_loop::run_rhf_scf_with_options(batch, model, scf_ws, &warm_opts);
+        if !scf_res.converged {
+            scf_res = run_rhf_scf_adaptive_with_nddo_cosmo_and_charge(
+                batch,
+                model,
+                scf_ws,
+                50,
+                1e-7,
+                1e-6,
+                options.use_nddo,
+                options.cosmo,
+                options.charge,
+            );
+        }
         let new_energy = scf_res.total_energy_ev;
         last_scf = scf_res;
 
@@ -337,7 +360,6 @@ pub fn optimize_geometry_lbfgs(
         let (new_rms_g, new_max_g) =
             compute_effective_gradient_norms(&gradients_3d, options.opt_mask.as_deref());
 
-        let mut new_grad = vec![0.0f64; ncoords];
         for i in 0..natoms {
             new_grad[3 * i] = gradients_3d[i][0];
             new_grad[3 * i + 1] = gradients_3d[i][1];
@@ -377,8 +399,8 @@ pub fn optimize_geometry_lbfgs(
             rho_hist.push(1.0 / sy);
         }
 
-        current_coords = trial_coords;
-        current_grad = new_grad;
+        current_coords.copy_from_slice(&trial_coords);
+        current_grad.copy_from_slice(&new_grad);
         current_energy = new_energy;
         rms_g = new_rms_g;
         max_g = new_max_g;
@@ -579,9 +601,13 @@ pub fn optimize_geometry_lbfgs_uhf(
             batch.z[i] = trial_coords[3 * i + 2];
         }
 
-        // 5. Evaluate UHF at trial point
+        // 5. Evaluate UHF at trial point with warm-started spin densities
+        let warm_uhf_opts = crate::scf::uhf_loop::UhfOptions {
+            reuse_density: true,
+            ..*uhf_opts
+        };
         let uhf_res =
-            crate::scf::uhf_loop::run_uhf_scf_with_options(batch, model, uhf_ws, uhf_opts);
+            crate::scf::uhf_loop::run_uhf_scf_with_options(batch, model, uhf_ws, &warm_uhf_opts);
         let new_energy = uhf_res.total_energy_ev;
         last_uhf = uhf_res;
 
@@ -697,6 +723,7 @@ mod tests {
                 epsilon: 78.4,
                 rsolv: 1.30005,
             }),
+            charge: 0,
         };
 
         let res = optimize_geometry_lbfgs(&mut batch, &model, &mut scf_ws, &mut grad_ws, &options);
@@ -736,6 +763,7 @@ mod tests {
             damping: 0.5,
             use_nddo: false,
             cosmo: None,
+            reuse_density: false,
         };
 
         let opt_opts = OptimizationOptions {
@@ -748,6 +776,7 @@ mod tests {
             use_nddo: false,
             opt_mask: None,
             cosmo: None,
+            charge: 0,
         };
 
         let res = optimize_geometry_lbfgs_uhf(
@@ -775,6 +804,85 @@ mod tests {
             out_of_plane < 0.05,
             "Methyl radical must optimize to planar geometry in AM1, out-of-plane={:.4} A",
             out_of_plane
+        );
+    }
+
+    #[test]
+    fn test_lbfgs_warm_start_and_workspace_geometry_reset() {
+        use crate::parameters::pm6::Pm6Model;
+
+        let z = vec![8, 1, 1];
+        let coords = vec![[0.0, 0.0, 0.0], [0.0, 0.85, 0.55], [0.0, -0.85, 0.55]];
+        let model = Pm6Model;
+        let mut batch = MolecularBatch::new_for_model(z, &coords, &model);
+        let mut scf_ws = ScfWorkspace::allocate(batch.norbs);
+        let mut grad_ws = GradientWorkspace::allocate(batch.norbs);
+
+        scf_ws.gamma = Some(crate::types::AlignedMatrix::zeroed(
+            batch.natoms,
+            batch.natoms,
+        ));
+        scf_ws.density.set(0, 0, 1.5);
+        scf_ws.reset_for_new_geometry(true);
+        assert!(scf_ws.gamma.is_none());
+        assert!(scf_ws.diatomic_pairs.is_empty());
+        assert!((scf_ws.density.get(0, 0) - 1.5).abs() < 1e-12);
+
+        scf_ws.reset_for_new_geometry(false);
+        assert!((scf_ws.density.get(0, 0) - 0.0).abs() < 1e-12);
+
+        let options = OptimizationOptions {
+            max_cycles: 30,
+            grad_rms_tol: 0.5,
+            grad_max_tol: 1.0,
+            use_nddo: true,
+            ..Default::default()
+        };
+        let res = optimize_geometry_lbfgs(&mut batch, &model, &mut scf_ws, &mut grad_ws, &options);
+        assert!(res.converged);
+        assert!(res.final_energy_ev <= res.initial_energy_ev);
+        assert!(res.final_grad_rms < 0.5);
+    }
+
+    #[test]
+    fn test_lbfgs_charged_ammonium_ion_optimization() {
+        use crate::parameters::pm6::Pm6Model;
+
+        // Slightly stretched tetrahedral NH4+ (8 valence electrons, closed-shell RHF with charge = +1)
+        let d = 0.72;
+        let z = vec![7, 1, 1, 1, 1];
+        let coords = vec![
+            [0.0, 0.0, 0.0],
+            [d, d, d],
+            [d, -d, -d],
+            [-d, d, -d],
+            [-d, -d, d],
+        ];
+        let model = Pm6Model;
+        let mut batch = MolecularBatch::new_for_model(z, &coords, &model);
+        let mut scf_ws = ScfWorkspace::allocate(batch.norbs);
+        let mut grad_ws = GradientWorkspace::allocate(batch.norbs);
+
+        let options = OptimizationOptions {
+            max_cycles: 40,
+            grad_rms_tol: 0.5,
+            grad_max_tol: 1.0,
+            use_nddo: true,
+            charge: 1,
+            ..Default::default()
+        };
+        let res = optimize_geometry_lbfgs(&mut batch, &model, &mut scf_ws, &mut grad_ws, &options);
+        assert!(res.converged, "NH4+ L-BFGS optimization must converge");
+        assert!(
+            res.final_energy_ev < res.initial_energy_ev,
+            "Stretched NH4+ energy must decrease during relaxation"
+        );
+        // Equilibrium N-H bond length in NH4+ is ~1.02-1.05 A
+        let r_nh = batch.distance(0, 1);
+        assert!(
+            (0.95..=1.12).contains(&r_nh),
+            "Unexpected relaxed NH4+ N-H bond length: {:.4} A",
+            r_nh
         );
     }
 }

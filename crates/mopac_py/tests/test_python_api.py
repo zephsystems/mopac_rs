@@ -531,6 +531,145 @@ class TestMopacPyBindings(unittest.TestCase):
         self.assertAlmostEqual(mat_gpu[0][1], expected_j01, places=12)
         self.assertAlmostEqual(mat_gpu[1][0], expected_j01, places=12)
 
+    def test_calculate_without_gradients_pm7(self):
+        """Verify compute_gradients=False skips analytical gradients while matching PM7 energy exactly."""
+        atoms = [8, 1, 1]
+        coords = [
+            [0.000, 0.000, 0.119],
+            [0.000, 0.763, -0.477],
+            [0.000, -0.763, -0.477],
+        ]
+        res_full = mopac_py.calculate(atoms, coords, method="PM7", compute_gradients=True)
+        res_energy_only = mopac_py.calculate(atoms, coords, method="PM7", compute_gradients=False)
+
+        self.assertTrue(res_energy_only.converged)
+        self.assertAlmostEqual(res_energy_only.total_energy_ev, res_full.total_energy_ev, places=10)
+        self.assertAlmostEqual(res_energy_only.heat_of_formation_kcal, res_full.heat_of_formation_kcal, places=8)
+        self.assertAlmostEqual(res_energy_only.dipole_debye[3], res_full.dipole_debye[3], places=8)
+        for row in res_energy_only.gradients_ev_angstrom:
+            self.assertEqual(row, [0.0, 0.0, 0.0])
+
+    def test_esp_charges_charged_cation(self):
+        """Verify charged species ESP fitting forwards net_charge into SCF and reproduces cation charge."""
+        # Tetrahedral NH4+ cation
+        d = 0.595
+        atoms = [7, 1, 1, 1, 1]
+        coords = [
+            [0.0, 0.0, 0.0],
+            [d, d, d],
+            [d, -d, -d],
+            [-d, d, -d],
+            [-d, -d, d],
+        ]
+        esp_cation = mopac_py.esp_charges(atoms, coords, method="PM6", net_charge=1.0)
+        self.assertAlmostEqual(sum(esp_cation.charges), 1.0, places=4)
+        for q_h in esp_cation.charges[1:]:
+            self.assertGreater(q_h, 0.1)
+
+    def test_quantum_session_single_scf_reuse(self):
+        """Verify QuantumSession caches SCF state across properties, cubes, and MECI."""
+        atoms = [8, 1, 1]
+        coords = [
+            [0.000, 0.000, 0.119],
+            [0.000, 0.763, -0.477],
+            [0.000, -0.763, -0.477],
+        ]
+        session = mopac_py.QuantumSession(atoms, coords, method="PM6")
+        self.assertTrue(session.converged)
+        self.assertFalse(session.is_uhf)
+
+        calc_ref = mopac_py.calculate(atoms, coords, method="PM6")
+        calc_sess = session.calculate(compute_gradients=True)
+        self.assertAlmostEqual(calc_sess.total_energy_ev, calc_ref.total_energy_ev, places=10)
+        self.assertAlmostEqual(calc_sess.heat_of_formation_kcal, calc_ref.heat_of_formation_kcal, places=8)
+        for g_s, g_r in zip(calc_sess.gradients_ev_angstrom, calc_ref.gradients_ev_angstrom):
+            for c_s, c_r in zip(g_s, g_r):
+                self.assertAlmostEqual(c_s, c_r, places=10)
+
+        esp_sess = session.esp_charges()
+        esp_ref = mopac_py.esp_charges(atoms, coords, method="PM6")
+        for q_s, q_r in zip(esp_sess.charges, esp_ref.charges):
+            self.assertAlmostEqual(q_s, q_r, places=8)
+
+        bo_sess = session.bond_orders()
+        bo_ref = mopac_py.bond_orders(atoms, coords, method="PM6")
+        self.assertAlmostEqual(bo_sess.bond_orders[0][1], bo_ref.bond_orders[0][1], places=6)
+
+        bundle = session.generate_cubes_bundle(orbitals=["HOMO"], resolution_angstrom=0.5)
+        self.assertIn("density", bundle)
+        self.assertIn("HOMO", bundle)
+        self.assertIn("MOPAC_RS", bundle["density"])
+
+        meci_sess = session.meci(active_orbitals=2, target_root=1)
+        meci_ref = mopac_py.meci(atoms, coords, method="PM6", active_orbitals=2, target_root=1)
+        self.assertAlmostEqual(meci_sess.total_energy_ev, meci_ref.total_energy_ev, places=8)
+
+        # Open-shell charged UHF session (CH3+) / doublet CH3 radical
+        rad_atoms = [6, 1, 1, 1]
+        rad_coords = [
+            [0.0, 0.0, 0.0],
+            [1.08, 0.0, 0.0],
+            [-0.54, 0.935, 0.0],
+            [-0.54, -0.935, 0.0],
+        ]
+        uhf_sess = mopac_py.QuantumSession(rad_atoms, rad_coords, method="AM1", multiplicity=2)
+        self.assertTrue(uhf_sess.converged)
+        self.assertTrue(uhf_sess.is_uhf)
+        uhf_res = uhf_sess.calculate(compute_gradients=False)
+        self.assertAlmostEqual(uhf_res.total_energy_ev, uhf_sess.total_energy_ev, places=10)
+
+    def test_charged_optimization_and_open_shell_properties(self):
+        """Verify charged closed-shell RHF optimization, open-shell UHF properties/cubes, and MopacCalculator charge/spin options."""
+        # Charged closed-shell NH4+ optimization via module function & MopacCalculator
+        d = 0.72
+        nh4_atoms = [7, 1, 1, 1, 1]
+        nh4_coords = [
+            [0.0, 0.0, 0.0],
+            [d, d, d],
+            [d, -d, -d],
+            [-d, d, -d],
+            [-d, -d, d],
+        ]
+        opt_nh4 = mopac_py.optimize(nh4_atoms, nh4_coords, method="PM6", charge=1, max_cycles=40)
+        self.assertTrue(opt_nh4.converged)
+        self.assertLess(opt_nh4.final_energy_ev, opt_nh4.initial_energy_ev)
+        self.assertAlmostEqual(sum(opt_nh4.final_result.mulliken_charges), 1.0, places=3)
+
+        # MopacCalculator.calculate and MopacCalculator.optimize with charge
+        calc = mopac_py.MopacCalculator(method="PM6")
+        oh_atoms = [8, 1]
+        oh_coords = [[0.0, 0.0, 0.0], [0.0, 0.0, 0.96]]
+        oh_res = calc.calculate(oh_atoms, oh_coords, charge=-1, compute_gradients=False)
+        self.assertTrue(oh_res.converged)
+        self.assertAlmostEqual(sum(oh_res.mulliken_charges), -1.0, places=3)
+
+        calc_opt = calc.optimize(nh4_atoms, nh4_coords, max_cycles=40, charge=1)
+        self.assertTrue(calc_opt.converged)
+        self.assertAlmostEqual(calc_opt.final_energy_ev, opt_nh4.final_energy_ev, places=6)
+
+        # Open-shell CH3 radical bond_orders, density cube, and cubes bundle
+        ch3_atoms = [6, 1, 1, 1]
+        ch3_coords = [
+            [0.0, 0.0, 0.0],
+            [1.08, 0.0, 0.0],
+            [-0.54, 0.935, 0.0],
+            [-0.54, -0.935, 0.0],
+        ]
+        bo = mopac_py.bond_orders(ch3_atoms, ch3_coords, method="AM1")
+        self.assertGreater(bo.bond_orders[0][1], 0.85)
+        self.assertLess(bo.bond_orders[0][1], 1.15)
+
+        dens_cube = mopac_py.generate_density_cube(
+            ch3_atoms, ch3_coords, method="AM1", padding_angstrom=1.5, resolution_angstrom=0.5
+        )
+        self.assertIn("MOPAC_RS", dens_cube)
+
+        bundle = mopac_py.generate_cubes_bundle(
+            ch3_atoms, ch3_coords, method="AM1", orbitals=["HOMO"], padding_angstrom=1.5, resolution_angstrom=0.5
+        )
+        self.assertIn("density", bundle)
+        self.assertIn("HOMO", bundle)
+
 
 if __name__ == "__main__":
     unittest.main(verbosity=2)

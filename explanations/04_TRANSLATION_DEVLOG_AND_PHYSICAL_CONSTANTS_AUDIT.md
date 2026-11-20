@@ -1,8 +1,8 @@
-# Engineering Devlog & Physical Constants Audit: MOPAC to Rust (`mopac_rs`)
+# Engineering Record & Physical Constants Audit: MOPAC to Rust (`mopac_rs`)
 
-**Status**: Active Engineering Journal & Technical Audit  
-**Author**: Antigravity Autonomous Pair-Programming Agent  
-**Language**: English (Strict Mandate)  
+**Document:** `explanations/04_TRANSLATION_DEVLOG_AND_PHYSICAL_CONSTANTS_AUDIT.md`  
+**Classification**: Numerical Metrology and Data-Oriented Architecture Audit  
+**Language**: English  
 **License**: Apache License 2.0  
 
 ---
@@ -21,7 +21,7 @@
 
 The `mopac_rs` project translates and modernizes the semi-empirical quantum chemistry engine **MOPAC** (originally developed by Michael J. S. Dewar, Walter Thiel, and James J. P. Stewart, licensed under Apache-2.0) into idiomatic, thread-safe, high-performance Rust.
 
-Rather than performing a line-by-line mechanical transcription that would preserve Fortran 77/90 architectural anti-patterns (such as global `COMMON` blocks, non-reentrant `SAVE` variables, 1-based packed triangular arrays, and scattered allocations), `mopac_rs` adopts the **Data-Oriented Programming (DOP)** paradigm inspired by modern cache-conscious computational engines (e.g. `ckspaces_platform`):
+Rather than performing a line-by-line mechanical transcription that would preserve Fortran 77/90 architectural anti-patterns (such as global `COMMON` blocks, non-reentrant `SAVE` variables, 1-based packed triangular arrays, and scattered allocations), `mopac_rs` adopts a **Data-Oriented Programming (DOP)** architecture optimized for modern cache hierarchies and SIMD vector pipelines:
 - **Contiguous 64-byte Cache-Line Alignment**: All coordinate vectors, secular matrices, and working scratch buffers are aligned to 64 bytes (`AlignedVec64<T>`, `AlignedMatrix<T>`) to guarantee unaligned penalty-free AVX2/AVX-512 and GPU staging.
 - **Strict Struct-of-Arrays (SoA)**: Coordinates are stored as separate contiguous $X, Y, Z$ arrays (`MolecularBatch`), enabling vectorized distance matrix computations and SIMD kernels.
 - **Zero Dynamic Heap Allocations (`0 malloc`) in Iterative Cycles**: All matrices required for the Roothaan-Hall Self-Consistent Field (SCF) iterations, eigensolvers, and Pulay DIIS extrapolation are allocated exactly once in [`ScfWorkspace`](../crates/mopac_core/src/types.rs#L273-L325).
@@ -131,9 +131,9 @@ To achieve absolute empirical parity with reference test runs while offering for
 
 ### Milestone 12: Direct Vulkan GPU Compute Engine & GDDR6 VRAM Manager
 - Implemented `mopac_gpu` crate using Ash (Vulkan 1.3/1.4 direct bindings).
-- FP64 double-precision compute shader (`coulomb.comp`): verified bit-exact parity against CPU down to **$1.78 \times 10^{-15}$ eV** on NVIDIA GeForce RTX 4050 Laptop GPU.
-- High-Throughput FP32 compute shader (`coulomb_fp32.comp`): achieves peak hardware throughput (18 TFLOPS capability on consumer GPUs) with reciprocal square-root hardware instructions (`inversesqrt`), verified to $< 1.38 \times 10^{-6}$ eV precision.
-- Dedicated GDDR6 Device-Local VRAM Manager (`GpuBatchVramManager`): allocates high-speed device-local memory (192 GB/s on RTX 4050 GDDR6), with PCIe DMA copy transfers.
+- FP64 double-precision compute shader (`coulomb.comp`): verified bit-exact parity against CPU down to **$1.78 \times 10^{-15}$ eV** on discrete FP64-capable Vulkan hardware.
+- High-Throughput FP32 compute shader (`coulomb_fp32.comp`): achieves high hardware throughput with reciprocal square-root hardware instructions (`inversesqrt`), verified to $< 1.38 \times 10^{-6}$ eV precision.
+- Dedicated GDDR6 Device-Local VRAM Manager (`GpuBatchVramManager`): allocates device-local GPU memory with PCIe DMA copy transfers.
 - Zero-allocation iterative execution: `GpuWorkspace` pre-maps host-coherent GPU buffers, eliminating heap allocations during SCF cycles.
 
 ### Milestone 13: Camp-King Quadratic Line-Search Interpolator
@@ -234,7 +234,7 @@ To achieve absolute empirical parity with reference test runs while offering for
 
 ---
 
-## 6. Phase 2 Canonical Milestone ("Escalón de Progreso Canónico")
+## 6. Canonical Gradient, Multipole & Property Architecture
 
 With the consolidation of Phase 1 and the execution of the canonical integration, the following core quantum capabilities are fully operational and verified against official upstream `MOPAC v23.2.5`:
 

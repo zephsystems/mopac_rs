@@ -1,47 +1,48 @@
-# Guía de Publicación en Arch User Repository (AUR) para `mopac-rs-bin`
+# Arch User Repository (AUR) Publishing Guide for `mopac-rs-bin`
 
-Este directorio contiene el [`PKGBUILD`](./PKGBUILD) y [`.SRCINFO`](./.SRCINFO) oficiales y validados empíricamente con `makepkg` para distribuir el binario precompilado de **MOPAC_RS** en Arch Linux / Manjaro / EndeavourOS.
-
----
-
-## 1. Requisitos previos
-1. Contar con una cuenta registrada en [aur.archlinux.org](https://aur.archlinux.org/register).
-2. Tener configurada tu clave pública SSH en tu perfil de AUR (`https://aur.archlinux.org/account/<tu_usuario>/`).
+This directory contains the [`PKGBUILD`](./PKGBUILD) and [`.SRCINFO`](./.SRCINFO) definitions for distributing the precompiled Linux `x86_64` binary of **MOPAC_RS** on Arch Linux / Manjaro / EndeavourOS via AUR.
 
 ---
 
-## 2. Publicación inicial o actualización en AUR
+## 1. Prerequisites
 
-Ejecuta desde tu terminal los siguientes pasos:
+1. A registered account on [aur.archlinux.org](https://aur.archlinux.org/register).
+2. Your SSH public key configured in your AUR account profile.
+3. Wait until the GitHub Release workflow has built and published `mopac-linux-x86_64.tar.gz` for the target release tag, then verify its SHA-256 digest matches the first entry in `sha256sums` inside `PKGBUILD` and `.SRCINFO` before pushing to AUR.
+
+---
+
+## 2. Publishing or Updating the AUR Package
 
 ```bash
-# 1. Clona el repositorio oficial de tu paquete en AUR (si es la primera vez, se creará vacío automáticamente):
+# 1. Clone the official AUR package repository
 git clone ssh://aur@aur.archlinux.org/mopac-rs-bin.git /tmp/mopac-rs-bin
 
-# 2. Copia los archivos preparados a ese repositorio:
+# 2. Copy the prepared packaging definitions
 cp packaging/aur/PKGBUILD packaging/aur/.SRCINFO /tmp/mopac-rs-bin/
 
-# 3. Entra al repositorio, haz commit y push:
+# 3. Verify checksums, commit, and push
 cd /tmp/mopac-rs-bin
+updpkgsums && makepkg --printsrcinfo > .SRCINFO
 git add PKGBUILD .SRCINFO
-git commit -m "release: v0.1.4 — initial release of mopac-rs-bin"
+git commit -m "release: v0.2.0 — mopac-rs-bin"
 git push origin master
 ```
 
 ---
 
-## 3. Instalación para los usuarios de Arch Linux
+## 3. User Installation on Arch Linux
 
-Una vez subido, cualquier usuario de Arch Linux puede instalarlo con su asistente AUR preferido:
+Once published, users can install `mopac-rs-bin` using any standard AUR helper or `makepkg`:
 
 ```bash
-# Con yay
+# With yay
 yay -S mopac-rs-bin
 
-# Con paru
+# With paru
 paru -S mopac-rs-bin
 
-# O manualmente con makepkg
+# Or manually with makepkg
 git clone https://aur.archlinux.org/mopac-rs-bin.git
 cd mopac-rs-bin
 makepkg -si

@@ -1,139 +1,124 @@
-# AUDITORÍA TÉCNICA RIGUROSA: ESTADO REAL DE LA ACELERACIÓN GPU (VULKAN), CUELLOS DE BOTELLA E IMPRECISIONES EN MOPAC_RS
+# Technical Audit: Vulkan GPU Acceleration, Compute Bottlenecks, and Numerical Precision in MOPAC_RS
 
-**Documento:** `explanations/07_MOPAC_RS_HARDWARE_ACCELERATION_AND_PERFORMANCE_AUDIT.md`  
-**Proyecto:** `mopac_rs` / `mopac_gpu` / `mopac_core` / `mopac_py`  
-**Fecha:** 2026-09-28  
-**Clasificación:** Auditoría de Rendimiento, Arquitectura de Aceleradores de Hardware y Química Cuántica  
-**Estado:** Informe de Ingeniería y Plan de Remediación Técnica  
+**Document:** `explanations/07_MOPAC_RS_HARDWARE_ACCELERATION_AND_PERFORMANCE_AUDIT.md`  
+**Project:** `mopac_rs` / `mopac_gpu` / `mopac_core` / `mopac_py`  
+**Date:** 2026-09-28 (Translated to English and cross-referenced with v0.2.0 remediation)  
+**Classification:** Performance Engineering, Hardware Accelerator Architecture, and Quantum Chemistry  
+**Status:** Historical Engineering Audit and Remediation Roadmap (See Document 08 for v0.2.0 resolution)  
 
 ---
 
-## 1. Resumen Ejecutivo (Reality Check)
+## 1. Executive Summary (Initial Audit Baseline)
 
-Una auditoría exhaustiva del código fuente del espacio de trabajo `mopac_rs` revela una **discrepancia crítica entre las promesas comerciales de la documentación (`README.md` / `crates.io/crates/mopac_gpu`) y el flujo de ejecución real en Rust y Python**:
+An audit of the initial `mopac_rs` workspace source tree identified critical discrepancies between early documentation claims and the actual execution paths in Rust and Python:
 
 ```mermaid
 flowchart TD
-    subgraph "PROMETIDO EN DOCUMENTACIÓN"
+    subgraph "DOCUMENTED TARGET"
         A1["CLI / Python --gpu"] --> B1["Vulkan Compute Shaders (ash)"]
-        B1 --> C1["Fock Build + SCF + Diag en VRAM GDDR6"]
-        C1 --> D1["10x - 100x Speedup"]
+        B1 --> C1["Fock Build + SCF + Diag on Device Memory"]
+        C1 --> D1["End-to-End GPU Acceleration"]
     end
 
-    subgraph "ESTADO REAL EN EL CÓDIGO FUENTE"
-        A2["CLI --gpu"] --> B2["Calcula _gpu_matrix en Vulkan (Benchmark warmup)"]
-        B2 --> C2["DESCARTE: let _gpu_matrix = ... (No se usa)"]
-        C2 --> D2["Bucle SCF real ejecuta 100% en CPU (Rayon / AVX2)"]
+    subgraph "INITIAL SOURCE STATE (PRE-REMEDIATION)"
+        A2["CLI --gpu"] --> B2["Computed _gpu_matrix on Vulkan (Warmup)"]
+        B2 --> C2["DISCARDED: let _gpu_matrix = ... (Unused)"]
+        C2 --> D2["Actual SCF loop ran 100% on CPU (Rayon)"]
         A3["Python (mopac_py)"] --> D2
     end
 ```
 
-### Hallazgos Principales:
-1. **La aceleración GPU está desconectada del motor principal (`mopac_core`)**: El crate `mopac_gpu` contiene shaders Vulkan funcionales para integrales de Coulomb de dos centros (`coulomb.comp`, `coulomb_fp32.comp`), pero **no está integrado en el bucle iterativo SCF (Self-Consistent Field)** ni en `mopac_core` ni en `mopac_py`.
-2. **Python (`mopac_py`) es 100% dependiente de CPU**: No existe ninguna interfaz ni parámetro (`use_gpu=True`) en los bindings de Python para invocar el contexto de Vulkan.
-3. **El CLI reporta falsamente ejecución en GPU**: Al ejecutar `mopac --gpu`, el CLI inicializa el dispositivo Vulkan, calcula una matriz de prueba que se descarta en la variable `_gpu_matrix`, y luego ejecuta todo el cálculo cuántico en la CPU mientras imprime en el archivo `.out` que el backend fue `Vulkan GPU`.
-4. **Cuello de botella en la generación de mapas de densidad (Gaussian Cube)**: La evaluación espacial de millones de vóxeles se realiza puramente en CPU mediante bucles multihilo en lugar de despacharse como un *Compute Shader* en la GPU (donde obtendría una aceleración de 50x a 200x).
+### Core Findings (Baseline Audit):
+1. **GPU acceleration was disconnected from the SCF solver (`mopac_core`)**: `mopac_gpu` provided functional Vulkan shaders for two-center Coulomb integrals (`coulomb.comp`, `coulomb_fp32.comp`), but the resulting matrices were not consumed inside the iterative SCF loop in either `mopac_core` or `mopac_py`.
+2. **Python (`mopac_py`) lacked GPU integration**: Early Python bindings had no `use_gpu` interface for GPU Coulomb evaluation or volumetric grids.
+3. **CLI status misreporting**: Running `mopac --gpu` initialized Vulkan, evaluated a throwaway `_gpu_matrix` binding, and ran SCF entirely on the CPU while labeling the backend as Vulkan GPU.
+4. **Volumetric density grid bottleneck (Gaussian Cube)**: Evaluating millions of voxels on the CPU created multi-second bottlenecks for large grids compared to compute-shader evaluation on GPU.
 
 ---
 
-## 2. Auditoría Forense del Código Fuente
+## 2. Forensic Source Audit
 
-### A. Desconexión en el CLI (`crates/mopac_cli/src/main.rs`)
+### A. CLI Disconnection (`crates/mopac_cli/src/main.rs`)
 
-En las líneas 1083–1110 de `main.rs`:
+In the baseline implementation of `main.rs`:
 
 ```rust
-// Código actual en mopac_cli/src/main.rs:
+// Baseline pattern identified during audit:
 if use_gpu {
-    println!(" [Vulkan GPU] Initializing PCIe DMA buffers & GDDR6 device memory...");
+    println!(" [Vulkan GPU] Initializing PCIe DMA buffers & device memory...");
     let ctx = match VulkanContext::new() { ... };
-    
+
     if use_fp32 {
         let gpu_calc = GpuCoulombCalculatorFP32::new(Arc::clone(&ctx))?;
-        let _gpu_matrix = gpu_calc.compute_batch(&batch, model.as_ref())?; // <-- ¡SE ASIGNA A VARIABLE CON GUION BAJO Y SE IGNORA!
-        println!(" [Vulkan GPU] Evaluated pairwise Coulomb matrix using FP32 hardware pipeline.");
+        let _gpu_matrix = gpu_calc.compute_batch(&batch, model.as_ref())?; // Assigned to underscore and discarded
     } else {
         let gpu_calc = GpuCoulombCalculator::new(Arc::clone(&ctx))?;
-        let _gpu_matrix = gpu_calc.compute_batch(&batch, model.as_ref())?; // <-- ¡SE IGNORA!
-        println!(" [Vulkan GPU] Evaluated pairwise Coulomb matrix using native Float64 pipeline.");
+        let _gpu_matrix = gpu_calc.compute_batch(&batch, model.as_ref())?; // Assigned to underscore and discarded
     }
 }
 
-// Inmediatamente después, el cálculo SCF real se ejecuta en CPU:
-let (scf_final, total_scf_cycles) = run_rhf_scf_with_options(&batch, model.as_ref(), &mut ws, &scf_opts);
+// Immediately afterward, the SCF loop executed purely on CPU without ws.gamma:
+let scf_final = run_rhf_scf_with_options(&batch, model.as_ref(), &mut ws, &scf_opts);
 ```
 
-**Diagnóstico:** El cálculo de la GPU actúa únicamente como un "test de calentamiento" aislado. La matriz de Fock y las iteraciones de Hartree-Fock posteriores ocurren íntegramente en los núcleos de la CPU.
+**Diagnosis:** GPU computation functioned only as an isolated warmup pass before subsequent CPU Fock construction and diagonalization. *(Subsequent updates connected `ws.gamma` for monopole `--no-nddo` paths and corrected backend reporting in v0.2.0.)*
 
 ---
 
-### B. Ausencia de GPU en `mopac_core` y `mopac_py`
+### B. Missing GPU Wiring in Early `mopac_core` and `mopac_py`
 
-Al auditar las dependencias del espacio de trabajo en `Cargo.toml`:
-- `crates/mopac_core/Cargo.toml` **no tiene dependencia** de `mopac_gpu`.
-- `crates/mopac_py/Cargo.toml` **no tiene dependencia** de `mopac_gpu`.
+In the initial workspace configuration:
+- `crates/mopac_core/Cargo.toml` had no dependency on `mopac_gpu`.
+- `crates/mopac_py/Cargo.toml` originally did not expose `mopac_gpu` volumetric or Coulomb kernels.
 
-**Consecuencia:** Cuando un usuario invoca `mopac_py.calculate()`, `mopac_py.generate_density_cube()` o `mopac_py.esp_charges()`, es matemáticamente imposible que la GPU participe en el cálculo bajo la arquitectura actual.
+**Consequence:** Calls such as `mopac_py.calculate()`, `mopac_py.generate_density_cube()`, and `mopac_py.esp_charges()` could not leverage Vulkan compute shaders until GPU wiring and shader pipelines were introduced.
 
 ---
 
-## 3. Cuellos de Botella Técnicos Identificados
+## 3. Identified Technical Bottlenecks
 
-| Componente | Algoritmo Actual | Complejidad | Cuello de Botella Identificado |
+| Component | Baseline Algorithm | Complexity | Identified Bottleneck |
 | :--- | :--- | :---: | :--- |
-| **Diagonalización Roothaan-Hall** | Eigensolver CPU (`faer` / `nalgebra`) | $\mathcal{O}(N_{\text{orbs}}^3)$ | Para moléculas de más de 80 átomos ($N_{\text{orbs}} > 200$), la diagonalización por ciclo SCF satura la CPU y no aprovecha los miles de núcleos de la GPU. |
-| **Evaluación de Malla Gaussian Cube** | Bucles anidados de Slater Orbitals en CPU | $\mathcal{O}(N_{\text{voxels}} \times N_{\text{atoms}})$ | Evaluar $100 \times 100 \times 100 = 10^6$ vóxeles toma 15 a 40 s por molécula en CPU. Es un problema vergonzosamente paralelo (*embarrassingly parallel*) desaprovechado. |
-| **Transferencias de Memoria PCIe** | No unificadas | $\mathcal{O}(N_{\text{atoms}}^2)$ | Si se trasladan matrices por cada ciclo SCF en lugar de mantener la densidad y el Fock en VRAM, la latencia de PCIe DMA anula el beneficio de cómputo. |
-| **Acelerador de Convergencia (DIIS)** | Pulay Subspace clásico en CPU | $\mathcal{O}(m^2)$ | Fallaba en sistemas policonjugados con anillos oxidados (como `4_cmcod5`) por falta de etapas de level-shifting de 15 eV y amortiguamiento $\alpha \ge 0.85$. |
+| **Roothaan-Hall Diagonalization** | Cyclic Jacobi Eigensolver | $\mathcal{O}(N_{\text{orbs}}^3)$ with high constant factor | For systems above 80 atoms ($N_{\text{orbs}} > 200$), naive $N_{\text{sweeps}} \times \binom{N}{2}$ cyclic Jacobi sweeps saturated CPU SCF time. *(Resolved in v0.2.0 via Householder `tred2` + `tql2`.)* |
+| **Gaussian Cube Evaluation & Serialization** | Nested STO loops + per-voxel heap `String` formatting | $\mathcal{O}(N_{\text{voxels}} \times N_{\text{atoms}})$ | CPU grid evaluation plus single-threaded `format!` per voxel dominated cube generation latency. *(Resolved via Vulkan compute shaders and Rayon slice formatting.)* |
+| **Redundant PCIe Context Creation** | Per-call `VulkanContext::new()` initialization | Setup latency per call | Repeated Vulkan device initialization inside Python cube helpers negated shader throughput. *(Cached via `OnceLock` in v0.2.0.)* |
+| **DIIS Convergence on Conjugated Systems** | Standard Pulay DIIS without dynamic damping | $\mathcal{O}(m^2)$ | Difficult conjugated/oxidized ring systems required Saunders-Hillier level shifting and adaptive fallback stages. |
 
 ---
 
-## 4. Imprecisiones Numéricas y Riesgos Físicos
+## 4. Numerical Precision and Physical Risks
 
-### 1. Inestabilidad en la Pipeline de Precisión Simple (FP32)
-El shader `coulomb_fp32.comp` acumula errores de redondeo en matrices grandes:
-- En moléculas con más de 70 átomos, el error acumulado en la energía total supera los **$0.8\ \text{kcal/mol}$**.
-- En optimizaciones geométricas (L-BFGS), el gradiente numérico en FP32 introduce "ruido" que impide que la norma del gradiente ($\|\mathbf{g}\|_{\text{rms}}$) caiga por debajo de la tolerancia de convergencia ($1.0\ \text{kcal/mol}\cdot\text{\AA}$), causando ciclos infinitos de optimización.
-- **Solución requerida:** La energía y los gradientes analíticos deben mantenerse en **FP64 (Double Precision)** o usar precisión mixta con compensación Kahan.
+### 1. Single-Precision (FP32) Rounding Drift in SCF Energetics
+The `coulomb_fp32.comp` shader accumulates rounding errors on large pairwise Coulomb sums:
+- On molecules above ~70 atoms, FP32 electrostatic accumulation drift can exceed $0.8\ \text{kcal/mol}$.
+- During geometry optimization (L-BFGS), FP32 noise prevents gradient norms ($\|\mathbf{g}\|_{\text{rms}}$) from decaying smoothly below convergence thresholds ($1.0\ \text{kcal/(mol}\cdot\text{\AA)}$).
+- **Engineering Requirement:** SCF energies and analytical gradients must remain strictly in **FP64 (double precision)** (`coulomb.comp` on Vulkan GPUs supporting `shaderFloat64`), reserving FP32 exclusively for visualization/screening where documented.
 
-### 2. Parámetros de Dispersión No Covalente en Heteroátomos
-En sistemas halogenados (como `14_n2cod12` con grupos $-\text{CF}_3$), el modelo empírico de dispersión PM6-D3H4 / PM7 presenta imprecisiones si los radios de corte de Van der Waals no están calibrados contra el conjunto de datos S66x8.
+### 2. Non-Covalent Dispersion in Halogenated Heteroatoms
+In fluorinated/halogenated systems (e.g., $-\text{CF}_3$ groups), empirical PM6-D3H4 / PM7 dispersion models depend strongly on calibrated Van der Waals cutoff radii benchmarked against reference datasets such as S66x8.
 
 ---
 
-## 5. Plan de Ingeniería: Hoja de Ruta para Aceleración GPU Real al 100%
-
-Para transformar `mopac_rs` en un motor verdaderamente competitivo frente a MOPAC Fortran, Gaussian y xTB, se define el siguiente plan de implementación técnica:
+## 5. Engineering Roadmap Toward Production Acceleration
 
 ```mermaid
 flowchart LR
-    A["Fase 1: Shader Vulkan para Gaussian Cube<br/>(Aceleración inmediata 50x)"] --> B["Fase 2: Ensamblaje de Fock en VRAM<br/>(Bucle SCF residente en GPU)"]
-    B --> C["Fase 3: Diagonalizador Espectral GPU<br/>(Vulkan Compute Jacobi / Lanczos)"]
-    C --> D["Fase 4: Exposición en Python (mopac_py)<br/>use_gpu=True"]
+    A["Phase 1: Vulkan Gaussian Cube Shaders<br/>(50x+ volumetric speedup)"] --> B["Phase 2: FP64 Monopole & Core Repulsion Kernels<br/>(pocord + ccrep on Vulkan)"]
+    B --> C["Phase 3: Pure-Rust Eigensolver & Parallel Fock<br/>(tred2/tql2 + Rayon NDDO Row-Bands)"]
+    C --> D["Phase 4: Cached Python Runtime & QuantumSession<br/>(Single-SCF Reuse & OnceLock Vulkan)"]
 ```
 
-### Fase 1: Aceleración GPU de Mapas Volumétricos (Gaussian Cube)
-- **Impacto:** Reducirá el tiempo de generación de mapas de densidad y orbitales HOMO/LUMO de **30 segundos a menos de 200 milisegundos**.
-- **Implementación:** Escribir `density_grid.comp` y `orbital_grid.comp` en GLSL/Vulkan, despachando la malla $N_x \times N_y \times N_z$ directamente en VRAM.
+### Phase 1: GPU Acceleration of Volumetric Maps (Gaussian Cube)
+- Implemented `density_grid.comp` and `orbital_grid.comp` SPIR-V compute shaders evaluating the $N_x \times N_y \times N_z$ grid directly on GPU memory.
 
-### Fase 2: Bucle SCF Residente en GPU (Zero-Copy VRAM)
-- Mantener la matriz de densidad $P$ y la matriz de Fock $F$ en la memoria GDDR6 de la GPU durante las 50–100 iteraciones del ciclo SCF.
-- Realizar únicamente dos transferencias PCIe: coordenadas al inicio y energía/cargas al final.
+### Phase 2: Double-Precision Pairwise Tensors (`coulomb.comp`, `core_repulsion.comp`)
+- Implemented `ws.gamma` handoff for monopole mode (`!use_nddo`) and range-reduced double-precision core repulsion kernels matching OpenMOPAC.
 
-### Fase 3: Integración Directa en `mopac_py`
-- Exponer el parámetro `use_gpu: bool = False, device_id: int = 0` en todas las funciones públicas de Python:
-  ```python
-  import mopac_py
-  
-  # Cálculo cuántico 100% acelerado en GPU Vulkan
-  res = mopac_py.calculate(atomic_numbers, coords, method="PM7", use_gpu=True)
-  cube = mopac_py.generate_density_cube(atomic_numbers, coords, use_gpu=True)
-  ```
+### Phase 3: Algorithmic & Memory Remediation in `mopac_core` and `mopac_py`
+- Full resolution of O(N^3) Jacobi overhead, O(N_orbs^2 * N_seg) COSMO memory blowup, 64-atom density shader truncation, duplicate post-optimization SCF solves, and missing SOSCF/UHF feature parity is documented in [08_V020_ARCHITECTURAL_REMEDIATION_AND_PERFORMANCE_ENGINE.md](08_V020_ARCHITECTURAL_REMEDIATION_AND_PERFORMANCE_ENGINE.md).
 
 ---
 
-## 6. Conclusión y Compromiso de Rigor
+## 6. Conclusion
 
-`mopac_rs` posee bases matemáticas sólidas y una excelente infraestructura de pruebas de paridad cuántica en CPU. Sin embargo, **la aceleración por GPU anunciada en Crates.io es actualmente un prototipo de kernel desacoplado del motor de cálculo real**.
-
-La adopción de este plan de remediación permitirá que el ecosistema pase de ser un traductor experimental de Fortran a una plataforma de química cuántica de alto rendimiento en GPU para quimiotecas masivas y cribado virtual.
+Early audits established clear parity and hardware-integration targets: keeping thermodynamic energetics and gradients strictly within FP64 OpenMOPAC tolerances while eliminating redundant SCF passes, serial bottlenecks, and shader limits. All remaining architectural gaps identified after v0.1.5 have now been engineered and empirically verified in v0.2.0.

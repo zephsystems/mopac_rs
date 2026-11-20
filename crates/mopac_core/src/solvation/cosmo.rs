@@ -14,6 +14,7 @@ use crate::parameters::ParameterModel;
 use crate::ri::cholesky::cholesky_decompose;
 use crate::solvation::cavity::CosmoCavity;
 use crate::types::{AlignedMatrix, MolecularBatch};
+use rayon::prelude::*;
 use std::f64::consts::PI;
 
 /// Conversion factor $a_0 \times \text{eV}$ from atomic units to eV*Angstrom.
@@ -91,8 +92,12 @@ pub struct CosmoState {
     pub cavity: CosmoCavity,
     /// Cholesky lower factor $L$ of the electrostatic boundary matrix $A$.
     pub l_cholesky: AlignedMatrix<f64>,
-    /// Coupling matrix $B$ between atomic orbitals and cavity segments (norbs x norbs x n_seg).
+    /// Compact intra-atom coupling matrix $B$ (`total_intra_pairs x n_seg`).
     pub b_matrix: AlignedMatrix<f64>,
+    /// Starting row offset in `b_matrix` for each atom's intra-atom orbital pairs.
+    pub atom_pair_offsets: Vec<usize>,
+    /// Orbital offset and count `(orb_offset, num_ao)` for each atom in `b_matrix`.
+    atom_orbital_ranges: Vec<(usize, usize)>,
     /// Nuclear electrostatic potential on cavity segments.
     pub phi_nuc: Vec<f64>,
     /// Screened nuclear surface charges $q_{\text{nuc}}$.
@@ -124,9 +129,10 @@ impl CosmoState {
         let mut a_mat = AlignedMatrix::zeroed(nseg, nseg);
         let fdiagr = 2.1 * PI.sqrt(); // 1.07 * sqrt(4*pi)
         let disex2 = 4.0 * (1.7 * 4.0f64).powi(2) / 42.0; // 4.4038 A^2
+        let segments = &cavity.segments;
 
-        for i in 0..nseg {
-            let si = &cavity.segments[i];
+        let fill_a_row = |i: usize, row: &mut [f64]| {
+            let si = &segments[i];
             let nfl_i = si.fine_elements.len();
 
             // Diagonal self-energy with fine element pairwise integration (mfinel / coscav)
@@ -147,15 +153,14 @@ impl CosmoState {
                     }
                 }
             }
-            let a_ii = if si.area > 1e-12 && aa_diag > 0.0 {
+            row[i] = if si.area > 1e-12 && aa_diag > 0.0 {
                 aa_diag / (si.area * si.area)
             } else {
                 fdiagr / si.area.max(1e-6).sqrt()
             };
-            a_mat.set(i, i, a_ii);
 
             for j in 0..i {
-                let sj = &cavity.segments[j];
+                let sj = &segments[j];
                 let dx = si.position[0] - sj.position[0];
                 let dy = si.position[1] - sj.position[1];
                 let dz = si.position[2] - sj.position[2];
@@ -187,8 +192,30 @@ impl CosmoState {
                         1.0 / d2.max(1e-6).sqrt()
                     }
                 };
-                a_mat.set(i, j, a_val);
-                a_mat.set(j, i, a_val);
+                row[j] = a_val;
+            }
+        };
+
+        if nseg >= 64 && rayon::current_num_threads() > 1 {
+            a_mat
+                .data
+                .par_chunks_mut(nseg)
+                .enumerate()
+                .for_each(|(i, row)| fill_a_row(i, row));
+        } else {
+            a_mat
+                .data
+                .chunks_mut(nseg)
+                .enumerate()
+                .for_each(|(i, row)| fill_a_row(i, row));
+        }
+
+        // Mirror lower triangle to upper triangle
+        for i in 1..nseg {
+            let row_i_off = i * nseg;
+            for j in 0..i {
+                let val = a_mat.data[row_i_off + j];
+                a_mat.data[j * nseg + i] = val;
             }
         }
 
@@ -196,21 +223,54 @@ impl CosmoState {
         let mut l_cholesky = a_mat;
         cholesky_decompose(&mut l_cholesky)?;
 
-        // 2. Construct coupling matrix B between atomic charge distributions and surface segments
-        let norbs = batch.norbs;
-        let mut b_matrix = AlignedMatrix::zeroed(norbs * norbs, nseg);
+        // 2. Construct compact intra-atom coupling matrix B between atomic charge distributions and segments
+        //    Atom-outer layout: each atom owns contiguous rows [pair_base .. pair_base + num_ao^2],
+        //    hoisting element & multipole parameter lookup once per atom instead of nseg * natoms.
+        type AtomCosmoMeta = (usize, [f64; 3], Option<(f64, f64)>, f64);
+        let mut atom_pair_offsets = Vec::with_capacity(batch.natoms);
+        let mut atom_orbital_ranges = Vec::with_capacity(batch.natoms);
+        let mut atom_meta: Vec<Option<AtomCosmoMeta>> = Vec::with_capacity(batch.natoms);
+        let mut total_intra_pairs = 0usize;
+        for atom_idx in 0..batch.natoms {
+            let orb_offset = batch.orbital_offsets[atom_idx];
+            let num_ao = batch.basis_types[atom_idx].num_orbitals();
+            atom_pair_offsets.push(total_intra_pairs);
+            atom_orbital_ranges.push((orb_offset, num_ao));
+            total_intra_pairs += num_ao * num_ao;
 
-        for (seg_idx, seg) in cavity.segments.iter().enumerate() {
-            for atom_idx in 0..batch.natoms {
-                let z = batch.atomic_numbers[atom_idx];
-                let elem = match model.get_element(z) {
-                    Some(p) => p,
-                    None => continue,
-                };
-                let orb_offset = batch.orbital_offsets[atom_idx];
-                let num_ao = batch.basis_types[atom_idx].num_orbitals();
+            let z = batch.atomic_numbers[atom_idx];
+            let meta = model.get_element(z).map(|elem| {
                 let xa = [batch.x[atom_idx], batch.y[atom_idx], batch.z[atom_idx]];
+                let sp_multipole = if num_ao >= 4 {
+                    let mp =
+                        crate::integrals::multipoles::DerivedMultipoleParams::from_element(&elem);
+                    let d1 = mp.dd * crate::constants::codata2018::BOHR_RADIUS_ANGSTROMS;
+                    let q2 = (mp.qq * crate::constants::codata2018::BOHR_RADIUS_ANGSTROMS).powi(2);
+                    Some((d1, q2))
+                } else {
+                    None
+                };
+                (num_ao, xa, sp_multipole, elem.core_charge)
+            });
+            atom_meta.push(meta);
+        }
+        let mut b_matrix = AlignedMatrix::zeroed(total_intra_pairs, nseg);
 
+        // Partition b_matrix.data into disjoint per-atom row bands for lock-free parallel writes
+        let mut atom_bands: Vec<(usize, &mut [f64])> = Vec::with_capacity(batch.natoms);
+        let mut rest: &mut [f64] = &mut b_matrix.data[..];
+        for (atom_idx, &(_, num_ao)) in atom_orbital_ranges.iter().enumerate() {
+            let band_len = num_ao * num_ao * nseg;
+            let (head, tail) = rest.split_at_mut(band_len);
+            atom_bands.push((atom_idx, head));
+            rest = tail;
+        }
+
+        let fill_atom_b = |(atom_idx, band): &mut (usize, &mut [f64])| {
+            let Some((num_ao, xa, sp_multipole, _)) = atom_meta[*atom_idx] else {
+                return;
+            };
+            for (seg_idx, seg) in segments.iter().enumerate() {
                 let dx = seg.position[0] - xa[0];
                 let dy = seg.position[1] - xa[1];
                 let dz = seg.position[2] - xa[2];
@@ -221,79 +281,75 @@ impl CosmoState {
 
                 // Monopole coupling (diagonal orbital terms mu == nu)
                 for mu in 0..num_ao {
-                    let global_mu = orb_offset + mu;
-                    let flat_idx = global_mu * norbs + global_mu;
-                    b_matrix.set(flat_idx, seg_idx, inv_r);
+                    band[(mu * num_ao + mu) * nseg + seg_idx] = inv_r;
                 }
 
                 // Dipole and quadrupole coupling for sp hybridization terms
-                if num_ao >= 4 {
-                    let mp =
-                        crate::integrals::multipoles::DerivedMultipoleParams::from_element(&elem);
-                    let d1 = mp.dd * crate::constants::codata2018::BOHR_RADIUS_ANGSTROMS;
-                    let q2 = (mp.qq * crate::constants::codata2018::BOHR_RADIUS_ANGSTROMS).powi(2);
+                if let Some((d1, q2)) = sp_multipole {
                     let inv_r5 = inv_r3 * inv_r * inv_r;
 
-                    let g_s = orb_offset;
-                    let g_px = orb_offset + 1;
-                    let g_py = orb_offset + 2;
-                    let g_pz = orb_offset + 3;
+                    let s = 0usize;
+                    let px = 1usize;
+                    let py = 2usize;
+                    let pz = 3usize;
 
                     // Quadrupole diagonal adjustments for px, py, pz
                     let q_xx = (3.0 * dx * dx * inv_r5 - inv_r3) * q2;
                     let q_yy = (3.0 * dy * dy * inv_r5 - inv_r3) * q2;
                     let q_zz = (3.0 * dz * dz * inv_r5 - inv_r3) * q2;
 
-                    b_matrix.set(g_px * norbs + g_px, seg_idx, inv_r + q_xx);
-                    b_matrix.set(g_py * norbs + g_py, seg_idx, inv_r + q_yy);
-                    b_matrix.set(g_pz * norbs + g_pz, seg_idx, inv_r + q_zz);
+                    band[(px * num_ao + px) * nseg + seg_idx] = inv_r + q_xx;
+                    band[(py * num_ao + py) * nseg + seg_idx] = inv_r + q_yy;
+                    band[(pz * num_ao + pz) * nseg + seg_idx] = inv_r + q_zz;
 
                     // Dipole s-p coupling
                     let b_spx = dx * d1 * inv_r3;
                     let b_spy = dy * d1 * inv_r3;
                     let b_spz = dz * d1 * inv_r3;
 
-                    b_matrix.set(g_s * norbs + g_px, seg_idx, b_spx);
-                    b_matrix.set(g_px * norbs + g_s, seg_idx, b_spx);
+                    band[(s * num_ao + px) * nseg + seg_idx] = b_spx;
+                    band[(px * num_ao + s) * nseg + seg_idx] = b_spx;
 
-                    b_matrix.set(g_s * norbs + g_py, seg_idx, b_spy);
-                    b_matrix.set(g_py * norbs + g_s, seg_idx, b_spy);
+                    band[(s * num_ao + py) * nseg + seg_idx] = b_spy;
+                    band[(py * num_ao + s) * nseg + seg_idx] = b_spy;
 
-                    b_matrix.set(g_s * norbs + g_pz, seg_idx, b_spz);
-                    b_matrix.set(g_pz * norbs + g_s, seg_idx, b_spz);
+                    band[(s * num_ao + pz) * nseg + seg_idx] = b_spz;
+                    band[(pz * num_ao + s) * nseg + seg_idx] = b_spz;
 
                     // Quadrupole p-p off-diagonal coupling
                     let b_px_py = 3.0 * dx * dy * q2 * inv_r5;
                     let b_px_pz = 3.0 * dx * dz * q2 * inv_r5;
                     let b_py_pz = 3.0 * dy * dz * q2 * inv_r5;
 
-                    b_matrix.set(g_px * norbs + g_py, seg_idx, b_px_py);
-                    b_matrix.set(g_py * norbs + g_px, seg_idx, b_px_py);
+                    band[(px * num_ao + py) * nseg + seg_idx] = b_px_py;
+                    band[(py * num_ao + px) * nseg + seg_idx] = b_px_py;
 
-                    b_matrix.set(g_px * norbs + g_pz, seg_idx, b_px_pz);
-                    b_matrix.set(g_pz * norbs + g_px, seg_idx, b_px_pz);
+                    band[(px * num_ao + pz) * nseg + seg_idx] = b_px_pz;
+                    band[(pz * num_ao + px) * nseg + seg_idx] = b_px_pz;
 
-                    b_matrix.set(g_py * norbs + g_pz, seg_idx, b_py_pz);
-                    b_matrix.set(g_pz * norbs + g_py, seg_idx, b_py_pz);
+                    band[(py * num_ao + pz) * nseg + seg_idx] = b_py_pz;
+                    band[(pz * num_ao + py) * nseg + seg_idx] = b_py_pz;
                 }
             }
+        };
+
+        if batch.natoms >= 8 && nseg >= 64 && rayon::current_num_threads() > 1 {
+            atom_bands.par_iter_mut().for_each(fill_atom_b);
+        } else {
+            atom_bands.iter_mut().for_each(fill_atom_b);
         }
 
         // 3. Compute nuclear electrostatic potential on cavity segments
         let mut phi_nuc = vec![0.0f64; nseg];
-        for (seg_idx, seg) in cavity.segments.iter().enumerate() {
+        for (seg_idx, seg) in segments.iter().enumerate() {
             let mut pot = 0.0f64;
-            for atom_idx in 0..batch.natoms {
-                let z = batch.atomic_numbers[atom_idx];
-                if let Some(p) = model.get_element(z) {
-                    let z_core = p.core_charge;
-                    let dx = seg.position[0] - batch.x[atom_idx];
-                    let dy = seg.position[1] - batch.y[atom_idx];
-                    let dz = seg.position[2] - batch.z[atom_idx];
-                    let dist = (dx * dx + dy * dy + dz * dz).sqrt();
-                    if dist > 1e-12 {
-                        pot += z_core / dist;
-                    }
+            for (_, xa, _, z_core) in atom_meta.iter().flatten() {
+                let dx = seg.position[0] - xa[0];
+                let dy = seg.position[1] - xa[1];
+                let dz = seg.position[2] - xa[2];
+                let dist = (dx * dx + dy * dy + dz * dz).sqrt();
+                if dist > 1e-12 {
+                    pot += z_core / dist;
                 }
             }
             phi_nuc[seg_idx] = pot;
@@ -324,6 +380,8 @@ impl CosmoState {
             cavity,
             l_cholesky,
             b_matrix,
+            atom_pair_offsets,
+            atom_orbital_ranges,
             phi_nuc,
             q_nuc,
             e_nuc_diel_ev,
@@ -334,24 +392,68 @@ impl CosmoState {
         })
     }
 
+    /// Accumulate electronic electrostatic potential `phi_elec = B * Q_elec` over intra-atom blocks.
+    fn compute_phi_elec_blocks(
+        atom_pair_offsets: &[usize],
+        atom_orbital_ranges: &[(usize, usize)],
+        b_matrix: &AlignedMatrix<f64>,
+        density: &AlignedMatrix<f64>,
+        phi_out: &mut [f64],
+    ) {
+        let nseg = b_matrix.cols;
+        phi_out[..nseg].fill(0.0);
+        for (&pair_base, &(orb_offset, num_ao)) in
+            atom_pair_offsets.iter().zip(atom_orbital_ranges.iter())
+        {
+            for i in 0..num_ao {
+                let mu = orb_offset + i;
+                let row_atom = pair_base + i * num_ao;
+                for j in 0..num_ao {
+                    let nu = orb_offset + j;
+                    let p_val = density.get(mu, nu);
+                    if p_val.abs() > 1e-12 {
+                        let row_start = (row_atom + j) * nseg;
+                        let b_row = &b_matrix.data[row_start..row_start + nseg];
+                        for (phi_k, &b_val) in phi_out[..nseg].iter_mut().zip(b_row.iter()) {
+                            *phi_k -= b_val * p_val;
+                        }
+                    }
+                }
+            }
+        }
+    }
+
+    /// Apply reaction field `- A0_EV * B * q` over compact intra-atom blocks into `target`.
+    fn apply_reaction_field_blocks(&self, q_vec: &[f64], target: &mut AlignedMatrix<f64>) {
+        let nseg = q_vec.len();
+        for (&pair_base, &(orb_offset, num_ao)) in self
+            .atom_pair_offsets
+            .iter()
+            .zip(self.atom_orbital_ranges.iter())
+        {
+            for i in 0..num_ao {
+                let mu = orb_offset + i;
+                let row_atom = pair_base + i * num_ao;
+                for j in 0..num_ao {
+                    let nu = orb_offset + j;
+                    let row_start = (row_atom + j) * nseg;
+                    let b_row = &self.b_matrix.data[row_start..row_start + nseg];
+                    let mut sum = 0.0f64;
+                    for (&b_val, &q_val) in b_row.iter().zip(q_vec.iter()) {
+                        sum += b_val * q_val;
+                    }
+                    let old_val = target.get(mu, nu);
+                    target.set(mu, nu, old_val - A0_EV * sum);
+                }
+            }
+        }
+    }
+
     /// Add nuclear screening reaction field to one-electron core Hamiltonian $H_{\text{core}}$.
     ///
     /// Matches OpenMOPAC `addhcr` subroutine in `cosmo.F90`.
     pub fn apply_nuclear_reaction_field_to_hcore(&self, h_core: &mut AlignedMatrix<f64>) {
-        let norbs = h_core.rows;
-        let nseg = self.cavity.num_segments();
-
-        for mu in 0..norbs {
-            for nu in 0..norbs {
-                let flat_idx = mu * norbs + nu;
-                let mut him = 0.0f64;
-                for k in 0..nseg {
-                    him += self.b_matrix.get(flat_idx, k) * self.q_nuc[k];
-                }
-                let h_old = h_core.get(mu, nu);
-                h_core.set(mu, nu, h_old - A0_EV * him);
-            }
-        }
+        self.apply_reaction_field_blocks(&self.q_nuc, h_core);
     }
 
     /// Compute electronic screening reaction field and dielectric solvation free energy.
@@ -365,26 +467,18 @@ impl CosmoState {
         density: &AlignedMatrix<f64>,
         fock: &mut AlignedMatrix<f64>,
     ) -> f64 {
-        let norbs = fock.rows;
         let nseg = self.cavity.num_segments();
         let fepsi = self.params.dielectric_scaling();
 
         // 1. Calculate electronic electrostatic potential phi_elec = B * Q_elec
         // In NDDO, electronic charge density is Q_elec,mu_nu = -P_mu_nu
-        self.phi_elec.fill(0.0);
-        for k in 0..nseg {
-            let mut phi = 0.0f64;
-            for mu in 0..norbs {
-                for nu in 0..norbs {
-                    let p_val = density.get(mu, nu);
-                    if p_val.abs() > 1e-12 {
-                        let b_val = self.b_matrix.get(mu * norbs + nu, k);
-                        phi -= b_val * p_val;
-                    }
-                }
-            }
-            self.phi_elec[k] = phi;
-        }
+        Self::compute_phi_elec_blocks(
+            &self.atom_pair_offsets,
+            &self.atom_orbital_ranges,
+            &self.b_matrix,
+            density,
+            &mut self.phi_elec,
+        );
 
         // 2. Solve for screened electronic surface charges: A * q_elec_star = phi_elec
         solve_cholesky_system(
@@ -406,17 +500,7 @@ impl CosmoState {
         let total_dielectric_energy_ev = 0.5 * A0_EV * ediel;
 
         // 3. Add reaction field to Fock matrix: F_mu_nu -= (a0 * ev) * sum_k B_mu_nu,k * q_elec,k
-        for mu in 0..norbs {
-            for nu in 0..norbs {
-                let flat_idx = mu * norbs + nu;
-                let mut fim = 0.0f64;
-                for k in 0..nseg {
-                    fim += self.b_matrix.get(flat_idx, k) * self.q_elec[k];
-                }
-                let f_old = fock.get(mu, nu);
-                fock.set(mu, nu, f_old - A0_EV * fim);
-            }
-        }
+        self.apply_reaction_field_blocks(&self.q_elec, fock);
 
         total_dielectric_energy_ev
     }
@@ -441,24 +525,17 @@ impl CosmoState {
 
         let nseg = self.cavity.num_segments();
         let natoms = batch.natoms;
-        let norbs = batch.norbs;
         assert_eq!(gradients.len(), natoms);
 
         // 0. Compute actual electronic screening charges corresponding to the provided density matrix
         let mut phi_elec = vec![0.0f64; nseg];
-        for (k, phi_k) in phi_elec.iter_mut().enumerate().take(nseg) {
-            let mut phi = 0.0f64;
-            for mu in 0..norbs {
-                for nu in 0..norbs {
-                    let p_val = density.get(mu, nu);
-                    if p_val.abs() > 1e-12 {
-                        let b_val = self.b_matrix.get(mu * norbs + nu, k);
-                        phi -= b_val * p_val;
-                    }
-                }
-            }
-            *phi_k = phi;
-        }
+        Self::compute_phi_elec_blocks(
+            &self.atom_pair_offsets,
+            &self.atom_orbital_ranges,
+            &self.b_matrix,
+            density,
+            &mut phi_elec,
+        );
         let mut q_star = vec![0.0f64; nseg];
         let mut scratch = vec![0.0f64; nseg];
         solve_cholesky_system(&self.l_cholesky, &phi_elec, &mut q_star, &mut scratch);
@@ -612,6 +689,79 @@ mod tests {
             state.cavity.total_area_angstrom2,
             state.cavity.total_volume_angstrom3,
             state.e_nuc_diel_ev
+        );
+    }
+
+    #[test]
+    fn test_cosmo_parallel_initialization_exact_parity() {
+        let mut z = Vec::new();
+        let mut coords = Vec::new();
+        for c in 0..6 {
+            z.push(6u8);
+            coords.push([c as f64 * 1.53, (c % 2) as f64 * 0.5, 0.0]);
+            let n_h = if c == 0 || c == 5 { 3 } else { 2 };
+            for h in 0..n_h {
+                z.push(1u8);
+                coords.push([
+                    c as f64 * 1.53 + 0.3 * h as f64,
+                    (c % 2) as f64 * 0.5 + if h == 0 { 1.09 } else { -0.8 },
+                    if h == 2 { 0.85 } else { 0.2 },
+                ]);
+            }
+        }
+        let batch = MolecularBatch::new(z, &coords);
+        let am1 = Am1Model;
+        let params = CosmoParams::default();
+
+        let state_1 = crate::threading::run_with_thread_pool(Some(1), || {
+            CosmoState::initialize(&batch, &am1, params).expect("1-thread COSMO init")
+        });
+        let state_4 = crate::threading::run_with_thread_pool(Some(4), || {
+            CosmoState::initialize(&batch, &am1, params).expect("4-thread COSMO init")
+        });
+
+        assert_eq!(state_1.cavity.num_segments(), state_4.cavity.num_segments());
+        assert!(state_1.cavity.num_segments() >= 64);
+
+        let max_l_diff = state_1
+            .l_cholesky
+            .data
+            .iter()
+            .zip(state_4.l_cholesky.data.iter())
+            .map(|(a, b)| (a - b).abs())
+            .fold(0.0f64, f64::max);
+        let max_b_diff = state_1
+            .b_matrix
+            .data
+            .iter()
+            .zip(state_4.b_matrix.data.iter())
+            .map(|(a, b)| (a - b).abs())
+            .fold(0.0f64, f64::max);
+        let max_phi_diff = state_1
+            .phi_nuc
+            .iter()
+            .zip(state_4.phi_nuc.iter())
+            .map(|(a, b)| (a - b).abs())
+            .fold(0.0f64, f64::max);
+
+        assert!(
+            max_l_diff < 1e-13,
+            "Parallel COSMO L_cholesky diverged: {:e}",
+            max_l_diff
+        );
+        assert!(
+            max_b_diff < 1e-13,
+            "Parallel COSMO B matrix diverged: {:e}",
+            max_b_diff
+        );
+        assert!(
+            max_phi_diff < 1e-13,
+            "Parallel COSMO phi_nuc diverged: {:e}",
+            max_phi_diff
+        );
+        assert!(
+            (state_1.e_nuc_diel_ev - state_4.e_nuc_diel_ev).abs() < 1e-13,
+            "Parallel COSMO E_nuc_diel diverged"
         );
     }
 }

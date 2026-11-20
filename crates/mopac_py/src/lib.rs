@@ -20,13 +20,13 @@ use mopac_core::ci::spectrum::{
 };
 use mopac_core::constants::codata2018::EV_TO_KCAL_MOL;
 use mopac_core::corrections::dispersion::{
-    DispersionModel, compute_dispersion_energy_and_gradients,
+    DispersionModel, compute_dispersion_energy, compute_dispersion_energy_and_gradients,
 };
 use mopac_core::corrections::h_bonds4::{
     H4Parameters, compute_h4_energy, compute_hh_repulsion_energy_and_gradients,
 };
 use mopac_core::gradients::nuclear_gradients::{
-    GradientWorkspace, compute_cartesian_gradients_with_options,
+    GradientWorkspace, compute_cartesian_gradients_uhf, compute_cartesian_gradients_with_options,
 };
 use mopac_core::mozyme::{MozymeOptions, run_mozyme_scf};
 use mopac_core::opt::eigenvector_following::{
@@ -45,12 +45,13 @@ use mopac_core::properties::{
 };
 use mopac_core::reactions::{
     DrcEnsemble, DrcOptions, DrcWorkspace, InitialVelocities, IrcDirection, IrcOptions,
-    IrcWorkspace, SaddleOptions, run_dynamic_reaction_coordinate, run_saddle,
+    IrcWorkspace, SaddleOptions, run_dynamic_reaction_coordinate, saddle::run_saddle_with_state,
     trace_intrinsic_reaction_coordinate,
 };
-use mopac_core::scf::scf_loop::{ScfOptions, run_rhf_scf_with_options};
+use mopac_core::scf::scf_loop::{ScfOptions, ScfResult, run_rhf_scf_with_options};
+use mopac_core::scf::uhf_loop::{UhfOptions, UhfResult, UhfWorkspace, run_uhf_scf_with_options};
 use mopac_core::solvation::CosmoParams;
-use mopac_core::types::{MolecularBatch, ScfWorkspace};
+use mopac_core::types::{AlignedMatrix, MolecularBatch, ScfWorkspace};
 use mopac_core::vibrations::{HessianOptions, compute_hessian_and_frequencies};
 use std::sync::atomic::{AtomicUsize, Ordering};
 
@@ -779,6 +780,287 @@ fn get_cached_gpu_coulomb_calc()
         .clone()
 }
 
+fn get_cached_gpu_cube_eval()
+-> Option<std::sync::Arc<std::sync::Mutex<mopac_gpu::GpuCubeEvaluator>>> {
+    static CACHE: std::sync::OnceLock<
+        Option<std::sync::Arc<std::sync::Mutex<mopac_gpu::GpuCubeEvaluator>>>,
+    > = std::sync::OnceLock::new();
+    CACHE
+        .get_or_init(|| {
+            let ctx = mopac_gpu::VulkanContext::new().ok()?;
+            let eval = mopac_gpu::GpuCubeEvaluator::new(std::sync::Arc::new(ctx)).ok()?;
+            Some(std::sync::Arc::new(std::sync::Mutex::new(eval)))
+        })
+        .clone()
+}
+
+enum ConvergedWavefunction<'a> {
+    Rhf {
+        ws: &'a ScfWorkspace,
+        res: &'a ScfResult,
+    },
+    Uhf {
+        ws: &'a UhfWorkspace,
+        res: &'a UhfResult,
+    },
+}
+
+fn run_converged_rhf_scf(
+    batch: &MolecularBatch,
+    model: &dyn ParameterModel,
+    use_nddo: bool,
+    cosmo: Option<CosmoParams>,
+    charge: i32,
+    max_iter: usize,
+    adaptive_max_iter: usize,
+    energy_tol_ev: f64,
+    density_tol: f64,
+    level_shift_ev: f64,
+    damping: f64,
+    use_gpu: bool,
+) -> (ScfWorkspace, ScfResult) {
+    let mut scf_ws = ScfWorkspace::allocate(batch.norbs);
+
+    if use_gpu
+        && !use_nddo
+        && let Some(gpu_calc_arc) = get_cached_gpu_coulomb_calc()
+        && let Ok(gpu_calc) = gpu_calc_arc.lock()
+        && let Ok(gamma_matrix) = gpu_calc.compute_batch(batch, model)
+    {
+        scf_ws.gamma = Some(gamma_matrix);
+    }
+
+    let opts = ScfOptions {
+        max_iter,
+        energy_tol_ev,
+        density_tol,
+        level_shift_ev,
+        damping,
+        use_nddo,
+        cosmo,
+        charge,
+        ..Default::default()
+    };
+
+    let mut scf_res = if level_shift_ev > 0.0 {
+        mopac_core::scf::scf_loop::run_rhf_scf_shift_safe(batch, model, &mut scf_ws, &opts)
+    } else {
+        run_rhf_scf_with_options(batch, model, &mut scf_ws, &opts)
+    };
+    if !scf_res.converged {
+        scf_res = mopac_core::scf::scf_loop::run_rhf_scf_adaptive_with_nddo_cosmo_and_charge(
+            batch,
+            model,
+            &mut scf_ws,
+            adaptive_max_iter,
+            energy_tol_ev,
+            density_tol,
+            use_nddo,
+            cosmo,
+            charge,
+        );
+    }
+
+    (scf_ws, scf_res)
+}
+
+fn finalize_calculation_result(
+    batch: &mut MolecularBatch,
+    model: &dyn ParameterModel,
+    method: &str,
+    wfn: ConvergedWavefunction<'_>,
+    dispersion: Option<&str>,
+    h_bonds: bool,
+    use_nddo: bool,
+    charge: i32,
+    compute_gradients: bool,
+    grad_ws_reuse: Option<&mut GradientWorkspace>,
+) -> PyResult<CalculationResult> {
+    let natoms = batch.natoms;
+    let mut grads_ev = vec![[0.0f64; 3]; natoms];
+    let mut grads_kcal = vec![[0.0f64; 3]; natoms];
+
+    if compute_gradients {
+        let mut local_grad_ws;
+        let grad_ws = match grad_ws_reuse {
+            Some(ws) => ws,
+            None => {
+                local_grad_ws = GradientWorkspace::allocate(batch.norbs);
+                &mut local_grad_ws
+            }
+        };
+        match wfn {
+            ConvergedWavefunction::Rhf { ws, .. } => {
+                compute_cartesian_gradients_with_options(
+                    batch,
+                    model,
+                    &ws.density,
+                    grad_ws,
+                    &mut grads_ev,
+                    use_nddo,
+                );
+            }
+            ConvergedWavefunction::Uhf { ws, .. } => {
+                compute_cartesian_gradients_uhf(
+                    batch,
+                    model,
+                    &ws.density_a,
+                    &ws.density_b,
+                    grad_ws,
+                    &mut grads_ev,
+                    use_nddo,
+                );
+            }
+        }
+        for i in 0..natoms {
+            for c in 0..3 {
+                grads_kcal[i][c] = grads_ev[i][c] * EV_TO_KCAL_MOL;
+            }
+        }
+    }
+
+    let effective_disp = match dispersion {
+        Some(d) if d.eq_ignore_ascii_case("NONE") || d.eq_ignore_ascii_case("OFF") => None,
+        Some(d) => Some(d),
+        None => {
+            if method.eq_ignore_ascii_case("PM7") {
+                Some("PM7")
+            } else {
+                None
+            }
+        }
+    };
+
+    let mut non_cov_kcal = 0.0;
+    if let Some(dm_name) = effective_disp {
+        let dm = match dm_name.to_uppercase().as_str() {
+            "PM6-DH+" | "DH+" | "PM6_DH+" => DispersionModel::Pm6DhPlus,
+            "PM7" => DispersionModel::Pm7,
+            "D3" | "D3BJ" | "D3-BJ" | "PM6-D3" | "AM1-D3" => DispersionModel::D3Bj,
+            other => {
+                return Err(PyValueError::new_err(format!(
+                    "Unknown dispersion model '{}'. Supported: 'PM6-DH+', 'PM7', 'D3-BJ'",
+                    other
+                )));
+            }
+        };
+        if compute_gradients {
+            let mut disp_grads = vec![[0.0f64; 3]; natoms];
+            let e_disp = compute_dispersion_energy_and_gradients(batch, dm, &mut disp_grads);
+            non_cov_kcal += e_disp;
+            for i in 0..natoms {
+                for c in 0..3 {
+                    grads_kcal[i][c] += disp_grads[i][c];
+                    grads_ev[i][c] += disp_grads[i][c] / EV_TO_KCAL_MOL;
+                }
+            }
+        } else {
+            non_cov_kcal += compute_dispersion_energy(batch, dm);
+        }
+    }
+
+    if method.eq_ignore_ascii_case("PM7") || method.eq_ignore_ascii_case("PM6") {
+        non_cov_kcal += compute_c_triple_bond_c_correction(batch);
+    }
+    if method.eq_ignore_ascii_case("PM6") {
+        non_cov_kcal += compute_nsp2_correction(batch);
+    }
+
+    if h_bonds {
+        let h4_params = H4Parameters::default();
+        non_cov_kcal += compute_h4_energy(batch, &h4_params);
+
+        let (e_hh, hh_grads) = compute_hh_repulsion_energy_and_gradients(batch);
+        non_cov_kcal += e_hh;
+        if compute_gradients {
+            for i in 0..natoms {
+                for c in 0..3 {
+                    grads_kcal[i][c] += hh_grads[i][c];
+                    grads_ev[i][c] += hh_grads[i][c] / EV_TO_KCAL_MOL;
+                }
+            }
+        }
+    }
+
+    let (
+        scf_total_energy_ev,
+        electronic_energy_ev,
+        nuclear_repulsion_ev,
+        converged,
+        scf_iterations,
+        homo,
+        lumo,
+        dipole_res,
+        mulliken_res,
+    ) = match wfn {
+        ConvergedWavefunction::Rhf { ws, res } => {
+            let dipole_res = compute_dipole_moment(batch, model, &ws.density);
+            let num_electrons: f64 = batch
+                .atomic_numbers
+                .iter()
+                .filter_map(|&z| model.get_element(z))
+                .map(|p| p.core_charge)
+                .sum();
+            let net_electrons = (num_electrons - charge as f64).round().max(0.0) as usize;
+            let num_occupied = net_electrons / 2;
+            let mulliken_res =
+                compute_mulliken_population(batch, model, &ws.eigenvectors, num_occupied);
+            (
+                res.total_energy_ev,
+                res.electronic_energy_ev,
+                res.nuclear_repulsion_ev,
+                res.converged,
+                res.iterations,
+                res.homo_energy_ev,
+                res.lumo_energy_ev,
+                dipole_res,
+                mulliken_res,
+            )
+        }
+        ConvergedWavefunction::Uhf { ws, res } => {
+            let dipole_res = compute_dipole_moment(batch, model, &ws.density_tot);
+            let mulliken_res =
+                compute_mulliken_population(batch, model, &ws.eigenvectors_a, res.n_alpha);
+            (
+                res.total_energy_ev,
+                res.electronic_energy_ev,
+                res.nuclear_repulsion_ev,
+                res.converged,
+                res.iterations,
+                res.homo_a_energy_ev,
+                res.lumo_a_energy_ev,
+                dipole_res,
+                mulliken_res,
+            )
+        }
+    };
+
+    let (binding_energy_ev, heat_of_formation_kcal) = compute_heat_of_formation(
+        scf_total_energy_ev,
+        &batch.atomic_numbers,
+        model,
+        non_cov_kcal,
+    );
+
+    Ok(CalculationResult {
+        total_energy_ev: scf_total_energy_ev + (non_cov_kcal / EV_TO_KCAL_MOL),
+        electronic_energy_ev,
+        nuclear_repulsion_ev,
+        binding_energy_ev,
+        heat_of_formation_kcal,
+        gradients_ev_angstrom: grads_ev,
+        gradients_kcal_mol_angstrom: grads_kcal,
+        dipole_debye: dipole_res.total,
+        atomic_charges: dipole_res.atomic_charges,
+        mulliken_charges: mulliken_res.net_charges,
+        converged,
+        scf_iterations,
+        homo_energy_ev: homo,
+        lumo_energy_ev: lumo,
+        homo_lumo_gap_ev: lumo - homo,
+    })
+}
+
 /// Internal engine execution for single-point calculation.
 fn run_calculation_internal(
     atomic_numbers: &[u8],
@@ -797,6 +1079,7 @@ fn run_calculation_internal(
     uhf: Option<bool>,
     multiplicity: Option<usize>,
     charge: Option<i32>,
+    compute_gradients: bool,
 ) -> PyResult<CalculationResult> {
     let natoms = atomic_numbers.len();
     if natoms == 0 {
@@ -839,7 +1122,7 @@ fn run_calculation_internal(
 
     if run_as_uhf {
         let mult = multiplicity.unwrap_or(if is_open_shell { 2 } else { 1 });
-        let uhf_opts = mopac_core::scf::uhf_loop::UhfOptions {
+        let uhf_opts = UhfOptions {
             multiplicity: mult,
             charge: chg,
             max_iter,
@@ -848,292 +1131,58 @@ fn run_calculation_internal(
             damping,
             use_nddo,
             cosmo,
+            ..Default::default()
         };
-        let mut uhf_ws = mopac_core::scf::uhf_loop::UhfWorkspace::new(batch.norbs);
-        let uhf_res = mopac_core::scf::uhf_loop::run_uhf_scf_with_options(
-            &batch,
-            model.as_ref(),
-            &mut uhf_ws,
-            &uhf_opts,
-        );
+        let mut uhf_ws = UhfWorkspace::new(batch.norbs);
+        let uhf_res = run_uhf_scf_with_options(&batch, model.as_ref(), &mut uhf_ws, &uhf_opts);
 
-        let mut grad_ws = GradientWorkspace::allocate(batch.norbs);
-        let mut grads_ev = vec![[0.0f64; 3]; natoms];
-        mopac_core::gradients::nuclear_gradients::compute_cartesian_gradients_uhf(
+        return finalize_calculation_result(
             &mut batch,
             model.as_ref(),
-            &uhf_ws.density_a,
-            &uhf_ws.density_b,
-            &mut grad_ws,
-            &mut grads_ev,
+            method,
+            ConvergedWavefunction::Uhf {
+                ws: &uhf_ws,
+                res: &uhf_res,
+            },
+            dispersion,
+            h_bonds,
             use_nddo,
+            chg,
+            compute_gradients,
+            None,
         );
-
-        let mut grads_kcal = vec![[0.0f64; 3]; natoms];
-        for i in 0..natoms {
-            for c in 0..3 {
-                grads_kcal[i][c] = grads_ev[i][c] * EV_TO_KCAL_MOL;
-            }
-        }
-
-        let effective_disp = match dispersion {
-            Some(d) if d.eq_ignore_ascii_case("NONE") || d.eq_ignore_ascii_case("OFF") => None,
-            Some(d) => Some(d),
-            None => {
-                if method.eq_ignore_ascii_case("PM7") {
-                    Some("PM7")
-                } else {
-                    None
-                }
-            }
-        };
-
-        let mut non_cov_kcal = 0.0;
-        if let Some(dm_name) = effective_disp {
-            let dm = match dm_name.to_uppercase().as_str() {
-                "PM6-DH+" | "DH+" | "PM6_DH+" => DispersionModel::Pm6DhPlus,
-                "PM7" => DispersionModel::Pm7,
-                "D3" | "D3BJ" | "D3-BJ" | "PM6-D3" | "AM1-D3" => DispersionModel::D3Bj,
-                other => {
-                    return Err(PyValueError::new_err(format!(
-                        "Unknown dispersion model '{}'. Supported: 'PM6-DH+', 'PM7', 'D3-BJ'",
-                        other
-                    )));
-                }
-            };
-            let mut disp_grads = vec![[0.0f64; 3]; natoms];
-            let e_disp = compute_dispersion_energy_and_gradients(&batch, dm, &mut disp_grads);
-            non_cov_kcal += e_disp;
-            for i in 0..natoms {
-                for c in 0..3 {
-                    grads_kcal[i][c] += disp_grads[i][c];
-                    grads_ev[i][c] += disp_grads[i][c] / EV_TO_KCAL_MOL;
-                }
-            }
-        }
-
-        if method.eq_ignore_ascii_case("PM7") || method.eq_ignore_ascii_case("PM6") {
-            non_cov_kcal += compute_c_triple_bond_c_correction(&batch);
-        }
-        if method.eq_ignore_ascii_case("PM6") {
-            non_cov_kcal += compute_nsp2_correction(&batch);
-        }
-
-        if h_bonds {
-            let h4_params = H4Parameters::default();
-            let e_h4 = compute_h4_energy(&batch, &h4_params);
-            non_cov_kcal += e_h4;
-
-            let (e_hh, hh_grads) = compute_hh_repulsion_energy_and_gradients(&batch);
-            non_cov_kcal += e_hh;
-
-            for i in 0..natoms {
-                for c in 0..3 {
-                    grads_kcal[i][c] += hh_grads[i][c];
-                    grads_ev[i][c] += hh_grads[i][c] / EV_TO_KCAL_MOL;
-                }
-            }
-        }
-
-        let (binding_energy_ev, heat_of_formation_kcal) = compute_heat_of_formation(
-            uhf_res.total_energy_ev,
-            atomic_numbers,
-            model.as_ref(),
-            non_cov_kcal,
-        );
-
-        let dipole_res = compute_dipole_moment(&batch, model.as_ref(), &uhf_ws.density_tot);
-        let n_alpha = uhf_res.n_alpha;
-        let mulliken_res =
-            compute_mulliken_population(&batch, model.as_ref(), &uhf_ws.eigenvectors_a, n_alpha);
-
-        let homo = uhf_res.homo_a_energy_ev;
-        let lumo = uhf_res.lumo_a_energy_ev;
-
-        return Ok(CalculationResult {
-            total_energy_ev: uhf_res.total_energy_ev + (non_cov_kcal / EV_TO_KCAL_MOL),
-            electronic_energy_ev: uhf_res.electronic_energy_ev,
-            nuclear_repulsion_ev: uhf_res.nuclear_repulsion_ev,
-            binding_energy_ev,
-            heat_of_formation_kcal,
-            gradients_ev_angstrom: grads_ev,
-            gradients_kcal_mol_angstrom: grads_kcal,
-            dipole_debye: dipole_res.total,
-            atomic_charges: dipole_res.atomic_charges,
-            mulliken_charges: mulliken_res.net_charges,
-            converged: uhf_res.converged,
-            scf_iterations: uhf_res.iterations,
-            homo_energy_ev: homo,
-            lumo_energy_ev: lumo,
-            homo_lumo_gap_ev: lumo - homo,
-        });
     }
 
-    let mut scf_ws = ScfWorkspace::allocate(batch.norbs);
-
-    if use_gpu
-        && let Some(gpu_calc_arc) = get_cached_gpu_coulomb_calc()
-        && let Ok(gpu_calc) = gpu_calc_arc.lock()
-        && let Ok(gamma_matrix) = gpu_calc.compute_batch(&batch, model.as_ref())
-    {
-        scf_ws.gamma = Some(gamma_matrix);
-    }
-
-    let opts = ScfOptions {
+    let (scf_ws, scf_res) = run_converged_rhf_scf(
+        &batch,
+        model.as_ref(),
+        use_nddo,
+        cosmo,
+        chg,
+        max_iter,
         max_iter,
         energy_tol_ev,
         density_tol,
         level_shift_ev,
         damping,
-        use_nddo,
-        cosmo,
-        charge: chg,
-        ..Default::default()
-    };
+        use_gpu,
+    );
 
-    let mut scf_res = if level_shift_ev > 0.0 {
-        mopac_core::scf::scf_loop::run_rhf_scf_shift_safe(
-            &batch,
-            model.as_ref(),
-            &mut scf_ws,
-            &opts,
-        )
-    } else {
-        run_rhf_scf_with_options(&batch, model.as_ref(), &mut scf_ws, &opts)
-    };
-    if !scf_res.converged {
-        scf_res = mopac_core::scf::scf_loop::run_rhf_scf_adaptive_with_nddo_cosmo_and_charge(
-            &batch,
-            model.as_ref(),
-            &mut scf_ws,
-            max_iter,
-            energy_tol_ev,
-            density_tol,
-            use_nddo,
-            cosmo,
-            chg,
-        );
-    }
-
-    // Analytical nuclear gradients
-    let mut grad_ws = GradientWorkspace::allocate(batch.norbs);
-    let mut grads_ev = vec![[0.0f64; 3]; natoms];
-    compute_cartesian_gradients_with_options(
+    finalize_calculation_result(
         &mut batch,
         model.as_ref(),
-        &scf_ws.density,
-        &mut grad_ws,
-        &mut grads_ev,
+        method,
+        ConvergedWavefunction::Rhf {
+            ws: &scf_ws,
+            res: &scf_res,
+        },
+        dispersion,
+        h_bonds,
         use_nddo,
-    );
-
-    let mut grads_kcal = vec![[0.0f64; 3]; natoms];
-    for i in 0..natoms {
-        for c in 0..3 {
-            grads_kcal[i][c] = grads_ev[i][c] * EV_TO_KCAL_MOL;
-        }
-    }
-
-    let effective_disp = match dispersion {
-        Some(d) if d.eq_ignore_ascii_case("NONE") || d.eq_ignore_ascii_case("OFF") => None,
-        Some(d) => Some(d),
-        None => {
-            if method.eq_ignore_ascii_case("PM7") {
-                Some("PM7")
-            } else {
-                None
-            }
-        }
-    };
-
-    // Non-covalent corrections
-    let mut non_cov_kcal = 0.0;
-    if let Some(dm_name) = effective_disp {
-        let dm = match dm_name.to_uppercase().as_str() {
-            "PM6-DH+" | "DH+" | "PM6_DH+" => DispersionModel::Pm6DhPlus,
-            "PM7" => DispersionModel::Pm7,
-            "D3" | "D3BJ" | "D3-BJ" | "PM6-D3" | "AM1-D3" => DispersionModel::D3Bj,
-            other => {
-                return Err(PyValueError::new_err(format!(
-                    "Unknown dispersion model '{}'. Supported: 'PM6-DH+', 'PM7', 'D3-BJ'",
-                    other
-                )));
-            }
-        };
-        let mut disp_grads = vec![[0.0f64; 3]; natoms];
-        let e_disp = compute_dispersion_energy_and_gradients(&batch, dm, &mut disp_grads);
-        non_cov_kcal += e_disp;
-        for i in 0..natoms {
-            for c in 0..3 {
-                grads_kcal[i][c] += disp_grads[i][c];
-                grads_ev[i][c] += disp_grads[i][c] / EV_TO_KCAL_MOL;
-            }
-        }
-    }
-
-    if method.eq_ignore_ascii_case("PM7") || method.eq_ignore_ascii_case("PM6") {
-        non_cov_kcal += compute_c_triple_bond_c_correction(&batch);
-    }
-    if method.eq_ignore_ascii_case("PM6") {
-        non_cov_kcal += compute_nsp2_correction(&batch);
-    }
-
-    if h_bonds {
-        let h4_params = H4Parameters::default();
-        let e_h4 = compute_h4_energy(&batch, &h4_params);
-        non_cov_kcal += e_h4;
-
-        let (e_hh, hh_grads) = compute_hh_repulsion_energy_and_gradients(&batch);
-        non_cov_kcal += e_hh;
-
-        for i in 0..natoms {
-            for c in 0..3 {
-                grads_kcal[i][c] += hh_grads[i][c];
-                grads_ev[i][c] += hh_grads[i][c] / EV_TO_KCAL_MOL;
-            }
-        }
-    }
-
-    let (binding_energy_ev, heat_of_formation_kcal) = compute_heat_of_formation(
-        scf_res.total_energy_ev,
-        atomic_numbers,
-        model.as_ref(),
-        non_cov_kcal,
-    );
-
-    let dipole_res = compute_dipole_moment(&batch, model.as_ref(), &scf_ws.density);
-
-    let num_electrons: f64 = batch
-        .atomic_numbers
-        .iter()
-        .filter_map(|&z| model.get_element(z))
-        .map(|p| p.core_charge)
-        .sum();
-    let num_occupied = (num_electrons.round() as usize) / 2;
-
-    let mulliken_res =
-        compute_mulliken_population(&batch, model.as_ref(), &scf_ws.eigenvectors, num_occupied);
-
-    let homo = scf_res.homo_energy_ev;
-    let lumo = scf_res.lumo_energy_ev;
-
-    Ok(CalculationResult {
-        total_energy_ev: scf_res.total_energy_ev + (non_cov_kcal / EV_TO_KCAL_MOL),
-        electronic_energy_ev: scf_res.electronic_energy_ev,
-        nuclear_repulsion_ev: scf_res.nuclear_repulsion_ev,
-        binding_energy_ev,
-        heat_of_formation_kcal,
-        gradients_ev_angstrom: grads_ev,
-        gradients_kcal_mol_angstrom: grads_kcal,
-        dipole_debye: dipole_res.total,
-        atomic_charges: dipole_res.atomic_charges,
-        mulliken_charges: mulliken_res.net_charges,
-        converged: scf_res.converged,
-        scf_iterations: scf_res.iterations,
-        homo_energy_ev: homo,
-        lumo_energy_ev: lumo,
-        homo_lumo_gap_ev: lumo - homo,
-    })
+        chg,
+        compute_gradients,
+        None,
+    )
 }
 
 /// Compute single-point semi-empirical quantum chemical properties and analytical gradients.
@@ -1154,7 +1203,8 @@ fn run_calculation_internal(
     use_gpu = false,
     uhf = None,
     multiplicity = None,
-    charge = None
+    charge = None,
+    compute_gradients = true
 ))]
 pub fn calculate(
     atomic_numbers: Vec<u8>,
@@ -1173,6 +1223,7 @@ pub fn calculate(
     uhf: Option<bool>,
     multiplicity: Option<usize>,
     charge: Option<i32>,
+    compute_gradients: Option<bool>,
 ) -> PyResult<CalculationResult> {
     run_calculation_internal(
         &atomic_numbers,
@@ -1183,14 +1234,15 @@ pub fn calculate(
         h_bonds.unwrap_or(false),
         use_nddo.unwrap_or(true),
         max_iter.unwrap_or(60),
-        energy_tol_ev.unwrap_or(1e-5),
-        density_tol.unwrap_or(1e-4),
+        energy_tol_ev.unwrap_or(1e-7),
+        density_tol.unwrap_or(1e-6),
         level_shift_ev.unwrap_or(0.0),
         damping.unwrap_or(0.5),
         use_gpu.unwrap_or(false),
         uhf,
         multiplicity,
         charge,
+        compute_gradients.unwrap_or(true),
     )
 }
 
@@ -1245,8 +1297,9 @@ pub fn optimize(
         }
     }
 
-    let nelec = total_valence_elecs.round() as usize;
-    let is_open_shell = nelec % 2 != 0;
+    let chg = charge.unwrap_or(0);
+    let nelec_signed = total_valence_elecs.round() as i64 - chg as i64;
+    let is_open_shell = (nelec_signed % 2) != 0;
     let run_as_uhf = uhf.unwrap_or(false) || is_open_shell;
 
     let mut batch =
@@ -1265,13 +1318,13 @@ pub fn optimize(
         grad_max_tol: grad_max_tol.unwrap_or(2.0),
         use_nddo,
         cosmo,
+        charge: chg,
         ..Default::default()
     };
 
     if run_as_uhf {
         let mult = multiplicity.unwrap_or(if is_open_shell { 2 } else { 1 });
-        let chg = charge.unwrap_or(0);
-        let uhf_opts = mopac_core::scf::uhf_loop::UhfOptions {
+        let uhf_opts = UhfOptions {
             multiplicity: mult,
             charge: chg,
             max_iter: 80,
@@ -1280,6 +1333,7 @@ pub fn optimize(
             damping: 0.5,
             use_nddo,
             cosmo,
+            ..Default::default()
         };
 
         let mut uhf_ws = mopac_core::scf::uhf_loop::UhfWorkspace::new(batch.norbs);
@@ -1299,23 +1353,20 @@ pub fn optimize(
             final_coords.push([batch.x[i], batch.y[i], batch.z[i]]);
         }
 
-        let final_calc = run_calculation_internal(
-            &atomic_numbers,
-            &final_coords,
+        let final_calc = finalize_calculation_result(
+            &mut batch,
+            model.as_ref(),
             m_name,
-            cosmo_eps,
+            ConvergedWavefunction::Uhf {
+                ws: &uhf_ws,
+                res: &opt_res.final_uhf,
+            },
             None,
             false,
             use_nddo,
-            60,
-            1e-7,
-            1e-6,
-            0.0,
-            0.5,
-            false,
-            Some(true),
-            Some(mult),
-            Some(chg),
+            chg,
+            true,
+            Some(&mut grad_ws),
         )?;
 
         return Ok(OptimizationPyResult {
@@ -1347,23 +1398,20 @@ pub fn optimize(
         final_coords.push([batch.x[i], batch.y[i], batch.z[i]]);
     }
 
-    let final_calc = run_calculation_internal(
-        &atomic_numbers,
-        &final_coords,
+    let final_calc = finalize_calculation_result(
+        &mut batch,
+        model.as_ref(),
         m_name,
-        cosmo_eps,
+        ConvergedWavefunction::Rhf {
+            ws: &scf_ws,
+            res: &opt_res.final_scf,
+        },
         None,
         false,
         use_nddo,
-        60,
-        1e-7,
-        1e-6,
-        0.0,
-        0.5,
-        false,
-        None,
-        None,
-        None,
+        chg,
+        true,
+        Some(&mut grad_ws),
     )?;
 
     Ok(OptimizationPyResult {
@@ -1483,23 +1531,20 @@ pub fn transition_state(
         final_coords.push([batch.x[i], batch.y[i], batch.z[i]]);
     }
 
-    let final_calc = run_calculation_internal(
-        &atomic_numbers,
-        &final_coords,
+    let final_calc = finalize_calculation_result(
+        &mut batch,
+        model.as_ref(),
         m_name,
-        None,
+        ConvergedWavefunction::Rhf {
+            ws: &scf_ws,
+            res: &ts_res.final_scf,
+        },
         None,
         false,
         use_nddo,
-        60,
-        1e-7,
-        1e-6,
-        0.0,
-        0.5,
-        false,
-        None,
-        None,
-        None,
+        0,
+        true,
+        Some(&mut grad_ws),
     )?;
 
     Ok(TransitionStatePyResult {
@@ -1720,40 +1765,71 @@ pub fn esp_charges(
         )));
     }
 
+    let net_chg = net_charge.unwrap_or(0.0);
+    let chg = net_chg.round() as i32;
+    let total_valence_elecs: f64 = atomic_numbers
+        .iter()
+        .filter_map(|&z| model.get_element(z))
+        .map(|p| p.core_charge)
+        .sum();
+    let nelec_signed = total_valence_elecs.round() as i64 - chg as i64;
+    let is_open_shell = (nelec_signed % 2) != 0;
+
     let batch = MolecularBatch::new_for_model(atomic_numbers, &coordinates, model.as_ref());
     let opts = EspOptions {
         shell_multipliers: vec![1.4, 1.6, 1.8, 2.0],
         points_per_shell: points_per_shell.unwrap_or(64),
-        net_charge: net_charge.unwrap_or(0.0),
+        net_charge: net_chg,
         n_threads: resolve_num_threads(n_threads),
     };
 
     let res = py
         .allow_threads(
             || -> Result<mopac_core::properties::esp::EspResult, String> {
-                let mut ws = ScfWorkspace::allocate(batch.norbs);
-                let scf_opts = ScfOptions::default();
-
-                let mut scf_res =
-                    run_rhf_scf_with_options(&batch, model.as_ref(), &mut ws, &scf_opts);
-                if !scf_res.converged {
-                    scf_res = mopac_core::scf::scf_loop::run_rhf_scf_adaptive_with_nddo(
+                if is_open_shell {
+                    let uhf_opts = UhfOptions {
+                        multiplicity: 2,
+                        charge: chg,
+                        max_iter: 120,
+                        use_nddo: true,
+                        ..Default::default()
+                    };
+                    let mut uhf_ws = UhfWorkspace::new(batch.norbs);
+                    let uhf_res =
+                        run_uhf_scf_with_options(&batch, model.as_ref(), &mut uhf_ws, &uhf_opts);
+                    if !uhf_res.converged
+                        && !uhf_ws.density_tot.data.iter().any(|&x| x.abs() > 1e-6)
+                    {
+                        return Err(
+                            "Base UHF SCF failed to produce valid density for ESP calculation"
+                                .to_string(),
+                        );
+                    }
+                    compute_esp_charges(&batch, model.as_ref(), &uhf_ws.density_tot, &opts)
+                } else {
+                    let (ws, scf_res) = run_converged_rhf_scf(
                         &batch,
                         model.as_ref(),
-                        &mut ws,
-                        120,
-                        1e-5,
-                        1e-4,
                         true,
+                        None,
+                        chg,
+                        60,
+                        120,
+                        1e-7,
+                        1e-6,
+                        0.0,
+                        0.5,
+                        false,
                     );
-                }
-                if !scf_res.converged && !ws.density.data.iter().any(|&x| x.abs() > 1e-6) {
-                    return Err(
-                        "Base SCF failed to produce valid density for ESP calculation".to_string(),
-                    );
-                }
+                    if !scf_res.converged && !ws.density.data.iter().any(|&x| x.abs() > 1e-6) {
+                        return Err(
+                            "Base SCF failed to produce valid density for ESP calculation"
+                                .to_string(),
+                        );
+                    }
 
-                compute_esp_charges(&batch, model.as_ref(), &ws.density, &opts)
+                    compute_esp_charges(&batch, model.as_ref(), &ws.density, &opts)
+                }
             },
         )
         .map_err(PyValueError::new_err)?;
@@ -2069,7 +2145,7 @@ pub fn saddle(
         refine_with_ts: refine_with_ts.unwrap_or(true),
     };
 
-    let saddle_res = run_saddle(
+    let (saddle_res, ts_state) = run_saddle_with_state(
         atomic_numbers.clone(),
         &reactant_coords,
         &product_coords,
@@ -2077,24 +2153,42 @@ pub fn saddle(
         &opts,
     );
 
-    let final_calc = run_calculation_internal(
-        &atomic_numbers,
-        &saddle_res.transition_state_coordinates,
-        m_name,
-        None,
-        None,
-        false,
-        opts.use_nddo,
-        60,
-        1e-7,
-        1e-6,
-        0.0,
-        0.5,
-        false,
-        None,
-        None,
-        None,
-    )?;
+    let final_calc = match ts_state {
+        Some((mut ts_batch, ts_scf_ws, ts_scf)) => finalize_calculation_result(
+            &mut ts_batch,
+            model.as_ref(),
+            m_name,
+            ConvergedWavefunction::Rhf {
+                ws: &ts_scf_ws,
+                res: &ts_scf,
+            },
+            None,
+            false,
+            opts.use_nddo,
+            0,
+            true,
+            None,
+        )?,
+        None => run_calculation_internal(
+            &atomic_numbers,
+            &saddle_res.transition_state_coordinates,
+            m_name,
+            None,
+            None,
+            false,
+            opts.use_nddo,
+            60,
+            1e-7,
+            1e-6,
+            0.0,
+            0.5,
+            false,
+            None,
+            None,
+            None,
+            true,
+        )?,
+    };
 
     let py_traj: Vec<SaddlePointPy> = saddle_res
         .trajectory
@@ -2207,6 +2301,118 @@ pub struct UvVisSpectrumPy {
     pub epsilon_max: f64,
 }
 
+fn run_meci_from_scf(
+    batch: &mut MolecularBatch,
+    model: &dyn ParameterModel,
+    scf_ws: &ScfWorkspace,
+    scf_res: &ScfResult,
+    n_occ: usize,
+    active_orbitals: Option<usize>,
+    target_root: Option<usize>,
+    nddo: bool,
+) -> PyResult<MeciPyResult> {
+    let natoms = batch.natoms;
+    let n_orbs = active_orbitals.unwrap_or(2);
+    let n_occ_active = n_orbs.div_ceil(2);
+    if n_occ < n_occ_active {
+        return Err(PyValueError::new_err(format!(
+            "Not enough occupied orbitals ({}) for active space size {}",
+            n_occ, n_orbs
+        )));
+    }
+    let start_mo = n_occ - n_occ_active;
+    if start_mo + n_orbs > batch.norbs {
+        return Err(PyValueError::new_err(format!(
+            "Active space [{}, {}) exceeds orbital count {}",
+            start_mo,
+            start_mo + n_orbs,
+            batch.norbs
+        )));
+    }
+
+    let active_space = CiActiveSpace::new(n_orbs, n_orbs);
+    let options = MeciOptions {
+        active_space,
+        target_root: target_root.unwrap_or(1),
+        spin_target: None,
+        use_nddo: nddo,
+    };
+
+    let active_mo_indices: Vec<usize> = (start_mo..start_mo + n_orbs).collect();
+    let max_microstates = 100;
+    let mut meci_ws = MeciWorkspace::allocate(n_orbs, max_microstates);
+
+    let mut meci_res = run_meci(
+        batch,
+        model,
+        &scf_ws.eigenvectors,
+        &scf_ws.eigenvalues,
+        scf_res.electronic_energy_ev,
+        scf_res.total_energy_ev,
+        &options,
+        &mut meci_ws,
+    );
+
+    compute_transition_dipoles_and_oscillator_strengths(
+        batch,
+        model,
+        &scf_ws.eigenvectors,
+        &active_mo_indices,
+        &mut meci_res,
+    );
+
+    let states: Vec<CiStatePy> = meci_res
+        .states
+        .iter()
+        .map(|s| CiStatePy {
+            root: s.root,
+            energy_ev: s.energy_ev,
+            excitation_energy_ev: s.excitation_energy_ev,
+            excitation_energy_cm1: s.excitation_energy_cm1,
+            wavelength_nm: s.wavelength_nm,
+            multiplicity: s.spin.multiplicity,
+            spin_label: s.spin.label.to_string(),
+            s_squared: s.spin.s_squared,
+            transition_dipole_debye: s.transition_dipole_debye,
+            dipole_strength_debye: s.dipole_strength_debye,
+            polarization_angstrom2: s.polarization_angstrom2,
+            oscillator_strength: s.oscillator_strength,
+        })
+        .collect();
+
+    let mut grad_ws = GradientWorkspace::allocate(batch.norbs);
+    let mut grads_ev = vec![[0.0f64; 3]; natoms];
+    mopac_core::ci::compute_meci_nuclear_gradients(
+        batch,
+        model,
+        &meci_res.state_density,
+        &mut grad_ws,
+        &mut grads_ev,
+        nddo,
+    );
+    let gradients_kcal_mol_angstrom: Vec<[f64; 3]> = grads_ev
+        .iter()
+        .map(|g| {
+            [
+                g[0] * EV_TO_KCAL_MOL,
+                g[1] * EV_TO_KCAL_MOL,
+                g[2] * EV_TO_KCAL_MOL,
+            ]
+        })
+        .collect();
+
+    Ok(MeciPyResult {
+        states,
+        num_microstates: meci_res.microstates.len(),
+        target_root: meci_res.target_root,
+        ci_energy_correction_ev: meci_res.ci_energy_correction_ev,
+        electronic_energy_ev: meci_res.electronic_energy_ev,
+        total_energy_ev: meci_res.total_energy_ev,
+        heat_of_formation_kcal: meci_res.heat_of_formation_kcal,
+        gradients_kcal_mol_angstrom,
+    })
+}
+
 /// Run Multi-Electron Configuration Interaction (MECI) excited state calculation.
 ///
 /// Parameters:
@@ -2255,99 +2461,17 @@ pub fn meci(
         return Err(PyValueError::new_err("SCF did not converge"));
     }
 
-    let n_orbs = active_orbitals.unwrap_or(2);
-    let active_space = CiActiveSpace::new(n_orbs, n_orbs);
-    let options = MeciOptions {
-        active_space,
-        target_root: target_root.unwrap_or(1),
-        spin_target: None,
-        use_nddo: nddo,
-    };
-
-    // Compute active MO indices
-    let mut total_valence_elecs = 0.0f64;
-    for &z in &batch.atomic_numbers {
-        if let Some(p) = model.get_element(z) {
-            total_valence_elecs += p.core_charge;
-        }
-    }
-    let n_occ = (total_valence_elecs.round() as usize) / 2;
-    let n_occ_active = n_orbs.div_ceil(2);
-    let start_mo = n_occ - n_occ_active;
-    let active_mo_indices: Vec<usize> = (start_mo..start_mo + n_orbs).collect();
-
-    let max_microstates = 100;
-    let mut meci_ws = MeciWorkspace::allocate(n_orbs, max_microstates);
-
-    let mut meci_res = run_meci(
-        &batch,
-        model.as_ref(),
-        &scf_ws.eigenvectors,
-        &scf_ws.eigenvalues,
-        scf_res.electronic_energy_ev,
-        scf_res.total_energy_ev,
-        &options,
-        &mut meci_ws,
-    );
-
-    compute_transition_dipoles_and_oscillator_strengths(
-        &batch,
-        model.as_ref(),
-        &scf_ws.eigenvectors,
-        &active_mo_indices,
-        &mut meci_res,
-    );
-
-    let states: Vec<CiStatePy> = meci_res
-        .states
-        .iter()
-        .map(|s| CiStatePy {
-            root: s.root,
-            energy_ev: s.energy_ev,
-            excitation_energy_ev: s.excitation_energy_ev,
-            excitation_energy_cm1: s.excitation_energy_cm1,
-            wavelength_nm: s.wavelength_nm,
-            multiplicity: s.spin.multiplicity,
-            spin_label: s.spin.label.to_string(),
-            s_squared: s.spin.s_squared,
-            transition_dipole_debye: s.transition_dipole_debye,
-            dipole_strength_debye: s.dipole_strength_debye,
-            polarization_angstrom2: s.polarization_angstrom2,
-            oscillator_strength: s.oscillator_strength,
-        })
-        .collect();
-
-    let mut grad_ws = GradientWorkspace::allocate(batch.norbs);
-    let mut grads_ev = vec![[0.0f64; 3]; natoms];
-    mopac_core::ci::compute_meci_nuclear_gradients(
+    let n_occ = compute_net_occupied_count(&batch, model.as_ref(), 0);
+    run_meci_from_scf(
         &mut batch,
         model.as_ref(),
-        &meci_res.state_density,
-        &mut grad_ws,
-        &mut grads_ev,
+        &scf_ws,
+        &scf_res,
+        n_occ,
+        active_orbitals,
+        target_root,
         nddo,
-    );
-    let gradients_kcal_mol_angstrom: Vec<[f64; 3]> = grads_ev
-        .iter()
-        .map(|g| {
-            [
-                g[0] * EV_TO_KCAL_MOL,
-                g[1] * EV_TO_KCAL_MOL,
-                g[2] * EV_TO_KCAL_MOL,
-            ]
-        })
-        .collect();
-
-    Ok(MeciPyResult {
-        states,
-        num_microstates: meci_res.microstates.len(),
-        target_root: meci_res.target_root,
-        ci_energy_correction_ev: meci_res.ci_energy_correction_ev,
-        electronic_energy_ev: meci_res.electronic_energy_ev,
-        total_energy_ev: meci_res.total_energy_ev,
-        heat_of_formation_kcal: meci_res.heat_of_formation_kcal,
-        gradients_kcal_mol_angstrom,
-    })
+    )
 }
 
 /// Simulate UV-Vis electronic absorption spectrum from CI states.
@@ -2494,12 +2618,25 @@ impl MopacCalculator {
     }
 
     /// Calculate energy, gradients, dipole, and charges for a given molecule.
-    #[pyo3(signature = (atomic_numbers, coordinates, use_gpu = None))]
+    #[pyo3(signature = (
+        atomic_numbers,
+        coordinates,
+        use_gpu = None,
+        compute_gradients = true,
+        charge = None,
+        uhf = None,
+        multiplicity = None
+    ))]
+    #[allow(clippy::too_many_arguments)]
     fn calculate(
         &self,
         atomic_numbers: Vec<u8>,
         coordinates: Vec<[f64; 3]>,
         use_gpu: Option<bool>,
+        compute_gradients: Option<bool>,
+        charge: Option<i32>,
+        uhf: Option<bool>,
+        multiplicity: Option<usize>,
     ) -> PyResult<CalculationResult> {
         run_calculation_internal(
             &atomic_numbers,
@@ -2515,19 +2652,30 @@ impl MopacCalculator {
             0.0,
             0.5,
             use_gpu.unwrap_or(self.use_gpu),
-            None,
-            None,
-            None,
+            uhf,
+            multiplicity,
+            charge,
+            compute_gradients.unwrap_or(true),
         )
     }
 
     /// Optimize geometry for a given molecule.
-    #[pyo3(signature = (atomic_numbers, coordinates, max_cycles = 100))]
+    #[pyo3(signature = (
+        atomic_numbers,
+        coordinates,
+        max_cycles = 100,
+        charge = None,
+        uhf = None,
+        multiplicity = None
+    ))]
     fn optimize(
         &self,
         atomic_numbers: Vec<u8>,
         coordinates: Vec<[f64; 3]>,
         max_cycles: Option<usize>,
+        charge: Option<i32>,
+        uhf: Option<bool>,
+        multiplicity: Option<usize>,
     ) -> PyResult<OptimizationPyResult> {
         optimize(
             atomic_numbers,
@@ -2538,9 +2686,9 @@ impl MopacCalculator {
             Some(2.0),
             Some(self.use_nddo),
             self.cosmo_eps,
-            None,
-            None,
-            None,
+            uhf,
+            multiplicity,
+            charge,
         )
     }
 
@@ -2598,6 +2746,8 @@ impl MopacCalculator {
             resolution_angstrom,
             n_threads,
             Some(use_gpu.unwrap_or(self.use_gpu)),
+            Some(0),
+            self.cosmo_eps,
         )
     }
 
@@ -2618,8 +2768,10 @@ impl MopacCalculator {
         padding_angstrom = 3.0,
         resolution_angstrom = 0.35,
         n_threads = None,
-        use_gpu = None
+        use_gpu = None,
+        charge = 0
     ))]
+    #[allow(clippy::too_many_arguments)]
     fn export_molstar_bundle(
         &self,
         py: Python<'_>,
@@ -2633,6 +2785,7 @@ impl MopacCalculator {
         resolution_angstrom: Option<f64>,
         n_threads: Option<usize>,
         use_gpu: Option<bool>,
+        charge: Option<i32>,
     ) -> PyResult<std::collections::HashMap<String, String>> {
         let prefix = output_prefix.unwrap_or("molecule");
         let natoms = atomic_numbers.len();
@@ -2641,31 +2794,64 @@ impl MopacCalculator {
                 "Mismatch between atomic_numbers and coordinates length",
             ));
         }
-        let mut coords_3d = Vec::with_capacity(natoms);
-        for c in &coordinates {
-            if c.len() != 3 {
-                return Err(PyValueError::new_err("Each coordinate must be [x, y, z]"));
-            }
-            coords_3d.push([c[0], c[1], c[2]]);
+        let coords_3d = parse_coords_matrix(&coordinates)?;
+        let model = get_model(&self.method)?;
+        let batch =
+            MolecularBatch::new_for_model(atomic_numbers.clone(), &coords_3d, model.as_ref());
+        let chg = charge.unwrap_or(0);
+        let nocc = compute_net_occupied_count(&batch, model.as_ref(), chg);
+
+        let requested_orbitals =
+            orbitals.unwrap_or_else(|| vec!["HOMO".to_string(), "LUMO".to_string()]);
+        let mut parsed_targets = Vec::with_capacity(requested_orbitals.len());
+        for orb_str in requested_orbitals {
+            let idx = parse_orbital_label(&orb_str, nocc, batch.norbs)?;
+            parsed_targets.push((orb_str, idx));
         }
 
+        let do_density = include_density.unwrap_or(true);
         let gpu = use_gpu.unwrap_or(self.use_gpu);
+        let config = mopac_core::export::cube::CubeGridConfig {
+            padding_angstrom: padding_angstrom.unwrap_or(3.0),
+            resolution_angstrom: resolution_angstrom.unwrap_or(0.35),
+            n_threads: resolve_num_threads(n_threads),
+        };
+        let cosmo = self.cosmo_eps.map(|eps| CosmoParams {
+            epsilon: eps,
+            ..Default::default()
+        });
 
-        let mut bundle = generate_cubes_bundle(
-            py,
-            atomic_numbers.clone(),
-            coordinates,
-            &self.method,
-            orbitals,
-            include_density,
-            padding_angstrom,
-            resolution_angstrom,
-            n_threads,
-            Some(gpu),
-        )?;
-
-        let calc_res = self.calculate(atomic_numbers.clone(), coords_3d.clone(), Some(gpu))?;
-        let charges = calc_res.mulliken_charges;
+        let (mut bundle, charges) = py
+            .allow_threads(
+                || -> Result<(std::collections::HashMap<String, String>, Vec<f64>), &'static str> {
+                    let wf = solve_property_wavefunction(
+                        &batch,
+                        model.as_ref(),
+                        self.use_nddo,
+                        cosmo,
+                        chg,
+                        self.max_iter.max(60),
+                        gpu,
+                    );
+                    if !wf.has_valid_density() {
+                        return Err("SCF failed to produce valid density for Mol* export");
+                    }
+                    let bundle = render_cubes_bundle_from_state(
+                        &batch,
+                        model.as_ref(),
+                        wf.density(),
+                        wf.eigenvectors(),
+                        wf.eigenvalues(),
+                        &parsed_targets,
+                        do_density,
+                        &config,
+                        gpu,
+                    );
+                    let net_charges = wf.net_charges(&batch, model.as_ref());
+                    Ok((bundle, net_charges))
+                },
+            )
+            .map_err(PyValueError::new_err)?;
 
         let pdb_str = mopac_core::export::export_molstar_pdb(
             &atomic_numbers,
@@ -2720,6 +2906,8 @@ impl MopacCalculator {
             resolution_angstrom.unwrap_or(0.35),
             n_threads,
             Some(use_gpu.unwrap_or(self.use_gpu)),
+            Some(0),
+            self.cosmo_eps,
         )
     }
 
@@ -2746,6 +2934,8 @@ impl MopacCalculator {
             resolution_angstrom.unwrap_or(0.35),
             n_threads,
             Some(use_gpu.unwrap_or(self.use_gpu)),
+            Some(0),
+            self.cosmo_eps,
         )
     }
 
@@ -3698,9 +3888,259 @@ pub fn export_mvs_session(
     .map_err(PyValueError::new_err)
 }
 
+fn parse_coords_matrix(coordinates: &[Vec<f64>]) -> PyResult<Vec<[f64; 3]>> {
+    let mut coords_3d = Vec::with_capacity(coordinates.len());
+    for c in coordinates {
+        if c.len() != 3 {
+            return Err(PyValueError::new_err("Each coordinate must be [x, y, z]"));
+        }
+        coords_3d.push([c[0], c[1], c[2]]);
+    }
+    Ok(coords_3d)
+}
+
+fn compute_net_occupied_count(
+    batch: &MolecularBatch,
+    model: &dyn ParameterModel,
+    charge: i32,
+) -> usize {
+    let mut total_valence = 0.0;
+    for &z in &batch.atomic_numbers {
+        if let Some(p) = model.get_element(z) {
+            total_valence += p.core_charge;
+        }
+    }
+    let net_elec = (total_valence - charge as f64).round().max(0.0) as usize;
+    // Closed-shell RHF: net_elec / 2; open-shell UHF doublet: n_alpha = (net_elec + 1) / 2
+    net_elec.div_ceil(2)
+}
+
+enum PropertyWavefunction {
+    Rhf {
+        ws: Box<ScfWorkspace>,
+        nocc: usize,
+        converged: bool,
+    },
+    Uhf {
+        ws: Box<mopac_core::scf::uhf_loop::UhfWorkspace>,
+        converged: bool,
+    },
+}
+
+impl PropertyWavefunction {
+    fn density(&self) -> &mopac_core::types::AlignedMatrix<f64> {
+        match self {
+            Self::Rhf { ws, .. } => &ws.density,
+            Self::Uhf { ws, .. } => &ws.density_tot,
+        }
+    }
+
+    fn eigenvectors(&self) -> &mopac_core::types::AlignedMatrix<f64> {
+        match self {
+            Self::Rhf { ws, .. } => &ws.eigenvectors,
+            Self::Uhf { ws, .. } => &ws.eigenvectors_a,
+        }
+    }
+
+    fn eigenvalues(&self) -> &[f64] {
+        match self {
+            Self::Rhf { ws, .. } => &ws.eigenvalues,
+            Self::Uhf { ws, .. } => &ws.eigenvalues_a,
+        }
+    }
+
+    fn converged(&self) -> bool {
+        match self {
+            Self::Rhf { converged, .. } | Self::Uhf { converged, .. } => *converged,
+        }
+    }
+
+    fn has_valid_density(&self) -> bool {
+        self.converged() || self.density().data.iter().any(|&x| x.abs() > 1e-6)
+    }
+
+    fn net_charges(&self, batch: &MolecularBatch, model: &dyn ParameterModel) -> Vec<f64> {
+        match self {
+            Self::Rhf { ws, nocc, .. } => {
+                compute_mulliken_population(batch, model, &ws.eigenvectors, *nocc).net_charges
+            }
+            Self::Uhf { ws, .. } => {
+                let mut charges = Vec::with_capacity(batch.natoms);
+                for a in 0..batch.natoms {
+                    let core = model
+                        .get_element(batch.atomic_numbers[a])
+                        .map(|p| p.core_charge)
+                        .unwrap_or(0.0);
+                    let start = batch.orbital_offsets[a];
+                    let norb = batch.basis_types[a].num_orbitals();
+                    let mut pop = 0.0f64;
+                    for mu in start..start + norb {
+                        pop += ws.density_tot.get(mu, mu);
+                    }
+                    charges.push(core - pop);
+                }
+                charges
+            }
+        }
+    }
+}
+
+fn solve_property_wavefunction(
+    batch: &MolecularBatch,
+    model: &dyn ParameterModel,
+    use_nddo: bool,
+    cosmo: Option<CosmoParams>,
+    charge: i32,
+    max_iter: usize,
+    use_gpu: bool,
+) -> PropertyWavefunction {
+    let mut total_valence = 0.0;
+    for &z in &batch.atomic_numbers {
+        if let Some(p) = model.get_element(z) {
+            total_valence += p.core_charge;
+        }
+    }
+    let net_elec = (total_valence - charge as f64).round().max(0.0) as usize;
+    if net_elec % 2 != 0 {
+        let mut uhf_ws = mopac_core::scf::uhf_loop::UhfWorkspace::new(batch.norbs);
+        let uhf_opts = UhfOptions {
+            multiplicity: 2,
+            charge,
+            max_iter: max_iter.max(80),
+            energy_tol_ev: 1e-7,
+            density_tol: 1e-6,
+            damping: 0.5,
+            use_nddo,
+            cosmo,
+            ..Default::default()
+        };
+        let uhf_res = mopac_core::scf::uhf_loop::run_uhf_scf_with_options(
+            batch,
+            model,
+            &mut uhf_ws,
+            &uhf_opts,
+        );
+        PropertyWavefunction::Uhf {
+            ws: Box::new(uhf_ws),
+            converged: uhf_res.converged,
+        }
+    } else {
+        let (ws, scf_res) = run_converged_rhf_scf(
+            batch,
+            model,
+            use_nddo,
+            cosmo,
+            charge,
+            max_iter,
+            max_iter.max(120),
+            1e-7,
+            1e-6,
+            0.0,
+            0.5,
+            use_gpu,
+        );
+        PropertyWavefunction::Rhf {
+            ws: Box::new(ws),
+            nocc: net_elec / 2,
+            converged: scf_res.converged,
+        }
+    }
+}
+
+fn render_density_cube(
+    batch: &MolecularBatch,
+    model: &dyn ParameterModel,
+    density: &AlignedMatrix<f64>,
+    config: &mopac_core::export::cube::CubeGridConfig,
+    use_gpu: bool,
+) -> String {
+    if use_gpu
+        && let Some(eval_arc) = get_cached_gpu_cube_eval()
+        && let Ok(eval) = eval_arc.lock()
+        && let Ok(cube_str) = eval.generate_density_cube(batch, model, density, config)
+    {
+        return cube_str;
+    }
+    mopac_core::export::cube::generate_density_cube(batch, model, density, config)
+}
+
+fn render_orbital_cube(
+    batch: &MolecularBatch,
+    model: &dyn ParameterModel,
+    mo_coeffs: &[f64],
+    orbital_idx_1based: usize,
+    energy_ev: f64,
+    config: &mopac_core::export::cube::CubeGridConfig,
+    use_gpu: bool,
+) -> String {
+    if use_gpu
+        && let Some(eval_arc) = get_cached_gpu_cube_eval()
+        && let Ok(eval) = eval_arc.lock()
+        && let Ok(cube_str) = eval.generate_molecular_orbital_cube(
+            batch,
+            model,
+            mo_coeffs,
+            orbital_idx_1based,
+            energy_ev,
+            config,
+        )
+    {
+        return cube_str;
+    }
+    mopac_core::export::cube::generate_molecular_orbital_cube(
+        batch,
+        model,
+        mo_coeffs,
+        orbital_idx_1based,
+        energy_ev,
+        config,
+    )
+}
+
+fn render_cubes_bundle_from_state(
+    batch: &MolecularBatch,
+    model: &dyn ParameterModel,
+    density: &AlignedMatrix<f64>,
+    eigenvectors: &AlignedMatrix<f64>,
+    eigenvalues: &[f64],
+    parsed_targets: &[(String, usize)],
+    include_density: bool,
+    config: &mopac_core::export::cube::CubeGridConfig,
+    use_gpu: bool,
+) -> std::collections::HashMap<String, String> {
+    let mut bundle = std::collections::HashMap::new();
+    if include_density {
+        bundle.insert(
+            "density".to_string(),
+            render_density_cube(batch, model, density, config, use_gpu),
+        );
+    }
+    for (label, idx) in parsed_targets {
+        let idx_0 = idx - 1;
+        let energy_ev = eigenvalues[idx_0];
+        let mo_coeffs = eigenvectors.row(idx_0);
+        bundle.insert(
+            label.clone(),
+            render_orbital_cube(batch, model, mo_coeffs, *idx, energy_ev, config, use_gpu),
+        );
+    }
+    bundle
+}
+
 /// Generate a volumetric Gaussian Cube (.cube) string for a Molecular Orbital (HOMO, LUMO, etc.).
 #[pyfunction]
-#[pyo3(signature = (atomic_numbers, coordinates, method="PM6", orbital_index=None, padding_angstrom=3.5, resolution_angstrom=0.25, n_threads=None, use_gpu=false))]
+#[pyo3(signature = (
+    atomic_numbers,
+    coordinates,
+    method = "PM6",
+    orbital_index = None,
+    padding_angstrom = 3.5,
+    resolution_angstrom = 0.25,
+    n_threads = None,
+    use_gpu = false,
+    charge = 0,
+    cosmo_eps = None
+))]
 pub fn generate_orbital_cube(
     py: Python<'_>,
     atomic_numbers: Vec<u8>,
@@ -3711,6 +4151,8 @@ pub fn generate_orbital_cube(
     resolution_angstrom: f64,
     n_threads: Option<usize>,
     use_gpu: Option<bool>,
+    charge: Option<i32>,
+    cosmo_eps: Option<f64>,
 ) -> PyResult<String> {
     let natoms = atomic_numbers.len();
     if coordinates.len() != natoms {
@@ -3718,22 +4160,11 @@ pub fn generate_orbital_cube(
             "Mismatch between atomic_numbers and coordinates length",
         ));
     }
-    let mut coords_3d = Vec::with_capacity(natoms);
-    for c in coordinates {
-        if c.len() != 3 {
-            return Err(PyValueError::new_err("Each coordinate must be [x, y, z]"));
-        }
-        coords_3d.push([c[0], c[1], c[2]]);
-    }
+    let coords_3d = parse_coords_matrix(&coordinates)?;
     let model = get_model(method)?;
     let batch = MolecularBatch::new_for_model(atomic_numbers, &coords_3d, model.as_ref());
-    let mut total_valence = 0.0;
-    for &z in &batch.atomic_numbers {
-        if let Some(p) = model.get_element(z) {
-            total_valence += p.core_charge;
-        }
-    }
-    let nocc = (total_valence.round() as usize) / 2;
+    let chg = charge.unwrap_or(0);
+    let nocc = compute_net_occupied_count(&batch, model.as_ref(), chg);
     let target_idx = orbital_index.unwrap_or(nocc); // 1-indexed: default is HOMO (nocc)
     if target_idx == 0 || target_idx > batch.norbs {
         return Err(PyValueError::new_err(format!(
@@ -3742,65 +4173,32 @@ pub fn generate_orbital_cube(
         )));
     }
     let target_idx_0 = target_idx - 1;
+    let cosmo = cosmo_eps.map(|eps| CosmoParams {
+        epsilon: eps,
+        ..Default::default()
+    });
+    let gpu = use_gpu.unwrap_or(false);
+    let config = mopac_core::export::cube::CubeGridConfig {
+        padding_angstrom,
+        resolution_angstrom,
+        n_threads: resolve_num_threads(n_threads),
+    };
 
     let res = py.allow_threads(|| -> Result<String, &'static str> {
-        let mut ws = ScfWorkspace::allocate(batch.norbs);
-        let scf_opts = ScfOptions {
-            max_iter: 100,
-            energy_tol_ev: 1e-7,
-            density_tol: 1e-6,
-            use_nddo: true,
-            damping: 0.5,
-            ..Default::default()
-        };
-        let mut scf_res = run_rhf_scf_with_options(&batch, model.as_ref(), &mut ws, &scf_opts);
-        if !scf_res.converged {
-            scf_res = mopac_core::scf::scf_loop::run_rhf_scf_adaptive_with_nddo(
-                &batch,
-                model.as_ref(),
-                &mut ws,
-                120,
-                1e-5,
-                1e-4,
-                true,
-            );
-        }
-        if !scf_res.converged {
+        let wf = solve_property_wavefunction(&batch, model.as_ref(), true, cosmo, chg, 100, false);
+        if !wf.has_valid_density() {
             return Err("SCF failed to converge for Cube generation");
         }
-        let energy_ev = ws.eigenvalues[target_idx_0];
-        let mo_coeffs = ws.eigenvectors.row(target_idx_0);
-        let config = mopac_core::export::cube::CubeGridConfig {
-            padding_angstrom,
-            resolution_angstrom,
-            n_threads: resolve_num_threads(n_threads),
-        };
-
-        if use_gpu.unwrap_or(false)
-            && let Ok(ctx) = mopac_gpu::VulkanContext::new()
-        {
-            let ctx = std::sync::Arc::new(ctx);
-            if let Ok(gpu_cube) = mopac_gpu::GpuCubeEvaluator::new(ctx)
-                && let Ok(cube_str) = gpu_cube.generate_molecular_orbital_cube(
-                    &batch,
-                    model.as_ref(),
-                    mo_coeffs,
-                    target_idx,
-                    energy_ev,
-                    &config,
-                )
-            {
-                return Ok(cube_str);
-            }
-        }
-
-        Ok(mopac_core::export::cube::generate_molecular_orbital_cube(
+        let energy_ev = wf.eigenvalues()[target_idx_0];
+        let mo_coeffs = wf.eigenvectors().row(target_idx_0);
+        Ok(render_orbital_cube(
             &batch,
             model.as_ref(),
             mo_coeffs,
             target_idx,
             energy_ev,
             &config,
+            gpu,
         ))
     });
 
@@ -3809,7 +4207,17 @@ pub fn generate_orbital_cube(
 
 /// Generate a volumetric Gaussian Cube (.cube) string for total electron density rho(r).
 #[pyfunction]
-#[pyo3(signature = (atomic_numbers, coordinates, method="PM6", padding_angstrom=3.5, resolution_angstrom=0.25, n_threads=None, use_gpu=false))]
+#[pyo3(signature = (
+    atomic_numbers,
+    coordinates,
+    method = "PM6",
+    padding_angstrom = 3.5,
+    resolution_angstrom = 0.25,
+    n_threads = None,
+    use_gpu = false,
+    charge = 0,
+    cosmo_eps = None
+))]
 pub fn generate_density_cube(
     py: Python<'_>,
     atomic_numbers: Vec<u8>,
@@ -3819,6 +4227,8 @@ pub fn generate_density_cube(
     resolution_angstrom: f64,
     n_threads: Option<usize>,
     use_gpu: Option<bool>,
+    charge: Option<i32>,
+    cosmo_eps: Option<f64>,
 ) -> PyResult<String> {
     let natoms = atomic_numbers.len();
     if coordinates.len() != natoms {
@@ -3826,64 +4236,32 @@ pub fn generate_density_cube(
             "Mismatch between atomic_numbers and coordinates length",
         ));
     }
-    let mut coords_3d = Vec::with_capacity(natoms);
-    for c in coordinates {
-        if c.len() != 3 {
-            return Err(PyValueError::new_err("Each coordinate must be [x, y, z]"));
-        }
-        coords_3d.push([c[0], c[1], c[2]]);
-    }
+    let coords_3d = parse_coords_matrix(&coordinates)?;
     let model = get_model(method)?;
     let batch = MolecularBatch::new_for_model(atomic_numbers, &coords_3d, model.as_ref());
+    let chg = charge.unwrap_or(0);
+    let cosmo = cosmo_eps.map(|eps| CosmoParams {
+        epsilon: eps,
+        ..Default::default()
+    });
+    let gpu = use_gpu.unwrap_or(false);
+    let config = mopac_core::export::cube::CubeGridConfig {
+        padding_angstrom,
+        resolution_angstrom,
+        n_threads: resolve_num_threads(n_threads),
+    };
 
     let res = py.allow_threads(|| -> Result<String, &'static str> {
-        let mut ws = ScfWorkspace::allocate(batch.norbs);
-        let scf_opts = ScfOptions {
-            max_iter: 100,
-            energy_tol_ev: 1e-7,
-            density_tol: 1e-6,
-            use_nddo: true,
-            damping: 0.5,
-            ..Default::default()
-        };
-        let mut scf_res = run_rhf_scf_with_options(&batch, model.as_ref(), &mut ws, &scf_opts);
-        if !scf_res.converged {
-            scf_res = mopac_core::scf::scf_loop::run_rhf_scf_adaptive_with_nddo(
-                &batch,
-                model.as_ref(),
-                &mut ws,
-                120,
-                1e-5,
-                1e-4,
-                true,
-            );
-        }
-        if !scf_res.converged {
+        let wf = solve_property_wavefunction(&batch, model.as_ref(), true, cosmo, chg, 100, false);
+        if !wf.has_valid_density() {
             return Err("SCF failed to converge for Density Cube generation");
         }
-        let config = mopac_core::export::cube::CubeGridConfig {
-            padding_angstrom,
-            resolution_angstrom,
-            n_threads: resolve_num_threads(n_threads),
-        };
-
-        if use_gpu.unwrap_or(false)
-            && let Ok(ctx) = mopac_gpu::VulkanContext::new()
-        {
-            let ctx = std::sync::Arc::new(ctx);
-            if let Ok(gpu_cube) = mopac_gpu::GpuCubeEvaluator::new(ctx)
-                && let Ok(cube_str) =
-                    gpu_cube.generate_density_cube(&batch, model.as_ref(), &ws.density, &config)
-            {
-                return Ok(cube_str);
-            }
-        }
-
-        Ok(mopac_core::export::cube::generate_density_cube(
+        Ok(render_density_cube(
             &batch,
             model.as_ref(),
-            &ws.density,
+            wf.density(),
             &config,
+            gpu,
         ))
     });
 
@@ -3960,7 +4338,9 @@ fn parse_orbital_label(label: &str, nocc: usize, norbs: usize) -> PyResult<usize
     padding_angstrom = 3.0,
     resolution_angstrom = 0.35,
     n_threads = None,
-    use_gpu = false
+    use_gpu = false,
+    charge = 0,
+    cosmo_eps = None
 ))]
 pub fn generate_cubes_bundle(
     py: Python<'_>,
@@ -3973,6 +4353,8 @@ pub fn generate_cubes_bundle(
     resolution_angstrom: Option<f64>,
     n_threads: Option<usize>,
     use_gpu: Option<bool>,
+    charge: Option<i32>,
+    cosmo_eps: Option<f64>,
 ) -> PyResult<std::collections::HashMap<String, String>> {
     let natoms = atomic_numbers.len();
     if coordinates.len() != natoms {
@@ -3980,23 +4362,11 @@ pub fn generate_cubes_bundle(
             "Mismatch between atomic_numbers and coordinates length",
         ));
     }
-    let mut coords_3d = Vec::with_capacity(natoms);
-    for c in coordinates {
-        if c.len() != 3 {
-            return Err(PyValueError::new_err("Each coordinate must be [x, y, z]"));
-        }
-        coords_3d.push([c[0], c[1], c[2]]);
-    }
+    let coords_3d = parse_coords_matrix(&coordinates)?;
     let model = get_model(method)?;
     let batch = MolecularBatch::new_for_model(atomic_numbers, &coords_3d, model.as_ref());
-
-    let mut total_valence = 0.0;
-    for &z in &batch.atomic_numbers {
-        if let Some(p) = model.get_element(z) {
-            total_valence += p.core_charge;
-        }
-    }
-    let nocc = (total_valence.round() as usize) / 2;
+    let chg = charge.unwrap_or(0);
+    let nocc = compute_net_occupied_count(&batch, model.as_ref(), chg);
 
     let requested_orbitals =
         orbitals.unwrap_or_else(|| vec!["HOMO".to_string(), "LUMO".to_string()]);
@@ -4007,112 +4377,35 @@ pub fn generate_cubes_bundle(
     }
 
     let do_density = include_density.unwrap_or(true);
-    let pad = padding_angstrom.unwrap_or(3.0);
-    let res_a = resolution_angstrom.unwrap_or(0.35);
-    let threads = resolve_num_threads(n_threads);
+    let gpu = use_gpu.unwrap_or(false);
+    let config = mopac_core::export::cube::CubeGridConfig {
+        padding_angstrom: padding_angstrom.unwrap_or(3.0),
+        resolution_angstrom: resolution_angstrom.unwrap_or(0.35),
+        n_threads: resolve_num_threads(n_threads),
+    };
+    let cosmo = cosmo_eps.map(|eps| CosmoParams {
+        epsilon: eps,
+        ..Default::default()
+    });
 
     let res = py.allow_threads(
         || -> Result<std::collections::HashMap<String, String>, &'static str> {
-            let mut ws = ScfWorkspace::allocate(batch.norbs);
-            let scf_opts = ScfOptions {
-                max_iter: 100,
-                energy_tol_ev: 1e-7,
-                density_tol: 1e-6,
-                use_nddo: true,
-                damping: 0.5,
-                ..Default::default()
-            };
-            let mut scf_res = run_rhf_scf_with_options(&batch, model.as_ref(), &mut ws, &scf_opts);
-            if !scf_res.converged {
-                scf_res = mopac_core::scf::scf_loop::run_rhf_scf_adaptive_with_nddo(
-                    &batch,
-                    model.as_ref(),
-                    &mut ws,
-                    120,
-                    1e-5,
-                    1e-4,
-                    true,
-                );
-            }
-            if !scf_res.converged && !ws.density.data.iter().any(|&x| x.abs() > 1e-6) {
+            let wf =
+                solve_property_wavefunction(&batch, model.as_ref(), true, cosmo, chg, 100, false);
+            if !wf.has_valid_density() {
                 return Err("SCF failed to produce valid density for Cubes bundle generation");
             }
-
-            let config = mopac_core::export::cube::CubeGridConfig {
-                padding_angstrom: pad,
-                resolution_angstrom: res_a,
-                n_threads: threads,
-            };
-
-            let gpu_eval = if use_gpu.unwrap_or(false) {
-                mopac_gpu::VulkanContext::new()
-                    .ok()
-                    .and_then(|ctx| mopac_gpu::GpuCubeEvaluator::new(std::sync::Arc::new(ctx)).ok())
-            } else {
-                None
-            };
-
-            let mut bundle = std::collections::HashMap::new();
-
-            if do_density {
-                let density_cube = if let Some(ref eval) = gpu_eval {
-                    eval.generate_density_cube(&batch, model.as_ref(), &ws.density, &config)
-                        .unwrap_or_else(|_| {
-                            mopac_core::export::cube::generate_density_cube(
-                                &batch,
-                                model.as_ref(),
-                                &ws.density,
-                                &config,
-                            )
-                        })
-                } else {
-                    mopac_core::export::cube::generate_density_cube(
-                        &batch,
-                        model.as_ref(),
-                        &ws.density,
-                        &config,
-                    )
-                };
-                bundle.insert("density".to_string(), density_cube);
-            }
-
-            for (label, idx) in parsed_targets {
-                let idx_0 = idx - 1;
-                let energy_ev = ws.eigenvalues[idx_0];
-                let mo_coeffs = ws.eigenvectors.row(idx_0);
-                let orb_cube = if let Some(ref eval) = gpu_eval {
-                    eval.generate_molecular_orbital_cube(
-                        &batch,
-                        model.as_ref(),
-                        mo_coeffs,
-                        idx,
-                        energy_ev,
-                        &config,
-                    )
-                    .unwrap_or_else(|_| {
-                        mopac_core::export::cube::generate_molecular_orbital_cube(
-                            &batch,
-                            model.as_ref(),
-                            mo_coeffs,
-                            idx,
-                            energy_ev,
-                            &config,
-                        )
-                    })
-                } else {
-                    mopac_core::export::cube::generate_molecular_orbital_cube(
-                        &batch,
-                        model.as_ref(),
-                        mo_coeffs,
-                        idx,
-                        energy_ev,
-                        &config,
-                    )
-                };
-                bundle.insert(label, orb_cube);
-            }
-
-            Ok(bundle)
+            Ok(render_cubes_bundle_from_state(
+                &batch,
+                model.as_ref(),
+                wf.density(),
+                wf.eigenvectors(),
+                wf.eigenvalues(),
+                &parsed_targets,
+                do_density,
+                &config,
+                gpu,
+            ))
         },
     );
 
@@ -4150,11 +4443,13 @@ impl BondOrderPyResult {
 
 /// Compute Armstrong-Perkins-Stewart / Mayer bond orders and atomic valencies.
 #[pyfunction]
-#[pyo3(signature = (atomic_numbers, coordinates, method="PM7"))]
+#[pyo3(signature = (atomic_numbers, coordinates, method = "PM7", charge = 0, cosmo_eps = None))]
 pub fn bond_orders(
     atomic_numbers: Vec<u8>,
     coordinates: Vec<Vec<f64>>,
     method: Option<&str>,
+    charge: Option<i32>,
+    cosmo_eps: Option<f64>,
 ) -> PyResult<BondOrderPyResult> {
     let natoms = atomic_numbers.len();
     if coordinates.len() != natoms {
@@ -4162,47 +4457,22 @@ pub fn bond_orders(
             "Mismatch between atomic_numbers and coordinates length",
         ));
     }
-    let mut coords_3d = Vec::with_capacity(natoms);
-    for c in coordinates {
-        if c.len() != 3 {
-            return Err(PyValueError::new_err("Each coordinate must be [x, y, z]"));
-        }
-        coords_3d.push([c[0], c[1], c[2]]);
-    }
+    let coords_3d = parse_coords_matrix(&coordinates)?;
     let m_str = method.unwrap_or("PM7");
     let model = get_model(m_str)?;
     let batch = MolecularBatch::new_for_model(atomic_numbers, &coords_3d, model.as_ref());
-    let mut ws = ScfWorkspace::allocate(batch.norbs);
-    let scf_res = mopac_core::scf::scf_loop::run_rhf_scf_adaptive_with_nddo(
-        &batch,
-        model.as_ref(),
-        &mut ws,
-        120,
-        1e-5,
-        1e-4,
-        true,
-    );
-    if !scf_res.converged && !ws.density.data.iter().any(|&x| x.abs() > 1e-6) {
+    let chg = charge.unwrap_or(0);
+    let cosmo = cosmo_eps.map(|eps| CosmoParams {
+        epsilon: eps,
+        ..Default::default()
+    });
+    let wf = solve_property_wavefunction(&batch, model.as_ref(), true, cosmo, chg, 60, false);
+    if !wf.has_valid_density() {
         return Err(PyValueError::new_err(
             "SCF failed to produce valid density for bond order calculation",
         ));
     }
-    let bo = mopac_core::properties::bonds::compute_bond_orders(&batch, &ws.density);
-    let mut bo_mat = Vec::with_capacity(natoms);
-    for i in 0..natoms {
-        let mut row = Vec::with_capacity(natoms);
-        for j in 0..natoms {
-            row.push(bo.bond_orders.get(i, j));
-        }
-        bo_mat.push(row);
-    }
-    Ok(BondOrderPyResult {
-        bond_orders: bo_mat,
-        valencies: bo.valencies,
-        active_charges: bo.active_charges,
-        self_charges: bo.self_charges,
-        free_valencies: bo.free_valencies,
-    })
+    Ok(build_bond_order_py_result(&batch, wf.density()))
 }
 
 /// Check whether a compatible Vulkan GPU compute device is available for hardware acceleration.
@@ -4294,12 +4564,519 @@ pub fn compute_coulomb_matrix_gpu(
     }
 }
 
+fn build_bond_order_py_result(
+    batch: &MolecularBatch,
+    density: &AlignedMatrix<f64>,
+) -> BondOrderPyResult {
+    let natoms = batch.natoms;
+    let bo = mopac_core::properties::bonds::compute_bond_orders(batch, density);
+    let mut bo_mat = Vec::with_capacity(natoms);
+    for i in 0..natoms {
+        let mut row = Vec::with_capacity(natoms);
+        for j in 0..natoms {
+            row.push(bo.bond_orders.get(i, j));
+        }
+        bo_mat.push(row);
+    }
+    BondOrderPyResult {
+        bond_orders: bo_mat,
+        valencies: bo.valencies,
+        active_charges: bo.active_charges,
+        self_charges: bo.self_charges,
+        free_valencies: bo.free_valencies,
+    }
+}
+
+enum SessionWavefunction {
+    Rhf {
+        ws: Box<ScfWorkspace>,
+        res: ScfResult,
+        nocc: usize,
+    },
+    Uhf {
+        ws: Box<UhfWorkspace>,
+        res: UhfResult,
+    },
+}
+
+/// Persistent quantum chemistry session caching converged SCF wavefunctions so energies,
+/// analytical gradients, ESP charges, bond orders, volumetric cubes, and MECI properties
+/// can all be computed without redundant SCF solves.
+#[pyclass]
+pub struct QuantumSession {
+    atomic_numbers: Vec<u8>,
+    coordinates: Vec<[f64; 3]>,
+    batch: MolecularBatch,
+    method: String,
+    cosmo_eps: Option<f64>,
+    use_nddo: bool,
+    charge: i32,
+    wavefunction: SessionWavefunction,
+}
+
+impl QuantumSession {
+    fn density_matrix(&self) -> &AlignedMatrix<f64> {
+        match &self.wavefunction {
+            SessionWavefunction::Rhf { ws, .. } => &ws.density,
+            SessionWavefunction::Uhf { ws, .. } => &ws.density_tot,
+        }
+    }
+
+    fn mo_basis(&self) -> (&AlignedMatrix<f64>, &[f64], usize) {
+        match &self.wavefunction {
+            SessionWavefunction::Rhf { ws, nocc, .. } => (&ws.eigenvectors, &ws.eigenvalues, *nocc),
+            SessionWavefunction::Uhf { ws, res } => {
+                (&ws.eigenvectors_a, &ws.eigenvalues_a, res.n_alpha)
+            }
+        }
+    }
+}
+
+#[pymethods]
+impl QuantumSession {
+    #[new]
+    #[pyo3(signature = (
+        atomic_numbers,
+        coordinates,
+        method = "PM6",
+        cosmo_eps = None,
+        use_nddo = true,
+        max_iter = 60,
+        energy_tol_ev = 1e-7,
+        density_tol = 1e-6,
+        level_shift_ev = 0.0,
+        damping = 0.5,
+        use_gpu = false,
+        uhf = None,
+        multiplicity = None,
+        charge = None
+    ))]
+    #[allow(clippy::too_many_arguments)]
+    fn new(
+        py: Python<'_>,
+        atomic_numbers: Vec<u8>,
+        coordinates: Vec<[f64; 3]>,
+        method: Option<&str>,
+        cosmo_eps: Option<f64>,
+        use_nddo: Option<bool>,
+        max_iter: Option<usize>,
+        energy_tol_ev: Option<f64>,
+        density_tol: Option<f64>,
+        level_shift_ev: Option<f64>,
+        damping: Option<f64>,
+        use_gpu: Option<bool>,
+        uhf: Option<bool>,
+        multiplicity: Option<usize>,
+        charge: Option<i32>,
+    ) -> PyResult<Self> {
+        let natoms = atomic_numbers.len();
+        if natoms == 0 {
+            return Err(PyValueError::new_err("atomic_numbers cannot be empty"));
+        }
+        if coordinates.len() != natoms {
+            return Err(PyValueError::new_err(format!(
+                "Length of atomic_numbers ({}) does not match coordinates ({})",
+                natoms,
+                coordinates.len()
+            )));
+        }
+
+        let m_str = method.unwrap_or("PM6");
+        let model = get_model(m_str)?;
+        let mut total_valence_elecs = 0.0;
+        for &z in &atomic_numbers {
+            if let Some(p) = model.get_element(z) {
+                total_valence_elecs += p.core_charge;
+            } else {
+                return Err(PyValueError::new_err(format!(
+                    "Unsupported element Z={} for semi-empirical method '{}'",
+                    z, m_str
+                )));
+            }
+        }
+
+        let chg = charge.unwrap_or(0);
+        let nelec_signed = total_valence_elecs.round() as i64 - chg as i64;
+        let is_open_shell = (nelec_signed % 2) != 0;
+        let run_as_uhf = uhf.unwrap_or(false) || is_open_shell;
+
+        let batch =
+            MolecularBatch::new_for_model(atomic_numbers.clone(), &coordinates, model.as_ref());
+        let cosmo = cosmo_eps.map(|eps| CosmoParams {
+            epsilon: eps,
+            ..Default::default()
+        });
+        let nddo = use_nddo.unwrap_or(true);
+        let max_it = max_iter.unwrap_or(60);
+        let e_tol = energy_tol_ev.unwrap_or(1e-7);
+        let d_tol = density_tol.unwrap_or(1e-6);
+        let l_shift = level_shift_ev.unwrap_or(0.0);
+        let damp = damping.unwrap_or(0.5);
+        let gpu = use_gpu.unwrap_or(false);
+
+        let wavefunction = py.allow_threads(|| {
+            if run_as_uhf {
+                let mult = multiplicity.unwrap_or(if is_open_shell { 2 } else { 1 });
+                let uhf_opts = UhfOptions {
+                    multiplicity: mult,
+                    charge: chg,
+                    max_iter: max_it,
+                    energy_tol_ev: e_tol,
+                    density_tol: d_tol,
+                    damping: damp,
+                    use_nddo: nddo,
+                    cosmo,
+                    ..Default::default()
+                };
+                let mut uhf_ws = UhfWorkspace::new(batch.norbs);
+                let uhf_res =
+                    run_uhf_scf_with_options(&batch, model.as_ref(), &mut uhf_ws, &uhf_opts);
+                SessionWavefunction::Uhf {
+                    ws: Box::new(uhf_ws),
+                    res: uhf_res,
+                }
+            } else {
+                let (ws, res) = run_converged_rhf_scf(
+                    &batch,
+                    model.as_ref(),
+                    nddo,
+                    cosmo,
+                    chg,
+                    max_it,
+                    max_it.max(120),
+                    e_tol,
+                    d_tol,
+                    l_shift,
+                    damp,
+                    gpu,
+                );
+                let nocc = (nelec_signed.max(0) as usize) / 2;
+                SessionWavefunction::Rhf {
+                    ws: Box::new(ws),
+                    res,
+                    nocc,
+                }
+            }
+        });
+
+        Ok(Self {
+            atomic_numbers,
+            coordinates,
+            batch,
+            method: m_str.to_string(),
+            cosmo_eps,
+            use_nddo: nddo,
+            charge: chg,
+            wavefunction,
+        })
+    }
+
+    #[getter]
+    fn method(&self) -> &str {
+        &self.method
+    }
+
+    #[getter]
+    fn cosmo_eps(&self) -> Option<f64> {
+        self.cosmo_eps
+    }
+
+    #[getter]
+    fn use_nddo(&self) -> bool {
+        self.use_nddo
+    }
+
+    #[getter]
+    fn charge(&self) -> i32 {
+        self.charge
+    }
+
+    #[getter]
+    fn atomic_numbers(&self) -> Vec<u8> {
+        self.atomic_numbers.clone()
+    }
+
+    #[getter]
+    fn coordinates(&self) -> Vec<[f64; 3]> {
+        self.coordinates.clone()
+    }
+
+    #[getter]
+    fn num_orbitals(&self) -> usize {
+        self.batch.norbs
+    }
+
+    #[getter]
+    fn is_uhf(&self) -> bool {
+        matches!(self.wavefunction, SessionWavefunction::Uhf { .. })
+    }
+
+    #[getter]
+    fn converged(&self) -> bool {
+        match &self.wavefunction {
+            SessionWavefunction::Rhf { res, .. } => res.converged,
+            SessionWavefunction::Uhf { res, .. } => res.converged,
+        }
+    }
+
+    #[getter]
+    fn scf_iterations(&self) -> usize {
+        match &self.wavefunction {
+            SessionWavefunction::Rhf { res, .. } => res.iterations,
+            SessionWavefunction::Uhf { res, .. } => res.iterations,
+        }
+    }
+
+    #[getter]
+    fn total_energy_ev(&self) -> f64 {
+        match &self.wavefunction {
+            SessionWavefunction::Rhf { res, .. } => res.total_energy_ev,
+            SessionWavefunction::Uhf { res, .. } => res.total_energy_ev,
+        }
+    }
+
+    #[getter]
+    fn electronic_energy_ev(&self) -> f64 {
+        match &self.wavefunction {
+            SessionWavefunction::Rhf { res, .. } => res.electronic_energy_ev,
+            SessionWavefunction::Uhf { res, .. } => res.electronic_energy_ev,
+        }
+    }
+
+    #[getter]
+    fn nuclear_repulsion_ev(&self) -> f64 {
+        match &self.wavefunction {
+            SessionWavefunction::Rhf { res, .. } => res.nuclear_repulsion_ev,
+            SessionWavefunction::Uhf { res, .. } => res.nuclear_repulsion_ev,
+        }
+    }
+
+    #[getter]
+    fn homo_energy_ev(&self) -> f64 {
+        match &self.wavefunction {
+            SessionWavefunction::Rhf { res, .. } => res.homo_energy_ev,
+            SessionWavefunction::Uhf { res, .. } => res.homo_a_energy_ev,
+        }
+    }
+
+    #[getter]
+    fn lumo_energy_ev(&self) -> f64 {
+        match &self.wavefunction {
+            SessionWavefunction::Rhf { res, .. } => res.lumo_energy_ev,
+            SessionWavefunction::Uhf { res, .. } => res.lumo_a_energy_ev,
+        }
+    }
+
+    #[getter]
+    fn homo_lumo_gap_ev(&self) -> f64 {
+        self.lumo_energy_ev() - self.homo_energy_ev()
+    }
+
+    #[pyo3(signature = (compute_gradients = true, dispersion = None, h_bonds = false))]
+    fn calculate(
+        &self,
+        py: Python<'_>,
+        compute_gradients: Option<bool>,
+        dispersion: Option<&str>,
+        h_bonds: Option<bool>,
+    ) -> PyResult<CalculationResult> {
+        let model = get_model(&self.method)?;
+        let mut batch = self.batch.clone();
+        let comp_grads = compute_gradients.unwrap_or(true);
+        let hb = h_bonds.unwrap_or(false);
+        py.allow_threads(|| {
+            let wfn = match &self.wavefunction {
+                SessionWavefunction::Rhf { ws, res, .. } => ConvergedWavefunction::Rhf { ws, res },
+                SessionWavefunction::Uhf { ws, res } => ConvergedWavefunction::Uhf { ws, res },
+            };
+            finalize_calculation_result(
+                &mut batch,
+                model.as_ref(),
+                &self.method,
+                wfn,
+                dispersion,
+                hb,
+                self.use_nddo,
+                self.charge,
+                comp_grads,
+                None,
+            )
+        })
+    }
+
+    #[pyo3(signature = (points_per_shell = 64, n_threads = None))]
+    fn esp_charges(
+        &self,
+        py: Python<'_>,
+        points_per_shell: Option<usize>,
+        n_threads: Option<usize>,
+    ) -> PyResult<EspResultPy> {
+        let model = get_model(&self.method)?;
+        let opts = EspOptions {
+            shell_multipliers: vec![1.4, 1.6, 1.8, 2.0],
+            points_per_shell: points_per_shell.unwrap_or(64),
+            net_charge: self.charge as f64,
+            n_threads: resolve_num_threads(n_threads),
+        };
+        let density = self.density_matrix();
+        let res = py
+            .allow_threads(|| compute_esp_charges(&self.batch, model.as_ref(), density, &opts))
+            .map_err(PyValueError::new_err)?;
+        Ok(EspResultPy {
+            charges: res.charges,
+            dipole_debye: res.dipole_debye,
+            dipole_magnitude_debye: res.dipole_magnitude_debye,
+            rms_error_ev: res.rms_error_ev,
+            num_grid_points: res.num_grid_points,
+        })
+    }
+
+    fn bond_orders(&self) -> PyResult<BondOrderPyResult> {
+        Ok(build_bond_order_py_result(
+            &self.batch,
+            self.density_matrix(),
+        ))
+    }
+
+    #[pyo3(signature = (padding_angstrom = 3.5, resolution_angstrom = 0.25, n_threads = None, use_gpu = false))]
+    fn generate_density_cube(
+        &self,
+        py: Python<'_>,
+        padding_angstrom: Option<f64>,
+        resolution_angstrom: Option<f64>,
+        n_threads: Option<usize>,
+        use_gpu: Option<bool>,
+    ) -> PyResult<String> {
+        let model = get_model(&self.method)?;
+        let config = mopac_core::export::cube::CubeGridConfig {
+            padding_angstrom: padding_angstrom.unwrap_or(3.5),
+            resolution_angstrom: resolution_angstrom.unwrap_or(0.25),
+            n_threads: resolve_num_threads(n_threads),
+        };
+        let gpu = use_gpu.unwrap_or(false);
+        let density = self.density_matrix();
+        Ok(py.allow_threads(|| {
+            render_density_cube(&self.batch, model.as_ref(), density, &config, gpu)
+        }))
+    }
+
+    #[pyo3(signature = (orbital_index = None, padding_angstrom = 3.5, resolution_angstrom = 0.25, n_threads = None, use_gpu = false))]
+    fn generate_orbital_cube(
+        &self,
+        py: Python<'_>,
+        orbital_index: Option<usize>,
+        padding_angstrom: Option<f64>,
+        resolution_angstrom: Option<f64>,
+        n_threads: Option<usize>,
+        use_gpu: Option<bool>,
+    ) -> PyResult<String> {
+        let model = get_model(&self.method)?;
+        let (eigenvectors, eigenvalues, nocc) = self.mo_basis();
+        let target_idx = orbital_index.unwrap_or(nocc);
+        if target_idx == 0 || target_idx > self.batch.norbs {
+            return Err(PyValueError::new_err(format!(
+                "orbital_index {} out of range [1, {}]",
+                target_idx, self.batch.norbs
+            )));
+        }
+        let target_idx_0 = target_idx - 1;
+        let energy_ev = eigenvalues[target_idx_0];
+        let mo_coeffs = eigenvectors.row(target_idx_0);
+        let config = mopac_core::export::cube::CubeGridConfig {
+            padding_angstrom: padding_angstrom.unwrap_or(3.5),
+            resolution_angstrom: resolution_angstrom.unwrap_or(0.25),
+            n_threads: resolve_num_threads(n_threads),
+        };
+        let gpu = use_gpu.unwrap_or(false);
+        Ok(py.allow_threads(|| {
+            render_orbital_cube(
+                &self.batch,
+                model.as_ref(),
+                mo_coeffs,
+                target_idx,
+                energy_ev,
+                &config,
+                gpu,
+            )
+        }))
+    }
+
+    #[pyo3(signature = (orbitals = None, include_density = true, padding_angstrom = 3.0, resolution_angstrom = 0.35, n_threads = None, use_gpu = false))]
+    fn generate_cubes_bundle(
+        &self,
+        py: Python<'_>,
+        orbitals: Option<Vec<String>>,
+        include_density: Option<bool>,
+        padding_angstrom: Option<f64>,
+        resolution_angstrom: Option<f64>,
+        n_threads: Option<usize>,
+        use_gpu: Option<bool>,
+    ) -> PyResult<std::collections::HashMap<String, String>> {
+        let model = get_model(&self.method)?;
+        let (eigenvectors, eigenvalues, nocc) = self.mo_basis();
+        let requested_orbitals =
+            orbitals.unwrap_or_else(|| vec!["HOMO".to_string(), "LUMO".to_string()]);
+        let mut parsed_targets = Vec::with_capacity(requested_orbitals.len());
+        for orb_str in requested_orbitals {
+            let idx = parse_orbital_label(&orb_str, nocc, self.batch.norbs)?;
+            parsed_targets.push((orb_str, idx));
+        }
+        let do_density = include_density.unwrap_or(true);
+        let config = mopac_core::export::cube::CubeGridConfig {
+            padding_angstrom: padding_angstrom.unwrap_or(3.0),
+            resolution_angstrom: resolution_angstrom.unwrap_or(0.35),
+            n_threads: resolve_num_threads(n_threads),
+        };
+        let gpu = use_gpu.unwrap_or(false);
+        let density = self.density_matrix();
+        Ok(py.allow_threads(|| {
+            render_cubes_bundle_from_state(
+                &self.batch,
+                model.as_ref(),
+                density,
+                eigenvectors,
+                eigenvalues,
+                &parsed_targets,
+                do_density,
+                &config,
+                gpu,
+            )
+        }))
+    }
+
+    #[pyo3(signature = (active_orbitals = 2, target_root = 1))]
+    fn meci(
+        &self,
+        active_orbitals: Option<usize>,
+        target_root: Option<usize>,
+    ) -> PyResult<MeciPyResult> {
+        let model = get_model(&self.method)?;
+        let mut batch = self.batch.clone();
+        match &self.wavefunction {
+            SessionWavefunction::Rhf { ws, res, nocc } => run_meci_from_scf(
+                &mut batch,
+                model.as_ref(),
+                ws,
+                res,
+                *nocc,
+                active_orbitals,
+                target_root,
+                self.use_nddo,
+            ),
+            SessionWavefunction::Uhf { .. } => Err(PyValueError::new_err(
+                "MECI requires a restricted closed-shell RHF reference",
+            )),
+        }
+    }
+}
+
 /// MOPAC_RS Python Module
 #[pymodule]
 fn mopac_py(m: &Bound<'_, PyModule>) -> PyResult<()> {
     m.add("__version__", env!("CARGO_PKG_VERSION"))?;
     m.add_class::<Am1BccPyResult>()?;
     m.add_class::<CalculationResult>()?;
+    m.add_class::<QuantumSession>()?;
     m.add_class::<OptimizationPyResult>()?;
     m.add_class::<TransitionStatePyResult>()?;
     m.add_class::<NormalModePy>()?;
