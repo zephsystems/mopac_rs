@@ -285,8 +285,8 @@ pub fn trace_intrinsic_reaction_coordinate(
                 }
             }
             let inv_norm = 1.0 / norm_sq.sqrt().max(1e-15);
-            for i in 0..n3 {
-                irc_ws.ts_vector[i] *= inv_norm;
+            for v in irc_ws.ts_vector.iter_mut().take(n3) {
+                *v *= inv_norm;
             }
             found_mode = true;
         }
@@ -320,8 +320,8 @@ pub fn trace_intrinsic_reaction_coordinate(
         .map(|i| irc_ws.grad_q[i] * irc_ws.ts_vector[i])
         .sum();
     if g_dot_v > 1e-4 {
-        for i in 0..n3 {
-            irc_ws.ts_vector[i] = -irc_ws.ts_vector[i];
+        for v in irc_ws.ts_vector.iter_mut().take(n3) {
+            *v = -*v;
         }
     }
 
@@ -460,8 +460,8 @@ fn trace_single_branch(
 
             // Compute norm of mass-weighted gradient
             let mut g_norm_sq = 0.0;
-            for i in 0..n3 {
-                g_norm_sq += irc_ws.grad_q[i] * irc_ws.grad_q[i];
+            for &g in irc_ws.grad_q.iter().take(n3) {
+                g_norm_sq += g * g;
             }
             let g_norm = g_norm_sq.sqrt();
 
@@ -543,8 +543,8 @@ fn trace_single_branch(
 
         // New tangent along negative gradient at converged point
         let mut g_norm_sq = 0.0;
-        for i in 0..n3 {
-            g_norm_sq += irc_ws.grad_q[i] * irc_ws.grad_q[i];
+        for &g in irc_ws.grad_q.iter().take(n3) {
+            g_norm_sq += g * g;
         }
         let g_norm = g_norm_sq.sqrt().max(1e-15);
         for i in 0..n3 {

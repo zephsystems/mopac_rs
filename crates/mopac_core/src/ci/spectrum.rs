@@ -97,9 +97,7 @@ pub fn compute_transition_dipoles_and_oscillator_strengths(
     for c in 0..3 {
         for i in 0..lab {
             let m_i = &meci_result.microstates[i];
-            for j in 0..i {
-                let m_j = &meci_result.microstates[j];
-
+            for (j, m_j) in meci_result.microstates.iter().enumerate().take(i) {
                 let mut diff_a = Vec::new();
                 let mut diff_b = Vec::new();
 
@@ -168,8 +166,12 @@ pub fn compute_transition_dipoles_and_oscillator_strengths(
             let mut val_angstrom = 0.0f64;
             for k in 0..lab {
                 let c_0k = meci_result.states[0].eigenvector[k];
-                for l in 0..lab {
-                    let c_nl = meci_result.states[state_idx].eigenvector[l];
+                for (l, &c_nl) in meci_result.states[state_idx]
+                    .eigenvector
+                    .iter()
+                    .enumerate()
+                    .take(lab)
+                {
                     val_angstrom += c_0k * t4[c].get(k, l) * c_nl;
                 }
             }

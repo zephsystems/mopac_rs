@@ -1,7 +1,7 @@
 # Multi-stage Dockerfile for MOPAC_RS (CLI & Python bindings)
 # Produces an optimized OCI container image for GitHub Container Registry (ghcr.io)
 
-FROM rust:1.85-slim-bookworm AS builder
+FROM rust:1-slim-bookworm AS builder
 
 # Install build dependencies
 RUN apt-get update && apt-get install -y --no-install-recommends \

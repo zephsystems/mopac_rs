@@ -1080,8 +1080,8 @@ pub fn run_meci(
 
     // Reference occupations occa in active space:
     // occa[i] = 1.0 for reference occupied MOs, 0.0 for reference virtual MOs
-    for i in 0..m {
-        workspace.occa[i] = if i < n_occ_active { 1.0 } else { 0.0 };
+    for (i, occ) in workspace.occa.iter_mut().enumerate().take(m) {
+        *occ = if i < n_occ_active { 1.0 } else { 0.0 };
     }
 
     // Precompute full NDDO rotated multipoles if enabled

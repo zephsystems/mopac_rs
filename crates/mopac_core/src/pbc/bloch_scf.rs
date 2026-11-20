@@ -271,8 +271,8 @@ pub fn run_pbc_scf(
     );
 
     // 6. Initialize real-space density matrix P(m) with diagonal block initial guess
-    for m_idx in 0..n_trans {
-        workspace.p_real[m_idx].fill_zero();
+    for p_mat in workspace.p_real.iter_mut().take(n_trans) {
+        p_mat.fill_zero();
     }
     for a in 0..natoms_cell {
         let z = unit_cell_atoms.atomic_numbers[a];

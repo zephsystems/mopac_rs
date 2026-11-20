@@ -110,8 +110,7 @@ pub fn compute_pair_core_repulsion(
                 gaussian_sum += a * (-exponent).exp();
             }
         }
-        for k in 0..other.num_gaussians {
-            let g = &other.gaussians[k];
+        for g in other.gaussians.iter().take(other.num_gaussians) {
             let dr = r_angstrom - g.c;
             let exponent = g.b * dr * dr;
             if exponent <= 25.0 {
@@ -119,8 +118,7 @@ pub fn compute_pair_core_repulsion(
             }
         }
     } else {
-        for k in 0..elem_a.num_gaussians {
-            let g = &elem_a.gaussians[k];
+        for g in elem_a.gaussians.iter().take(elem_a.num_gaussians) {
             let dr = r_angstrom - g.c;
             let exponent = g.b * dr * dr;
             if exponent < 25.0 {
@@ -128,8 +126,7 @@ pub fn compute_pair_core_repulsion(
             }
         }
 
-        for k in 0..elem_b.num_gaussians {
-            let g = &elem_b.gaussians[k];
+        for g in elem_b.gaussians.iter().take(elem_b.num_gaussians) {
             let dr = r_angstrom - g.c;
             let exponent = g.b * dr * dr;
             if exponent < 25.0 {
@@ -204,16 +201,14 @@ pub fn compute_pair_core_repulsion_pm6(
         }
     }
     if alpb <= 1e-4 {
-        for k in 1..elem_a.num_gaussians {
-            let g = &elem_a.gaussians[k];
+        for g in elem_a.gaussians.iter().take(elem_a.num_gaussians).skip(1) {
             let dr = r_angstrom - g.c;
             let exponent = g.b * dr * dr;
             if exponent <= 25.0 {
                 gaussian_sum += g.a * (-exponent).exp();
             }
         }
-        for k in 1..elem_b.num_gaussians {
-            let g = &elem_b.gaussians[k];
+        for g in elem_b.gaussians.iter().take(elem_b.num_gaussians).skip(1) {
             let dr = r_angstrom - g.c;
             let exponent = g.b * dr * dr;
             if exponent <= 25.0 {
@@ -306,16 +301,14 @@ pub fn compute_pair_core_repulsion_pm7(
         }
     }
     if abond <= 1e-4 {
-        for k in 1..elem_a.num_gaussians {
-            let g = &elem_a.gaussians[k];
+        for g in elem_a.gaussians.iter().take(elem_a.num_gaussians).skip(1) {
             let dr = r_angstrom - g.c;
             let exponent = g.b * dr * dr;
             if exponent <= 25.0 {
                 gaussian_sum += g.a * (-exponent).exp();
             }
         }
-        for k in 1..elem_b.num_gaussians {
-            let g = &elem_b.gaussians[k];
+        for g in elem_b.gaussians.iter().take(elem_b.num_gaussians).skip(1) {
             let dr = r_angstrom - g.c;
             let exponent = g.b * dr * dr;
             if exponent <= 25.0 {

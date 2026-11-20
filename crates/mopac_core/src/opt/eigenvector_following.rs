@@ -514,14 +514,14 @@ pub fn optimize_transition_state(
 
         // Enforce Trust Radius Constraint: ||s|| <= R_trust
         let mut step_norm_sq = 0.0;
-        for j in 0..n3 {
-            step_norm_sq += ef_ws.step_cart[j] * ef_ws.step_cart[j];
+        for &val in ef_ws.step_cart.iter().take(n3) {
+            step_norm_sq += val * val;
         }
         let step_norm = step_norm_sq.sqrt();
         let step_scale = if step_norm > trust_radius && step_norm > 1e-14 {
             let scale = trust_radius / step_norm;
-            for j in 0..n3 {
-                ef_ws.step_cart[j] *= scale;
+            for val in ef_ws.step_cart.iter_mut().take(n3) {
+                *val *= scale;
             }
             scale
         } else {

@@ -97,10 +97,10 @@ fn test_ef_trust_radius_invariants() {
         );
 
         // Verify that step norm in each cycle respected r_trust
-        let mut step_norm_sq = 0.0;
-        for j in 0..(3 * batch.natoms) {
-            step_norm_sq += ef_ws.step_cart[j] * ef_ws.step_cart[j];
-        }
+        let step_norm_sq: f64 = ef_ws.step_cart[..(3 * batch.natoms)]
+            .iter()
+            .map(|&s| s * s)
+            .sum();
         let step_norm = step_norm_sq.sqrt();
         assert!(
             step_norm <= r_trust + 1e-12,

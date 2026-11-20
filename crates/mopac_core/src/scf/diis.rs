@@ -121,8 +121,8 @@ impl DiisWorkspace {
         }
         // Shift B matrix columns
         for j in idx..(n - 1) {
-            for i in 0..(n - 1) {
-                self.b_mat[i][j] = self.b_mat[i][j + 1];
+            for row in self.b_mat.iter_mut().take(n - 1) {
+                row[j] = row[j + 1];
             }
         }
         // Zero unused boundary row and column
@@ -168,9 +168,9 @@ impl DiisWorkspace {
             // Find vector with maximum norm excluding the newest vector (m - 1)
             let mut max_norm = 0.0f64;
             let mut worst_norm_idx = 0usize;
-            for i in 0..(m - 1) {
-                if self.b_mat[i][i] > max_norm {
-                    max_norm = self.b_mat[i][i];
+            for (i, row) in self.b_mat.iter().enumerate().take(m - 1) {
+                if row[i] > max_norm {
+                    max_norm = row[i];
                     worst_norm_idx = i;
                 }
             }
@@ -454,11 +454,7 @@ pub fn solve_pulay_system(
     }
 
     // Normalization constraint check: sum(c_i) == 1.0
-    if (sum_c - 1.0).abs() > 1e-3 {
-        return false;
-    }
-
-    true
+    (sum_c - 1.0).abs() <= 1e-3
 }
 
 #[cfg(test)]

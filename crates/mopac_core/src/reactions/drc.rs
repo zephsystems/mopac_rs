@@ -162,8 +162,8 @@ impl DrcWorkspace {
         let mut masses = Vec::with_capacity(natoms);
         let mut inv_masses = Vec::with_capacity(natoms);
 
-        for a in 0..natoms {
-            let m = standard_atomic_mass(batch.atomic_numbers[a]);
+        for &z in batch.atomic_numbers.iter().take(natoms) {
+            let m = standard_atomic_mass(z);
             masses.push(m);
             inv_masses.push(1.0 / m);
         }
@@ -323,9 +323,9 @@ pub fn run_dynamic_reaction_coordinate(
                         * (options.target_temperature_k / current_temp - 1.0);
                 if lambda_sq > 0.0 {
                     let lambda = lambda_sq.sqrt();
-                    for a in 0..natoms {
-                        for c in 0..3 {
-                            drc_ws.velocities[a][c] *= lambda;
+                    for v in drc_ws.velocities.iter_mut().take(natoms) {
+                        for c in v.iter_mut() {
+                            *c *= lambda;
                         }
                     }
                 }
@@ -427,9 +427,7 @@ fn initialize_velocities(
 
     match init {
         InitialVelocities::Zero => {
-            for a in 0..natoms {
-                drc_ws.velocities[a] = [0.0; 3];
-            }
+            drc_ws.velocities[..natoms].fill([0.0; 3]);
         }
         InitialVelocities::Custom(custom_v) => {
             assert_eq!(custom_v.len(), natoms, "Custom velocities count mismatch");
@@ -506,10 +504,10 @@ fn initialize_velocities(
                 p_cm[1] / total_mass,
                 p_cm[2] / total_mass,
             ];
-            for a in 0..natoms {
-                drc_ws.velocities[a][0] -= v_cm[0];
-                drc_ws.velocities[a][1] -= v_cm[1];
-                drc_ws.velocities[a][2] -= v_cm[2];
+            for v in drc_ws.velocities.iter_mut().take(natoms) {
+                v[0] -= v_cm[0];
+                v[1] -= v_cm[1];
+                v[2] -= v_cm[2];
             }
 
             // Scale to exact target kinetic temperature
@@ -517,10 +515,10 @@ fn initialize_velocities(
             let target_kin_ev = 0.5 * n_dof * BOLTZMANN_EV_K * temperature_k;
             if current_kin_ev > 1e-15 && target_kin_ev > 0.0 {
                 let scale = (target_kin_ev / current_kin_ev).sqrt();
-                for a in 0..natoms {
-                    drc_ws.velocities[a][0] *= scale;
-                    drc_ws.velocities[a][1] *= scale;
-                    drc_ws.velocities[a][2] *= scale;
+                for v in drc_ws.velocities.iter_mut().take(natoms) {
+                    v[0] *= scale;
+                    v[1] *= scale;
+                    v[2] *= scale;
                 }
             }
         }

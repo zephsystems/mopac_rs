@@ -2235,11 +2235,11 @@ fn main() -> Result<(), Box<dyn std::error::Error>> {
                 sym_i,
                 b_res.valencies[i]
             );
-            for j in 0..batch.natoms {
+            for (j, &zj) in batch.atomic_numbers[..batch.natoms].iter().enumerate() {
                 if i != j {
                     let b_val = b_res.bond_orders.get(i, j);
                     if b_val > 0.01 {
-                        let sym_j = atomic_number_to_symbol(batch.atomic_numbers[j]);
+                        let sym_j = atomic_number_to_symbol(zj);
                         line.push_str(&format!("     {:3}  {:2} {:5.3}", j + 1, sym_j, b_val));
                     }
                 }
@@ -2667,11 +2667,11 @@ fn main() -> Result<(), Box<dyn std::error::Error>> {
                 sym_i,
                 b_res.valencies[i]
             );
-            for j in 0..batch.natoms {
+            for (j, &zj) in batch.atomic_numbers[..batch.natoms].iter().enumerate() {
                 if i != j {
                     let b_val = b_res.bond_orders.get(i, j);
                     if b_val > 0.01 {
-                        let sym_j = atomic_number_to_symbol(batch.atomic_numbers[j]);
+                        let sym_j = atomic_number_to_symbol(zj);
                         line.push_str(&format!("     {:3}  {:2} {:5.3}", j + 1, sym_j, b_val));
                     }
                 }

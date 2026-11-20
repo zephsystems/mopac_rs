@@ -141,9 +141,9 @@ impl CosmoState {
                 let sk = si.fine_elements[k].area;
                 aa_diag += fdiagr * sk.powf(1.5);
                 let xk = si.fine_elements[k].position;
-                for l in 0..k {
-                    let sl = si.fine_elements[l].area;
-                    let xl = si.fine_elements[l].position;
+                for fl in si.fine_elements.iter().take(k) {
+                    let sl = fl.area;
+                    let xl = fl.position;
                     let dist = ((xk[0] - xl[0]).powi(2)
                         + (xk[1] - xl[1]).powi(2)
                         + (xk[2] - xl[2]).powi(2))

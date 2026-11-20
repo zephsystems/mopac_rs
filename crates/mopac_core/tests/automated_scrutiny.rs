@@ -1857,12 +1857,12 @@ fn test_scrutiny_harmonic_vibrational_frequencies_and_thermodynamics() {
 
     // 2. Translational and rotational projection verification:
     // With Eckart projector, the first 6 frequencies correspond to rigid external motions and must be near zero (< 30 cm^-1).
-    for i in 0..6 {
+    for (i, &freq) in res.all_frequencies_cm1.iter().take(6).enumerate() {
         assert!(
-            res.all_frequencies_cm1[i].abs() < 30.0,
+            freq.abs() < 30.0,
             "External mode {} frequency should be near zero: got {:.2} cm^-1",
             i,
-            res.all_frequencies_cm1[i]
+            freq
         );
     }
 

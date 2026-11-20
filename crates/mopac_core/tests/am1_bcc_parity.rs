@@ -49,8 +49,7 @@ fn test_methane_am1_bcc_charge_conservation_and_shifts() {
     );
 
     // Each hydrogen should receive -(-0.0487) = +0.0487
-    for h_idx in 1..5 {
-        let h_corr = result.bond_charge_corrections[h_idx];
+    for &h_corr in &result.bond_charge_corrections[1..5] {
         assert!(
             (h_corr - 0.0487).abs() < 1e-6,
             "Expected H correction +0.0487, got {}",
@@ -118,16 +117,14 @@ fn test_benzene_am1_bcc_aromatic_shifts() {
     assert!(sum_final.abs() < 1e-14);
 
     // Each aromatic C-H transfers -0.0407 to C (C gets -0.0407, H gets +0.0407)
-    for c_idx in 0..6 {
-        let c_corr = result.bond_charge_corrections[c_idx];
+    for &c_corr in &result.bond_charge_corrections[0..6] {
         assert!(
             (c_corr - (-0.0407)).abs() < 1e-6,
             "Expected aromatic C correction -0.0407, got {}",
             c_corr
         );
     }
-    for h_idx in 6..12 {
-        let h_corr = result.bond_charge_corrections[h_idx];
+    for &h_corr in &result.bond_charge_corrections[6..12] {
         assert!(
             (h_corr - 0.0407).abs() < 1e-6,
             "Expected aromatic H correction +0.0407, got {}",
@@ -219,8 +216,7 @@ fn test_pyrrole_am1_bcc_five_membered_aromatic_shifts() {
     );
 
     // H on aromatic C receives +0.0407 (aromatic C-H shift)
-    for h_idx in 6..10 {
-        let hc_corr = result.bond_charge_corrections[h_idx];
+    for &hc_corr in &result.bond_charge_corrections[6..10] {
         assert!(
             (hc_corr - 0.0407).abs() < 1e-6,
             "Expected aromatic C-H correction +0.0407, got {}",

@@ -171,8 +171,7 @@ fn detect_aromatic_atoms(batch: &MolecularBatch, structure: &LewisStructure) -> 
         }
     }
 
-    for start in 0..natoms {
-        let z = batch.atomic_numbers[start];
+    for (start, &z) in batch.atomic_numbers.iter().enumerate().take(natoms) {
         if z == 6 || z == 7 || z == 8 || z == 16 {
             let mut path = vec![start];
             dfs_rings(start, start, &mut path, &adj, &mut rings);
@@ -461,8 +460,7 @@ pub fn compute_am1_bcc_charges(
     // 2. Perceive aromaticity and atomic hybridization
     let is_aromatic = detect_aromatic_atoms(batch, &structure);
     let mut hybridizations = Vec::with_capacity(natoms);
-    for i in 0..natoms {
-        let z = batch.atomic_numbers[i];
+    for (i, &z) in batch.atomic_numbers.iter().enumerate().take(natoms) {
         let hyb = determine_atom_hybridization(i, z, &structure, &is_aromatic);
         hybridizations.push(hyb);
     }

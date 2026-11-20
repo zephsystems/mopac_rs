@@ -233,11 +233,13 @@ fn test_vulkan_gpu_large_protein_human_serum_albumin() {
 
     // Compute genuine total classical nuclear-core repulsion: E_nuc = sum_{i < j} Z_i * Z_j * gamma_ij
     let mut total_core_repulsion_ev = 0.0;
-    for i in 0..natoms {
-        let zi = batch.atomic_numbers[i];
+    for (i, &zi) in batch.atomic_numbers[..natoms].iter().enumerate() {
         let pi = pm6.get_element(zi).unwrap();
-        for j in (i + 1)..natoms {
-            let zj = batch.atomic_numbers[j];
+        for (j, &zj) in batch.atomic_numbers[..natoms]
+            .iter()
+            .enumerate()
+            .skip(i + 1)
+        {
             let pj = pm6.get_element(zj).unwrap();
             total_core_repulsion_ev += pi.core_charge * pj.core_charge * gpu_matrix.get(i, j);
         }
